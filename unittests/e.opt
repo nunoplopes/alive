@@ -1,0 +1,23 @@
+=== Source ===
+  %tmp4 = trunc %a0 to i8
+  %tmp5 = shl %tmp4, 5
+  %tmp48 = and %tmp5, 32
+  %tmp49 = lshr %tmp48, 5
+  %tmp50 = mul %tmp49, 64
+  %tmp51 = xor %tmp50, %tmp5
+  %tmp52 = and %tmp51, -128
+  %tmp53 = lshr %tmp52, 7
+  %tmp54 = mul %tmp53, 16
+  %tmp55 = xor %tmp54, %tmp51
+=== Target ===
+  %tmp4 = trunc %a0 to i8
+  %tmp5 = shl %tmp4, 5
+  %tmp48 = and %tmp5, 32
+  %tmp49 = lshr %tmp48, 5
+  %tmp50 = mul %tmp49, 64
+  %tmp51 = xor %tmp50, %tmp5
+  %tmp52 = and %tmp51, -128
+  %tmp53 = lshr %tmp52, 7
+  %0 = shl %tmp4, 2
+  %tmp54 = and %0, 16
+  %tmp55 = xor %tmp54, %tmp51

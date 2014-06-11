@@ -1,0 +1,11 @@
+=== Source ===
+;%b = and i32 %c, 6
+%sh = shl nsw 1, %b
+%mul = mul nsw %a, %sh
+
+=== Target ===
+;%b = and i4 %c, 6
+%mul = shl nsw %a, %b
+
+=== Pre ===
+true
