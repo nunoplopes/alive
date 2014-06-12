@@ -48,6 +48,10 @@ def parseOperand(toks, type):
   return c
 
 
+def parseOptionalStr(toks):
+  return toks[0] if len(toks) > 0 else ''
+
+
 def parseBinOp(toks):
   return BinOp(BinOp.getOpId(toks[0]),
                toks[2],
@@ -60,6 +64,12 @@ def parseConversionOp(toks):
                       toks[1],
                       parseOperand(toks[2], toks[1]),
                       toks[3])
+
+def parseIcmp(toks):
+  return Icmp(toks[1],
+              toks[2],
+              parseOperand(toks[3], toks[2]),
+              parseOperand(toks[4], toks[2]))
 
 
 def parseInstr(toks):
@@ -75,8 +85,9 @@ def parseInstr(toks):
   return
 
 
-reg = Literal('%') + Word(srange("[a-zA-Z0-9]"))
-opname = Word(srange("[a-z.0-9]"))
+identifier = Word(srange("[a-zA-Z0-9_.]"))
+reg = Literal('%') + identifier
+opname = identifier
 
 instrs = Forward()
 prog = instrs + StringEnd()
@@ -89,11 +100,20 @@ flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(lambda toks : [toks])
 operand = (reg | Regex(r"-?[0-9]+")).setParseAction(lambda toks : [toks])
 
-op = (opname + flags + opttype + operand + Literal(',').suppress() + operand).\
-       setParseAction(parseBinOp) |\
-     (opname + opttype + operand +\
-      Optional(Literal('to').suppress() + type).setParseAction(parseOptType)).\
-      setParseAction(parseConversionOp)
+binop = (opname + flags + opttype + operand + Literal(',').suppress() +\
+         operand).setParseAction(parseBinOp)
+
+conversionop = (opname + opttype + operand +\
+                Optional(Literal('to').suppress() + type).\
+                 setParseAction(parseOptType)).setParseAction(parseConversionOp)
+
+optionalname = Optional(identifier).setParseAction(parseOptionalStr)
+
+icmp = (Literal('icmp') + optionalname + opttype + operand +\
+        Literal(',').suppress() + operand).setParseAction(parseIcmp)
+
+op = icmp | binop | conversionop
+
 
 instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\
         comment.suppress()

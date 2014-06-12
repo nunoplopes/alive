@@ -57,7 +57,7 @@ def print_var_vals(s, vars, stopv, types):
     print "%s i%d = %s" % (k, bits, s.model().evaluate(v.toSMT(defv)))
 
 
-def check_equivalence(src, tgt, types):
+def check_opt(src, tgt, types):
   s = Solver()
   for k,v in src.iteritems():
     if isinstance(v, Input) or isinstance(v, Constant):
@@ -151,7 +151,7 @@ def main():
     sys.stdout.flush()
     fixupTypes(src, s.model())
     fixupTypes(tgt, s.model())
-    check_equivalence(src, tgt, s.model())
+    check_opt(src, tgt, s.model())
     block_model(s)
 
   print '\nOptimization is correct!'

@@ -352,20 +352,112 @@ class ConversionOp(Instr):
 
   def getTypeConstraints(self, vars):
     my_type = self.getTypeSMTName()
-    srctype = self.stype.getSMTName(self.v)
+    srctype = self.v.getTypeSMTName()
     cnstr = {
       self.Trunc: lambda src,tgt: src > tgt,
       self.ZExt:  lambda src,tgt: src < tgt,
       self.SExt:  lambda src,tgt: src < tgt,
     } [self.op](srctype, my_type)
 
-    return And(self.ttype.getConstraints(self, vars),
-               srctype == self.v.getTypeSMTName(), cnstr)
+    c = [self.ttype.getConstraints(self, vars), cnstr]
+    if self.stype.defined:
+      c += [srctype == self.stype.getIntSize()]
+    return And(c)
 
   def fixupTypes(self, types):
     self.ttype.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
-    self.stype.fixupSize(types.evaluate(self.stype.getSMTName(self.v)).\
-      as_long())
+    self.stype.fixupSize(types.evaluate(self.v.getTypeSMTName()).as_long())
+
+
+################################
+class Icmp(Instr):
+  EQ, NE, UGT, UGE, ULT, ULE, SGT, SGE, SLT, SLE, Var, Last = range(12)
+
+  opnames = {
+    EQ:  'eq',
+    NE:  'ne',
+    UGT: 'ugt',
+    UGE: 'uge',
+    ULT: 'ult',
+    ULE: 'ule',
+    SGT: 'sgt',
+    SGE: 'sge',
+    SLT: 'slt',
+    SLE: 'sle',
+  }
+  opids = {v:k for k, v in opnames.items()}
+
+
+  def __init__(self, op, type, v1, v2):
+    self.op = self.getOpId(op)
+    if self.op == self.Var:
+      self.opname = op
+    self.type = type
+    self.v1 = v1
+    self.v2 = v2
+    assert isinstance(self.type, Type)
+    assert isinstance(self.v1, Instr)
+    assert isinstance(self.v2, Instr)
+
+  @staticmethod
+  def getOpId(name):
+    return Icmp.opids.get(name, Icmp.Var)
+
+  def toString(self):
+    op = self.opname if self.op == Icmp.Var else Icmp.opnames[self.op]
+    if len(op) > 0:
+      op = ' ' + op
+    t = str(self.type)
+    if len(t) > 0:
+      t = ' ' + t
+    return 'icmp%s%s %s, %s' % (op, t, self.v1.getName(), self.v2.getName())
+
+  @staticmethod
+  def toBV(b):
+    return If(b, BitVecVal(1, 1), BitVecVal(0, 1))
+
+  def opToSMT(self, op, a, b):
+    return {
+      self.EQ:  lambda a,b: Icmp.toBV(a == b),
+      self.NE:  lambda a,b: Icmp.toBV(a != b),
+      self.UGT: lambda a,b: Icmp.toBV(UGT(a, b)),
+      self.UGE: lambda a,b: Icmp.toBV(UGE(a, b)),
+      self.ULT: lambda a,b: Icmp.toBV(ULT(a, b)),
+      self.ULE: lambda a,b: Icmp.toBV(ULE(a, b)),
+      self.SGT: lambda a,b: Icmp.toBV(a > b),
+      self.SGE: lambda a,b: Icmp.toBV(a >= b),
+      self.SLT: lambda a,b: Icmp.toBV(a < b),
+      self.SLE: lambda a,b: Icmp.toBV(a <= b),
+    }[op](a, b)
+
+  def recurseSMT(self, ops, a, b, i):
+    if len(ops) == 1:
+      return self.opToSMT(ops[0], a, b)
+    var = BitVec('icmp_' + self.opname, 4)
+    assert 1 << 4 > self.Var
+    return If(var == i,
+              self.opToSMT(ops[0], a, b),
+              self.recurseSMT(ops[1:], a, b, i+1))
+
+  def toSMT(self, defined):
+    # Generate all possible comparisons if icmp is generic. Set of comparisons
+    # can be restricted in the precondition.
+    ops = [self.op] if self.op != self.Var else range(self.Var)
+    return self.recurseSMT(ops, self.v1.toSMT(defined),
+                           self.v2.toSMT(defined), 0)
+
+  def getTypeSMTName(self):
+    return self.type.getSMTName(self)
+
+  def getTypeConstraints(self, vars):
+    c = [self.v1.getTypeSMTName() == self.v2.getTypeSMTName(),
+         self.getTypeSMTName() == 1]
+    if self.type.defined:
+      c += [self.v1.getTypeSMTName() == self.type.getIntSize()]
+    return And(c)
+
+  def fixupTypes(self, types):
+    self.type.fixupSize(types.evaluate(self.v1.getTypeSMTName()).as_long())
 
 
 ################################
