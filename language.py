@@ -59,9 +59,7 @@ class Instr:
     return self.toString()
 
   def getName(self):
-    if hasattr(self, 'name'):
-      return self.name
-    return ''
+    return self.name
 
   def setName(self, name):
     self.name = name

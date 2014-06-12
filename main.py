@@ -36,7 +36,7 @@ def block_model(s):
 
 
 def str_model(s, v):
-  val = s.model().evaluate(v).as_long()
+  val = s.model().evaluate(v, True).as_long()
   return "%d (%s)" % (val, hex(val))
 
 
