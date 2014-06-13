@@ -92,22 +92,22 @@ class Input(Instr):
 
 
 ################################
-class CopyReg(Instr):
-  def __init__(self, reg, type):
-    self.reg = reg
+class CopyOperand(Instr):
+  def __init__(self, op, type):
+    self.op = op
     self.type = type
-    assert isinstance(self.reg, Instr)
+    assert isinstance(self.op, Instr)
     assert isinstance(self.type, Type)
 
   def toString(self):
-    return self.reg.toString()
+    return self.op.toString()
 
   def toSMT(self, defined):
-    return self.reg.toSMT(defined)
+    return self.op.toSMT(defined)
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(self, vars),
-               self.getTypeSMTName() == self.reg.getTypeSMTName())
+               self.getTypeSMTName() == self.op.getTypeSMTName())
 
 
 ################################

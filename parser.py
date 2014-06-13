@@ -85,9 +85,7 @@ def parseSelect(toks):
 
 def parseOperandInstr(toks):
   op = parseOperand(toks[1], toks[0])
-  if isinstance(op, Constant):
-    return op
-  return CopyReg(op, toks[0])
+  return CopyOperand(op, toks[0])
 
 
 def parseInstr(toks):
