@@ -41,8 +41,11 @@ def parseOperand(toks, type):
     identifiers[reg] = v = Input(reg, type)
     return v
 
-  # constant
   assert len(toks) == 1
+  if toks[0] == 'undef':
+    return UndefVal(type)
+
+  # constant
   if toks[0] == 'true':
     n = 1
   elif toks[0] == 'false':
@@ -114,8 +117,8 @@ type = (Literal('i') + Word(nums)).setParseAction(parseType)
 opttype = Optional(type).setParseAction(parseOptType)
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(lambda toks : [toks])
-operand = (reg | Regex(r"-?[0-9]+") | Literal('false') | Literal('true')).\
-            setParseAction(lambda toks : [toks])
+operand = (reg | Regex(r"-?[0-9]+") | Literal('false') | Literal('true') |\
+           Literal('undef')).setParseAction(lambda toks : [toks])
 
 typeoperand = (opttype + operand).setParseAction(parseTypeOperand)
 comma = Literal(',').suppress()

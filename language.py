@@ -45,8 +45,9 @@ class IntType(Type):
   def getSMTName(self, instr):
     return Int('t' + instr.getName())
 
-  def getConstraints(self, instr, vars):
-    v = self.getSMTName(instr)
+  def getConstraints(self, instr, vars, v = None):
+    if v == None:
+      v = self.getSMTName(instr)
     vars += [v]
     if self.defined:
       return v == self.getIntSize()
@@ -87,7 +88,7 @@ class Input(Instr):
   def toString(self):
     return self.getName()
 
-  def toSMT(self, defined):
+  def toSMT(self, defined, qvars):
     return BitVec(self.name, self.type.getIntSize())
 
 
@@ -102,8 +103,8 @@ class CopyOperand(Instr):
   def toString(self):
     return self.op.toString()
 
-  def toSMT(self, defined):
-    return self.op.toSMT(defined)
+  def toSMT(self, defined, qvars):
+    return self.op.toSMT(defined, qvars)
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(self, vars),
@@ -118,32 +119,54 @@ class Constant(Instr):
     self.val = val
     self.type = type
     self.setName(str(val))
-    self.SMTTypeVar = Int(self.mkSMTTypeName())
+    self.mk_id()
     assert isinstance(self.type, Type)
+
+  def mk_id(self):
+    self.id = Constant.last_id
+    Constant.last_id += 1
 
   def toString(self):
     return str(self.val)
 
-  def toSMT(self, defined):
+  def toSMT(self, defined, qvars):
     return BitVecVal(self.val, self.type.getIntSize())
 
-  def mkSMTTypeName(self):
-    id = Constant.last_id
-    Constant.last_id += 1
-    return str('t%d_%d' % (self.val, id))
-
   def getTypeSMTName(self):
-    return self.SMTTypeVar
+    return Int('t%d_%d' % (self.val, self.id))
 
   def getTypeConstraints(self, vars):
     v = self.getTypeSMTName()
-    vars += [v]
-    if self.type.defined:
-      return v == self.type.getIntSize()
+    c = self.type.getConstraints(self, vars, v)
+    if not is_true(c):
+      return c
     if self.val != 0:
       bits = int(math.ceil(math.log(abs(self.val), 2)))
       return v >= bits
     return BoolVal(True)
+
+
+################################
+class UndefVal(Constant):
+  def __init__(self, type):
+    self.type = type
+    self.setName('undef')
+    self.mk_id()
+    assert isinstance(self.type, Type)
+
+  def toString(self):
+    return 'undef'
+
+  def toSMT(self, defined, qvars):
+    v = BitVec('undef%d' % self.id, self.type.getIntSize())
+    qvars += [v]
+    return v
+
+  def getTypeSMTName(self):
+    return Int('tundef_%d' % self.id)
+
+  def getTypeConstraints(self, vars):
+    return  self.type.getConstraints(self, vars, getTypeSMTName)
 
 
 ################################
@@ -280,9 +303,9 @@ class BinOp(Instr):
       }[self.op](v1,v2)
     return
 
-  def toSMT(self, defined):
-    v1 = self.v1.toSMT(defined)
-    v2 = self.v2.toSMT(defined)
+  def toSMT(self, defined, qvars):
+    v1 = self.v1.toSMT(defined, qvars)
+    v2 = self.v2.toSMT(defined, qvars)
     self._genSMTDefConds(v1, v2, defined)
     return {
       self.Add:  lambda a,b: a + b,
@@ -348,8 +371,8 @@ class ConversionOp(Instr):
       tt = ' to ' + tt
     return '%s%s %s%s' % (self.getOpName(), st, self.v.getName(), tt)
 
-  def toSMT(self, defined):
-    v = self.v.toSMT(defined)
+  def toSMT(self, defined, qvars):
+    v = self.v.toSMT(defined, qvars)
     delta_bits = self.type.getIntSize() - self.stype.getIntSize()
     return {
       self.Trunc: lambda v: Extract(self.type.getIntSize()-1, 0, v),
@@ -446,12 +469,12 @@ class Icmp(Instr):
               self.opToSMT(ops[0], a, b),
               self.recurseSMT(ops[1:], a, b, i+1))
 
-  def toSMT(self, defined):
+  def toSMT(self, defined, qvars):
     # Generate all possible comparisons if icmp is generic. Set of comparisons
     # can be restricted in the precondition.
     ops = [self.op] if self.op != self.Var else range(self.Var)
-    return self.recurseSMT(ops, self.v1.toSMT(defined),
-                           self.v2.toSMT(defined), 0)
+    return self.recurseSMT(ops, self.v1.toSMT(defined, qvars),
+                           self.v2.toSMT(defined, qvars), 0)
 
   def getTypeConstraints(self, vars):
     c = [self.v1.getTypeSMTName() == self.v2.getTypeSMTName(),
@@ -482,10 +505,10 @@ class Select(Instr):
       t = t + ' '
     return 'select i1 %s, %s%s, %s%s' % (self.c, t, self.v1, t, self.v2)
 
-  def toSMT(self, defined):
-    return If(self.c.toSMT(defined) == 1,
-              self.v1.toSMT(defined),
-              self.v2.toSMT(defined))
+  def toSMT(self, defined, qvars):
+    return If(self.c.toSMT(defined, qvars) == 1,
+              self.v1.toSMT(defined, qvars),
+              self.v2.toSMT(defined, qvars))
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(self, vars),

@@ -1,0 +1,5 @@
+=== Source ===
+%1 = and %a, undef
+
+=== Target ===
+%1 = 0

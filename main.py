@@ -30,6 +30,12 @@ def mk_and(l):
   return And(l)
 
 
+def mk_forall(l, f):
+  if l == []:
+    return f
+  return ForAll(l, f)
+
+
 def block_model(s):
   m = s.model()
   s.add(Not(And([Int(str(n)) == m[n] for n in m.decls()])))
@@ -53,9 +59,8 @@ def _print_var_vals(s, vars, stopv, types, seen):
     if isinstance(v, Constant) or k in seen:
       continue
     seen |= set([k])
-    defv = []
     bits = get_var_int_size(k, types)
-    print "%s i%d = %s" % (k, bits, s.model().evaluate(v.toSMT(defv)))
+    print "%s i%d = %s" % (k, bits, s.model().evaluate(v.toSMT([], [])))
 
 
 def print_var_vals(s, vs1, vs2, stopv, types):
@@ -76,16 +81,15 @@ def check_opt(src, tgt, types):
 
     defa = []
     defb = []
-    a = v.toSMT(defa)
-    b = tgt[k].toSMT(defb)
+    qvars = []
+    a = v.toSMT(defa, qvars)
+    b = tgt[k].toSMT(defb, [])
+    defa = mk_and(defa)
     defb = mk_and(defb)
-
-    s.push()
-    s.add(defa)
 
     # check if domain of defined values of Src implies that of Tgt
     s.push()
-    s.add(Not(defb))
+    s.add(mk_forall(qvars, And(defa, Not(defb))))
     if s.check() != unsat:
       print '\nDomain of definedness of Target is smaller than Source\'s for '+\
               'i%d %s' % (get_var_int_size(k, types), k)
@@ -93,12 +97,17 @@ def check_opt(src, tgt, types):
       print_var_vals(s, src, tgt, k, types)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: undef'
-      s.pop(2)
+      s.pop()
       exit(-1)
     s.pop()
 
-    s.add(a != b)
-    if s.check() != unsat:
+    s.push()
+    s.add(mk_forall(qvars, And(defa, a != b)))
+    res = s.check()
+    if res != unsat:
+      if res == unknown:
+        print '\nWARNING: The SMT solver gave up. Verification incomplete.'
+        exit(-1)
       print '\nMismatch in values of i%d %s' % (get_var_int_size(k, types), k)
       print 'Example:'
       print_var_vals(s, src, tgt, k, types)
