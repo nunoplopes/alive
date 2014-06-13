@@ -43,33 +43,51 @@ def parseOperand(toks, type):
 
   # constant
   assert len(toks) == 1
-  c = Constant(int(toks[0]), type)
+  if toks[0] == 'true':
+    n = 1
+  elif toks[0] == 'false':
+    n = 0
+  else:
+    n = int(toks[0])
+
+  c = Constant(n, type)
   identifiers[str(c.getTypeSMTName())] = c
   return c
 
+def parseTypeOperand(toks):
+  return [toks[0], parseOperand(toks[1], toks[0])]
 
 def parseOptionalStr(toks):
   return toks[0] if len(toks) > 0 else ''
 
-
 def parseBinOp(toks):
-  return BinOp(BinOp.getOpId(toks[0]),
-               toks[2],
-               parseOperand(toks[3], toks[2]),
-               parseOperand(toks[4], toks[2]),
-               toks[1])
+  return BinOp(BinOp.getOpId(toks[0]), toks[2], toks[3],
+               parseOperand(toks[4], toks[2]), toks[1])
 
 def parseConversionOp(toks):
-  return ConversionOp(ConversionOp.getOpId(toks[0]),
-                      toks[1],
-                      parseOperand(toks[2], toks[1]),
-                      toks[3])
+  return ConversionOp(ConversionOp.getOpId(toks[0]), toks[1], toks[2], toks[3])
 
 def parseIcmp(toks):
-  return Icmp(toks[1],
-              toks[2],
-              parseOperand(toks[3], toks[2]),
-              parseOperand(toks[4], toks[2]))
+  return Icmp(toks[1], toks[2], toks[3], parseOperand(toks[4], toks[2]))
+
+def parseSelect(toks):
+  t1 = toks[2]
+  t2 = toks[4]
+  if t1.defined:
+    if t2.defined:
+      if t1.getIntSize() != t2.getIntSize():
+        print 'Error: type mismatch in select: %s vs %s' % (t1, t2)
+        exit(-1)
+    t = t1
+  else:
+    t = t2
+  return Select(t, parseOperand(toks[1], IntType(1)), toks[3], toks[5])
+
+def parseOperandInstr(toks):
+  op = parseOperand(toks[1], toks[0])
+  if isinstance(op, Constant):
+    return op
+  return CopyReg(op, toks[0])
 
 
 def parseInstr(toks):
@@ -98,21 +116,30 @@ type = (Literal('i') + Word(nums)).setParseAction(parseType)
 opttype = Optional(type).setParseAction(parseOptType)
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(lambda toks : [toks])
-operand = (reg | Regex(r"-?[0-9]+")).setParseAction(lambda toks : [toks])
+operand = (reg | Regex(r"-?[0-9]+") | Literal('false') | Literal('true')).\
+            setParseAction(lambda toks : [toks])
 
-binop = (opname + flags + opttype + operand + Literal(',').suppress() +\
-         operand).setParseAction(parseBinOp)
+typeoperand = (opttype + operand).setParseAction(parseTypeOperand)
+comma = Literal(',').suppress()
 
-conversionop = (opname + opttype + operand +\
+binop = (opname + flags + typeoperand + comma + operand).\
+          setParseAction(parseBinOp)
+
+conversionop = (opname + typeoperand +\
                 Optional(Literal('to').suppress() + type).\
                  setParseAction(parseOptType)).setParseAction(parseConversionOp)
 
 optionalname = Optional(identifier).setParseAction(parseOptionalStr)
 
-icmp = (Literal('icmp') + optionalname + opttype + operand +\
-        Literal(',').suppress() + operand).setParseAction(parseIcmp)
+icmp = (Literal('icmp') + optionalname + typeoperand + comma + operand).\
+         setParseAction(parseIcmp)
 
-op = icmp | binop | conversionop
+select = (Literal('select') + Optional(Literal('i1')).suppress() + operand +\
+          comma + typeoperand + comma + typeoperand).setParseAction(parseSelect)
+
+operandinstr = (opttype + operand).setParseAction(parseOperandInstr)
+
+op = icmp | select | binop | conversionop | operandinstr
 
 
 instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\

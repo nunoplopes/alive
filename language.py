@@ -92,6 +92,25 @@ class Input(Instr):
 
 
 ################################
+class CopyReg(Instr):
+  def __init__(self, reg, type):
+    self.reg = reg
+    self.type = type
+    assert isinstance(self.reg, Instr)
+    assert isinstance(self.type, Type)
+
+  def toString(self):
+    return self.reg.toString()
+
+  def toSMT(self, defined):
+    return self.reg.toSMT(defined)
+
+  def getTypeConstraints(self, vars):
+    return And(self.type.getConstraints(self, vars),
+               self.getTypeSMTName() == self.reg.getTypeSMTName())
+
+
+################################
 class Constant(Instr):
   last_id = 0
 
@@ -446,11 +465,40 @@ class Icmp(Instr):
 
 
 ################################
+class Select(Instr):
+  def __init__(self, type, c, v1, v2):
+    self.type = type
+    self.c = c
+    self.v1 = v1
+    self.v2 = v2
+    assert isinstance(self.type, Type)
+    assert isinstance(self.c, Instr)
+    assert isinstance(self.v1, Instr)
+    assert isinstance(self.v2, Instr)
+
+  def toString(self):
+    t = str(self.type)
+    if len(t) > 0:
+      t = t + ' '
+    return 'select i1 %s, %s%s, %s%s' % (self.c, t, self.v1, t, self.v2)
+
+  def toSMT(self, defined):
+    return If(self.c.toSMT(defined) == 1,
+              self.v1.toSMT(defined),
+              self.v2.toSMT(defined))
+
+  def getTypeConstraints(self, vars):
+    return And(self.type.getConstraints(self, vars),
+               self.v1.getTypeSMTName() == self.v2.getTypeSMTName(),
+               self.c.getTypeSMTName() == 1)
+
+
+################################
 def print_prog(p):
-  for i in p.itervalues():
-    if isinstance(i, Input) or isinstance(i, Constant):
+  for k,v in p.iteritems():
+    if isinstance(v, Input) or (isinstance(v, Constant) and k[0] != '%'):
       continue
-    print '%s = %s' % (i.getName(), i)
+    print '%s = %s' % (k, v)
 
 
 def getTypeConstraints(p, vars):
