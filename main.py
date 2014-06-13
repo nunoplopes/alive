@@ -46,15 +46,22 @@ def print_model(s):
     print '%s = %s' % (d, m[d])
 
 
-def print_var_vals(s, vars, stopv, types):
+def _print_var_vals(s, vars, stopv, types, seen):
   for k,v in vars.iteritems():
     if k == stopv:
       return
-    if isinstance(v, Constant):
+    if isinstance(v, Constant) or k in seen:
       continue
+    seen |= set([k])
     defv = []
     bits = get_var_int_size(k, types)
     print "%s i%d = %s" % (k, bits, s.model().evaluate(v.toSMT(defv)))
+
+
+def print_var_vals(s, vs1, vs2, stopv, types):
+  seen = set()
+  _print_var_vals(s, vs1, stopv, types, seen)
+  _print_var_vals(s, vs2, stopv, types, seen)
 
 
 def check_opt(src, tgt, types):
@@ -83,7 +90,7 @@ def check_opt(src, tgt, types):
       print '\nDomain of definedness of Target is smaller than Source\'s for '+\
               'i%d %s' % (get_var_int_size(k, types), k)
       print 'Example:'
-      print_var_vals(s, src, k, types)
+      print_var_vals(s, src, tgt, k, types)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: undef'
       s.pop(2)
@@ -94,7 +101,7 @@ def check_opt(src, tgt, types):
     if s.check() != unsat:
       print '\nMismatch in values of i%d %s' % (get_var_int_size(k, types), k)
       print 'Example:'
-      print_var_vals(s, src, k, types)
+      print_var_vals(s, src, tgt, k, types)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: ' + str_model(s, b)
       s.pop()

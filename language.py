@@ -489,6 +489,7 @@ class Select(Instr):
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(self, vars),
+               self.getTypeSMTName() == self.v1.getTypeSMTName(),
                self.v1.getTypeSMTName() == self.v2.getTypeSMTName(),
                self.c.getTypeSMTName() == 1)
 
