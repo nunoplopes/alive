@@ -67,6 +67,15 @@ class Instr:
   def toString(self):
     raise Exception('toString not implemented')
 
+  def getTypeSMTName(self):
+    return self.type.getSMTName(self)
+
+  def getTypeConstraints(self, vars):
+    return self.type.getConstraints(self, vars)
+
+  def fixupTypes(self, types):
+    self.type.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
+
 
 ################################
 class Input(Instr):
@@ -80,15 +89,6 @@ class Input(Instr):
 
   def toSMT(self, defined):
     return BitVec(self.name, self.type.getIntSize())
-
-  def getTypeSMTName(self):
-    return self.type.getSMTName(self)
-
-  def getTypeConstraints(self, vars):
-    return self.type.getConstraints(self, vars)
-
-  def fixupTypes(self, types):
-    self.type.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
 
 
 ################################
@@ -125,9 +125,6 @@ class Constant(Instr):
       bits = int(math.ceil(math.log(abs(self.val), 2)))
       return v >= bits
     return BoolVal(True)
-
-  def fixupTypes(self, types):
-    self.type.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
 
 
 ################################
@@ -284,17 +281,11 @@ class BinOp(Instr):
       self.Xor:  lambda a,b: a ^ b,
     }[self.op](v1, v2)
 
-  def getTypeSMTName(self):
-    return self.type.getSMTName(self)
-
   def getTypeConstraints(self, vars):
     my_type = self.getTypeSMTName()
     return And(self.type.getConstraints(self, vars),
                my_type == self.v1.getTypeSMTName(),
                my_type == self.v2.getTypeSMTName())
-
-  def fixupTypes(self, types):
-    self.type.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
 
 
 ################################
@@ -312,9 +303,9 @@ class ConversionOp(Instr):
     self.op = op
     self.stype = stype
     self.v = v
-    self.ttype = ttype
+    self.type = ttype
     assert isinstance(self.stype, Type)
-    assert isinstance(self.ttype, Type)
+    assert isinstance(self.type, Type)
     assert isinstance(self.v, Instr)
     assert self.op >= 0 and self.op < self.Last
 
@@ -333,22 +324,19 @@ class ConversionOp(Instr):
     st = str(self.stype)
     if len(st) > 0:
       st = ' ' + st
-    tt = str(self.ttype)
+    tt = str(self.type)
     if len(tt) > 0:
       tt = ' to ' + tt
     return '%s%s %s%s' % (self.getOpName(), st, self.v.getName(), tt)
 
   def toSMT(self, defined):
     v = self.v.toSMT(defined)
-    delta_bits = self.ttype.getIntSize() - self.stype.getIntSize()
+    delta_bits = self.type.getIntSize() - self.stype.getIntSize()
     return {
-      self.Trunc: lambda v: Extract(self.ttype.getIntSize()-1, 0, v),
+      self.Trunc: lambda v: Extract(self.type.getIntSize()-1, 0, v),
       self.ZExt:  lambda v: ZeroExt(delta_bits, v),
       self.SExt:  lambda v: SignExt(delta_bits, v),
     }[self.op](v)
-
-  def getTypeSMTName(self):
-    return self.ttype.getSMTName(self)
 
   def getTypeConstraints(self, vars):
     my_type = self.getTypeSMTName()
@@ -359,13 +347,13 @@ class ConversionOp(Instr):
       self.SExt:  lambda src,tgt: src < tgt,
     } [self.op](srctype, my_type)
 
-    c = [self.ttype.getConstraints(self, vars), cnstr]
+    c = [self.type.getConstraints(self, vars), cnstr]
     if self.stype.defined:
       c += [srctype == self.stype.getIntSize()]
     return And(c)
 
   def fixupTypes(self, types):
-    self.ttype.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
+    self.type.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
     self.stype.fixupSize(types.evaluate(self.v.getTypeSMTName()).as_long())
 
 
@@ -445,9 +433,6 @@ class Icmp(Instr):
     ops = [self.op] if self.op != self.Var else range(self.Var)
     return self.recurseSMT(ops, self.v1.toSMT(defined),
                            self.v2.toSMT(defined), 0)
-
-  def getTypeSMTName(self):
-    return self.type.getSMTName(self)
 
   def getTypeConstraints(self, vars):
     c = [self.v1.getTypeSMTName() == self.v2.getTypeSMTName(),
