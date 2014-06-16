@@ -162,13 +162,13 @@ def main():
   # now check for equivalence
   proofs = 0
   while s.check() == sat:
-    proofs += 1
-    sys.stdout.write('\rDone: ' + str(proofs))
-    sys.stdout.flush()
     fixupTypes(src, s.model())
     fixupTypes(tgt, s.model())
     check_opt(src, tgt, s.model())
     block_model(s)
+    proofs += 1
+    sys.stdout.write('\rDone: ' + str(proofs))
+    sys.stdout.flush()
 
   print '\nOptimization is correct!'
   if s.check() != unsat:

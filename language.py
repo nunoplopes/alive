@@ -13,7 +13,18 @@
 # limitations under the License.
 
 from z3 import *
-import math
+import math, copy
+
+def toBV(b):
+  return If(b, BitVecVal(1, 1), BitVecVal(0, 1))
+
+gbl_unique_id = 0
+def mk_unique_id():
+  global gbl_unique_id
+  id = str(gbl_unique_id)
+  gbl_unique_id += 1
+  return id
+
 
 class Type:
   def __repr__(self):
@@ -30,6 +41,9 @@ class IntType(Type):
     self.defined = True
     assert isinstance(self.size, int)
 
+  def setName(self, name):
+    self.smtvar = Int('t' + name)
+
   def __repr__(self):
     if self.defined:
       return 'i' + str(self.size)
@@ -38,19 +52,65 @@ class IntType(Type):
   def getIntSize(self):
     return self.size
 
-  def fixupSize(self, size):
+  def fixup(self, types):
+    size = types.evaluate(self.smtvar).as_long()
     assert self.defined == False or self.size == size
     self.size = size
 
-  def getSMTName(self, instr):
-    return Int('t' + instr.getName())
+  def __eq__(self, other):
+    if isinstance(other, IntType):
+      return self.smtvar == other.smtvar
+    if isinstance(other, int):
+      return self.smtvar == other
+    assert False
 
-  def getConstraints(self, instr, vars, v = None):
-    if v == None:
-      v = self.getSMTName(instr)
-    vars += [v]
+  def __lt__(self, other):
+    if isinstance(other, IntType):
+      return self.smtvar < other.smtvar
+    if isinstance(other, int):
+      return self.smtvar < other
+    assert False
+
+  def __gt__(self, other):
+    if isinstance(other, IntType):
+      return self.smtvar > other.smtvar
+    if isinstance(other, int):
+      return self.smtvar > other
+    assert False
+
+  def __ge__(self, other):
+    if isinstance(other, IntType):
+      return self.smtvar >= other.smtvar
+    if isinstance(other, int):
+      return self.smtvar >= other
+    assert False
+
+  def getConstraints(self, vars):
+    vars += [self.smtvar]
     if self.defined:
-      return v == self.getIntSize()
+      return self.smtvar == self.getIntSize()
+    return BoolVal(True)
+
+
+################################
+class PtrType(Type):
+  def __init__(self, type):
+    self.type = type
+    assert isinstance(self.type, Type)
+
+  def __repr__(self):
+    return self.type + '*'
+
+  def setName(self, name):
+    # TODO
+    return
+
+  def fixup(self, types):
+    # TODO
+    return
+
+  def getConstraints(self, vars):
+    # TODO
     return BoolVal(True)
 
 
@@ -64,25 +124,32 @@ class Instr:
 
   def setName(self, name):
     self.name = name
+    self.type = copy.deepcopy(self.type)
+    self.type.setName(name)
+    if hasattr(self, 'stype'):
+      self.stype = copy.deepcopy(self.stype)
+      self.stype.setName('s' + mk_unique_id() + name)
 
   def toString(self):
     raise Exception('toString not implemented')
 
-  def getTypeSMTName(self):
-    return self.type.getSMTName(self)
-
   def getTypeConstraints(self, vars):
-    return self.type.getConstraints(self, vars)
+    return self.type.getConstraints(vars)
 
   def fixupTypes(self, types):
-    self.type.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
+    self.type.fixup(types)
+    if hasattr(self, 'stype'):
+      self.stype.fixup(types)
+    for attr in ['v', 'v1', 'v2']:
+      if hasattr(self, attr):
+        getattr(self, attr).fixupTypes(types)
 
 
 ################################
 class Input(Instr):
   def __init__(self, name, type):
-    self.setName(name)
     self.type = type
+    self.setName(name)
     assert isinstance(self.type, Type)
 
   def toString(self):
@@ -94,37 +161,35 @@ class Input(Instr):
 
 ################################
 class CopyOperand(Instr):
-  def __init__(self, op, type):
-    self.op = op
+  def __init__(self, v, type):
+    self.v = v
     self.type = type
-    assert isinstance(self.op, Instr)
+    assert isinstance(self.v, Instr)
     assert isinstance(self.type, Type)
 
   def toString(self):
-    return self.op.toString()
+    return self.v.toString()
 
   def toSMT(self, defined, qvars):
-    return self.op.toSMT(defined, qvars)
+    return self.v.toSMT(defined, qvars)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(self, vars),
-               self.getTypeSMTName() == self.op.getTypeSMTName())
+    return And(self.type.getConstraints(vars),
+               self.type == self.v.type)
 
 
 ################################
 class Constant(Instr):
-  last_id = 0
-
   def __init__(self, val, type):
     self.val = val
     self.type = type
     self.setName(str(val))
-    self.mk_id()
+    self.id = mk_unique_id()
+    self.type.setName(self.getUniqueName())
     assert isinstance(self.type, Type)
 
-  def mk_id(self):
-    self.id = Constant.last_id
-    Constant.last_id += 1
+  def getUniqueName(self):
+    return self.getName() + '_' + self.id
 
   def toString(self):
     return str(self.val)
@@ -132,18 +197,15 @@ class Constant(Instr):
   def toSMT(self, defined, qvars):
     return BitVecVal(self.val, self.type.getIntSize())
 
-  def getTypeSMTName(self):
-    return Int('t%d_%d' % (self.val, self.id))
-
   def getTypeConstraints(self, vars):
-    v = self.getTypeSMTName()
-    c = self.type.getConstraints(self, vars, v)
-    if not is_true(c):
-      return c
+    c = self.type.getConstraints(vars)
     if self.val != 0:
-      bits = int(math.ceil(math.log(abs(self.val), 2)))
-      return v >= bits
-    return BoolVal(True)
+      if self.val > 0:
+        bits = int(math.floor(math.log(self.val, 2)+1))
+      else:
+        bits = int(math.floor(math.log(abs(self.val)+1, 2)+1))
+      return And(c, self.type >= bits)
+    return c
 
 
 ################################
@@ -151,22 +213,17 @@ class UndefVal(Constant):
   def __init__(self, type):
     self.type = type
     self.setName('undef')
-    self.mk_id()
+    self.id = mk_unique_id()
+    self.type.setName(self.getUniqueName())
     assert isinstance(self.type, Type)
 
   def toString(self):
     return 'undef'
 
   def toSMT(self, defined, qvars):
-    v = BitVec('undef%d' % self.id, self.type.getIntSize())
+    v = BitVec('undef' + self.id, self.type.getIntSize())
     qvars += [v]
     return v
-
-  def getTypeSMTName(self):
-    return Int('tundef_%d' % self.id)
-
-  def getTypeConstraints(self, vars):
-    return  self.type.getConstraints(self, vars, getTypeSMTName)
 
 
 ################################
@@ -324,10 +381,9 @@ class BinOp(Instr):
     }[self.op](v1, v2)
 
   def getTypeConstraints(self, vars):
-    my_type = self.getTypeSMTName()
-    return And(self.type.getConstraints(self, vars),
-               my_type == self.v1.getTypeSMTName(),
-               my_type == self.v2.getTypeSMTName())
+    return And(self.type.getConstraints(vars),
+               self.type == self.v1.type,
+               self.type == self.v2.type)
 
 
 ################################
@@ -381,22 +437,16 @@ class ConversionOp(Instr):
     }[self.op](v)
 
   def getTypeConstraints(self, vars):
-    my_type = self.getTypeSMTName()
-    srctype = self.v.getTypeSMTName()
     cnstr = {
       self.Trunc: lambda src,tgt: src > tgt,
       self.ZExt:  lambda src,tgt: src < tgt,
       self.SExt:  lambda src,tgt: src < tgt,
-    } [self.op](srctype, my_type)
+    } [self.op](self.stype, self.type)
 
-    c = [self.type.getConstraints(self, vars), cnstr]
-    if self.stype.defined:
-      c += [srctype == self.stype.getIntSize()]
-    return And(c)
-
-  def fixupTypes(self, types):
-    self.type.fixupSize(types.evaluate(self.getTypeSMTName()).as_long())
-    self.stype.fixupSize(types.evaluate(self.v.getTypeSMTName()).as_long())
+    return And(self.type.getConstraints(vars),
+               self.stype.getConstraints(vars),
+               self.stype == self.v.type,
+               cnstr)
 
 
 ################################
@@ -422,10 +472,11 @@ class Icmp(Instr):
     self.op = self.getOpId(op)
     if self.op == self.Var:
       self.opname = op
-    self.type = type
+    self.type = IntType(1)
+    self.stype = type
     self.v1 = v1
     self.v2 = v2
-    assert isinstance(self.type, Type)
+    assert isinstance(self.stype, Type)
     assert isinstance(self.v1, Instr)
     assert isinstance(self.v2, Instr)
 
@@ -437,27 +488,23 @@ class Icmp(Instr):
     op = self.opname if self.op == Icmp.Var else Icmp.opnames[self.op]
     if len(op) > 0:
       op = ' ' + op
-    t = str(self.type)
+    t = str(self.stype)
     if len(t) > 0:
       t = ' ' + t
     return 'icmp%s%s %s, %s' % (op, t, self.v1.getName(), self.v2.getName())
 
-  @staticmethod
-  def toBV(b):
-    return If(b, BitVecVal(1, 1), BitVecVal(0, 1))
-
   def opToSMT(self, op, a, b):
     return {
-      self.EQ:  lambda a,b: Icmp.toBV(a == b),
-      self.NE:  lambda a,b: Icmp.toBV(a != b),
-      self.UGT: lambda a,b: Icmp.toBV(UGT(a, b)),
-      self.UGE: lambda a,b: Icmp.toBV(UGE(a, b)),
-      self.ULT: lambda a,b: Icmp.toBV(ULT(a, b)),
-      self.ULE: lambda a,b: Icmp.toBV(ULE(a, b)),
-      self.SGT: lambda a,b: Icmp.toBV(a > b),
-      self.SGE: lambda a,b: Icmp.toBV(a >= b),
-      self.SLT: lambda a,b: Icmp.toBV(a < b),
-      self.SLE: lambda a,b: Icmp.toBV(a <= b),
+      self.EQ:  lambda a,b: toBV(a == b),
+      self.NE:  lambda a,b: toBV(a != b),
+      self.UGT: lambda a,b: toBV(UGT(a, b)),
+      self.UGE: lambda a,b: toBV(UGE(a, b)),
+      self.ULT: lambda a,b: toBV(ULT(a, b)),
+      self.ULE: lambda a,b: toBV(ULE(a, b)),
+      self.SGT: lambda a,b: toBV(a > b),
+      self.SGE: lambda a,b: toBV(a >= b),
+      self.SLT: lambda a,b: toBV(a < b),
+      self.SLE: lambda a,b: toBV(a <= b),
     }[op](a, b)
 
   def recurseSMT(self, ops, a, b, i):
@@ -477,14 +524,10 @@ class Icmp(Instr):
                            self.v2.toSMT(defined, qvars), 0)
 
   def getTypeConstraints(self, vars):
-    c = [self.v1.getTypeSMTName() == self.v2.getTypeSMTName(),
-         self.getTypeSMTName() == 1]
-    if self.type.defined:
-      c += [self.v1.getTypeSMTName() == self.type.getIntSize()]
-    return And(c)
-
-  def fixupTypes(self, types):
-    self.type.fixupSize(types.evaluate(self.v1.getTypeSMTName()).as_long())
+    return And(self.type.getConstraints(vars),
+               self.stype.getConstraints(vars),
+               self.stype == self.v1.type,
+               self.stype == self.v2.type)
 
 
 ################################
@@ -511,16 +554,44 @@ class Select(Instr):
               self.v2.toSMT(defined, qvars))
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(self, vars),
-               self.getTypeSMTName() == self.v1.getTypeSMTName(),
-               self.v1.getTypeSMTName() == self.v2.getTypeSMTName(),
-               self.c.getTypeSMTName() == 1)
+    return And(self.type.getConstraints(vars),
+               self.type == self.v1.type,
+               self.type == self.v2.type,
+               self.c.type == 1)
+
+
+################################
+class Alloca(Instr):
+  def __init__(self, type, elemsType, numElems, align):
+    self.type = PtrType(type)
+    self.elemsType = elemsType
+    self.numElems = numElems
+    self.align = align
+    assert isinstance(self.elemsType, Type)
+    assert isinstance(self.numElems, Instr)
+    assert isinstance(self.align, int)
+
+  def toString(self):
+    if str(self.numElems) == '1':
+      elems = ''
+    else:
+      t2 = str(self.elemsType)
+      elems = ', ' + t2
+      if len(t2) > 0:
+        elems += ' '
+      elems += str(self.numElems)
+    align = ', align %d' % self.align if self.align != 0 else ''
+    return 'alloca %s%s%s' % (str(self.type.type), elems, align)
+
+  def toSMT(self, defined, qvars):
+    # TODO
+    return BoolVal(True)
 
 
 ################################
 def print_prog(p):
   for k,v in p.iteritems():
-    if isinstance(v, Input) or (isinstance(v, Constant) and k[0] != '%'):
+    if isinstance(v, Input) or isinstance(v, Constant):
       continue
     print '%s = %s' % (k, v)
 

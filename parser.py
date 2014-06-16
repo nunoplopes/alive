@@ -20,7 +20,7 @@ identifiers = {}
 
 def parseType(toks):
   if toks[0] == 'i':
-    return IntType(int(toks[1]))
+    return IntType(toks[1])
   assert False
 
 
@@ -46,6 +46,12 @@ def parseOperand(toks, type):
     return UndefVal(type)
 
   # constant
+  if toks[0] == 'null':
+    if not isinstance(type, PtrType):
+      type = PtrType(IntType())
+    # TODO
+    assert 1 == 0
+
   if toks[0] == 'true':
     n = 1
   elif toks[0] == 'false':
@@ -54,14 +60,15 @@ def parseOperand(toks, type):
     n = int(toks[0])
 
   c = Constant(n, type)
-  identifiers[str(c.getTypeSMTName())] = c
+  identifiers[c.getUniqueName()] = c
   return c
 
 def parseTypeOperand(toks):
   return [toks[0], parseOperand(toks[1], toks[0])]
 
-def parseOptionalStr(toks):
-  return toks[0] if len(toks) > 0 else ''
+def parseOptional(default):
+  return lambda toks : toks[0] if len(toks) == 1 else\
+                       toks if len(toks) > 0 else default
 
 def parseBinOp(toks):
   return BinOp(BinOp.getOpId(toks[0]), toks[2], toks[3],
@@ -86,6 +93,13 @@ def parseSelect(toks):
     t = t2
   return Select(t, parseOperand(toks[1], IntType(1)), toks[3], toks[5])
 
+def parseOptionalNumElems(toks):
+  t = IntType()
+  return parseOptional([t, parseOperand(['1'], t)])(toks)
+
+def parseAlloca(toks):
+  return Alloca(toks[1], toks[2], toks[3], toks[4])
+
 def parseOperandInstr(toks):
   op = parseOperand(toks[1], toks[0])
   return CopyOperand(op, toks[0])
@@ -107,18 +121,20 @@ def parseInstr(toks):
 identifier = Word(srange("[a-zA-Z0-9_.]"))
 reg = Literal('%') + identifier
 opname = identifier
+posnum = Word(nums).setParseAction(lambda toks : int(toks[0]))
 
 instrs = Forward()
 prog = instrs + StringEnd()
 
 comment = Literal(';') + restOfLine()
 
-type = (Literal('i') + Word(nums)).setParseAction(parseType)
+type = (Literal('i') + posnum).setParseAction(parseType)
 opttype = Optional(type).setParseAction(parseOptType)
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(lambda toks : [toks])
 operand = (reg | Regex(r"-?[0-9]+") | Literal('false') | Literal('true') |\
-           Literal('undef')).setParseAction(lambda toks : [toks])
+           Literal('undef') | Literal('null')).\
+             setParseAction(lambda toks : [toks])
 
 typeoperand = (opttype + operand).setParseAction(parseTypeOperand)
 comma = Literal(',').suppress()
@@ -130,7 +146,7 @@ conversionop = (opname + typeoperand +\
                 Optional(Literal('to').suppress() + type).\
                  setParseAction(parseOptType)).setParseAction(parseConversionOp)
 
-optionalname = Optional(identifier).setParseAction(parseOptionalStr)
+optionalname = Optional(identifier).setParseAction(parseOptional(''))
 
 icmp = (Literal('icmp') + optionalname + typeoperand + comma + operand).\
          setParseAction(parseIcmp)
@@ -138,9 +154,17 @@ icmp = (Literal('icmp') + optionalname + typeoperand + comma + operand).\
 select = (Literal('select') + Optional(Literal('i1')).suppress() + operand +\
           comma + typeoperand + comma + typeoperand).setParseAction(parseSelect)
 
+align = (comma + Literal('align').suppress() + posnum)
+
+alloca = (Literal('alloca') + opttype +\
+          Optional(comma + typeoperand).\
+            setParseAction(parseOptionalNumElems) +\
+          Optional(align).setParseAction(parseOptional(0))).\
+            setParseAction(parseAlloca)
+
 operandinstr = (opttype + operand).setParseAction(parseOperandInstr)
 
-op = icmp | select | binop | conversionop | operandinstr
+op = icmp | select | alloca | binop | conversionop | operandinstr
 
 
 instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\
