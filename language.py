@@ -147,7 +147,7 @@ class PtrType(Type):
     assert isinstance(self.type, Type)
 
   def __repr__(self):
-    return self.type + '*'
+    return str(self.type) + '*'
 
   def setName(self, name):
     self.type.setName('*'+name)
@@ -157,6 +157,11 @@ class PtrType(Type):
 
   def getPointeeSize(self):
     return self.type.getSize()
+
+  def __eq__(self, other):
+    if isinstance(other, PtrType):
+      return self.type == other.type
+    assert False
 
   def fixup(self, types):
     self.size = types.evaluate(Int('ptrsize')).as_long()
@@ -188,9 +193,6 @@ class Instr:
       self.stype = copy.deepcopy(self.stype)
       self.stype.setName('s' + mk_unique_id() + name)
 
-  def toString(self):
-    raise Exception('toString not implemented')
-
   def getTypeConstraints(self, vars):
     return self.type.getConstraints(vars)
 
@@ -209,6 +211,7 @@ class TypeFixedValue(Instr):
     self.v = v
     self.min = min
     self.max = max
+    self.name = v.getName()
     assert isinstance(self.v, Instr)
 
     # TODO
@@ -649,14 +652,14 @@ class Alloca(Instr):
     assert isinstance(self.align, int)
 
   def toString(self):
-    if str(self.numElems) == '1':
+    elems = self.numElems.getName()
+    if elems == '1':
       elems = ''
     else:
-      t2 = str(self.elemsType)
-      elems = ', ' + t2
-      if len(t2) > 0:
-        elems += ' '
-      elems += str(self.numElems)
+      t = ', ' + str(self.elemsType)
+      if len(t) > 0:
+        t += ' '
+      elems = t + elems
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'alloca %s%s%s' % (str(self.type.type), elems, align)
 
@@ -668,11 +671,77 @@ class Alloca(Instr):
 
 
 ################################
+class Load(Instr):
+  def __init__(self, stype, v, align):
+    self.stype = stype
+    self.type = stype.type
+    self.v = v
+    self.align = align
+    assert isinstance(self.stype, PtrType)
+    assert isinstance(self.v, Instr)
+    assert isinstance(self.align, int)
+
+  def toString(self):
+    align = ', align %d' % self.align if self.align != 0 else ''
+    return 'load %s %s%s' % (str(self.stype), self.v.getName(), align)
+
+  def toSMT(self, defined, state, qvars):
+    # TODO
+    return BitVecVal(1,1)
+
+  def getTypeConstraints(self, vars):
+    return And(self.type.getConstraints(vars),
+               self.v.type == self.stype)
+
+
+################################
+class Store(Instr):
+  def __init__(self, stype, v1, type, v2, align):
+    self.stype = stype
+    self.v1 = v1
+    self.type = type
+    self.v2 = v2
+    self.align = align
+    self.setName('store')
+    self.id = mk_unique_id()
+    self.type.setName(self.getUniqueName())
+    assert isinstance(self.stype, Type)
+    assert isinstance(self.v1, Instr)
+    assert isinstance(self.type, PtrType)
+    assert isinstance(self.v2, Instr)
+    assert isinstance(self.align, int)
+
+  def getUniqueName(self):
+    return self.getName() + '_' + self.id
+
+  def toString(self):
+    t = str(self.stype)
+    if len(t) > 0:
+      t = t + ' '
+    align = ', align %d' % self.align if self.align != 0 else ''
+    return 'store %s%s, %s %s%s' % (t, self.v1.getName(), str(self.type),
+                                    self.v2.getName(), align)
+
+  def toSMT(self, defined, state, qvars):
+    # TODO
+    return BitVecVal(1,1)
+
+  def getTypeConstraints(self, vars):
+    return And(self.stype.getConstraints(vars),
+               self.type.getConstraints(vars),
+               self.v1.type == self.stype,
+               self.v2.type == self.type)
+
+
+################################
 def print_prog(p):
   for k,v in p.iteritems():
     if isinstance(v, Input) or isinstance(v, Constant):
       continue
-    print '%s = %s' % (k, v)
+    if isinstance(v, Store):
+      print v
+    else:
+      print '%s = %s' % (k, v)
 
 
 def getTypeConstraints(p, vars):

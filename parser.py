@@ -19,15 +19,23 @@ identifiers = {}
 
 
 def parseType(toks):
-  if toks[0] == 'i':
-    return IntType(toks[1])
-  assert False
-
+  t = IntType(toks[1])
+  for i in range(len(toks)-2):
+    t = PtrType(t)
+  return t
 
 def parseOptType(toks):
   if len(toks) == 1:
     return toks[0]
   return IntType()
+
+def ensurePtrType(t):
+  if isinstance(t, PtrType):
+    return t
+  if isinstance(t, IntType) and not t.defined:
+    return PtrType(t)
+  print 'Pointer type required, given \'%s\' instead' % str(t)
+  exit(-1)
 
 
 def parseOperand(toks, type):
@@ -97,9 +105,17 @@ def parseOptionalNumElems(toks):
 def parseAlloca(toks):
   return Alloca(toks[1], toks[2], toks[3], toks[4])
 
+def parseLoad(toks):
+  return Load(ensurePtrType(toks[1]), toks[2], toks[3])
+
 def parseOperandInstr(toks):
   op = parseOperand(toks[1], toks[0])
   return CopyOperand(op, toks[0])
+
+def parseStore(toks):
+  global identifiers
+  s = Store(toks[1], toks[2], ensurePtrType(toks[3]), toks[4], toks[5])
+  identifiers[s.getUniqueName()] = s
 
 
 def parseInstr(toks):
@@ -125,8 +141,10 @@ prog = instrs + StringEnd()
 
 comment = Literal(';') + restOfLine()
 
-type = (Literal('i') + posnum).setParseAction(parseType)
+type = (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
+         setParseAction(parseType)
 opttype = Optional(type).setParseAction(parseOptType)
+
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(lambda toks : [toks])
 operand = (reg | Regex(r"-?[0-9]+") | Literal('false') | Literal('true') |\
@@ -152,20 +170,23 @@ select = (Literal('select') + Optional(Literal('i1')).suppress() + operand +\
           comma + typeoperand + comma + typeoperand).setParseAction(parseSelect)
 
 align = (comma + Literal('align').suppress() + posnum)
+optalign = Optional(align).setParseAction(parseOptional(0))
 
 alloca = (Literal('alloca') + opttype +\
-          Optional(comma + typeoperand).\
-            setParseAction(parseOptionalNumElems) +\
-          Optional(align).setParseAction(parseOptional(0))).\
-            setParseAction(parseAlloca)
+          Optional(comma + typeoperand).setParseAction(parseOptionalNumElems) +\
+          optalign).setParseAction(parseAlloca)
+
+load = (Literal('load') + typeoperand + optalign).setParseAction(parseLoad)
 
 operandinstr = (opttype + operand).setParseAction(parseOperandInstr)
 
-op = icmp | select | alloca | binop | conversionop | operandinstr
+op = icmp | select | alloca | load | binop | conversionop | operandinstr
 
+store = (Literal('store') + typeoperand + comma + typeoperand +\
+         optalign).setParseAction(parseStore)
 
 instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\
-        comment.suppress()
+        store | comment.suppress()
 instrs <<= OneOrMore(instr)
 
 
