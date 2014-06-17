@@ -18,6 +18,13 @@ import math, collections, copy
 def toBV(b):
   return If(b, BitVecVal(1, 1), BitVecVal(0, 1))
 
+
+def mk_distinct(l):
+  if len(l) < 2:
+    return BoolVal(True)
+  return Distinct(l)
+
+
 gbl_unique_id = 0
 def mk_unique_id():
   global gbl_unique_id
@@ -39,6 +46,10 @@ class State:
 
   def addAlloca(self, ptr, mem):
     self.ptrs += [(ptr, mem)]
+
+  def getAllocaConstraints(self):
+    ptrs = [ptr for (ptr, mem) in self.ptrs]
+    return mk_distinct(ptrs)
 
   def eval(self, v, defined, qvars):
     (smt, d, q) = self.vars[v.getUniqueName()]

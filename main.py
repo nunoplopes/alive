@@ -104,6 +104,8 @@ def check_opt(src, tgt, types):
   s = Solver()
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
+  s.add(srcv.getAllocaConstraints())
+  s.add(tgtv.getAllocaConstraints())
 
   for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
