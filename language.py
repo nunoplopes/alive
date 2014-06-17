@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from z3 import *
-import math, copy
+import math, collections, copy
 
 def toBV(b):
   return If(b, BitVecVal(1, 1), BitVecVal(0, 1))
@@ -26,6 +26,40 @@ def mk_unique_id():
   return id
 
 
+################################
+class State:
+  def __init__(self):
+    self.vars = collections.OrderedDict()
+    self.ptrs = []
+
+  def add(self, v, smt, defined, qvars):
+    if v.getUniqueName() == '':
+      return
+    self.vars[v.getUniqueName()] = (smt, defined, qvars)
+
+  def addAlloca(self, ptr, mem):
+    self.ptrs += [(ptr, mem)]
+
+  def eval(self, v, defined, qvars):
+    (smt, d, q) = self.vars[v.getUniqueName()]
+    defined += d
+    qvars += q
+    return smt
+
+  def iteritems(self):
+    for k,v in self.vars.iteritems():
+      if isinstance(v, Input) or isinstance(v, Constant):
+        continue
+      yield k,v
+
+  def has_key(self, k):
+    return self.vars.has_key(k)
+
+  def __getitem__(self, k):
+    return self.vars[k]
+
+
+################################
 class Type:
   def __repr__(self):
     return ''
@@ -50,6 +84,9 @@ class IntType(Type):
     return ''
 
   def getIntSize(self):
+    return self.size
+
+  def getSize(self):
     return self.size
 
   def fixup(self, types):
@@ -102,16 +139,23 @@ class PtrType(Type):
     return self.type + '*'
 
   def setName(self, name):
-    # TODO
-    return
+    self.type.setName('*'+name)
+
+  def getSize(self):
+    return self.size
+
+  def getPointeeSize(self):
+    return self.type.getSize()
 
   def fixup(self, types):
-    # TODO
-    return
+    self.size = types.evaluate(Int('ptrsize')).as_long()
+    self.type.fixup(types)
 
   def getConstraints(self, vars):
-    # TODO
-    return BoolVal(True)
+    # Pointers are assumed to be either 32 or 64 bits
+    v = Int('ptrsize')
+    return And(Or(v == 32, v == 64),
+               self.type.getConstraints(vars))
 
 
 ################################
@@ -120,6 +164,9 @@ class Instr:
     return self.toString()
 
   def getName(self):
+    return self.name
+
+  def getUniqueName(self):
     return self.name
 
   def setName(self, name):
@@ -146,6 +193,22 @@ class Instr:
 
 
 ################################
+class TypeFixedValue(Instr):
+  def __init__(self, v, min, max):
+    self.v = v
+    self.min = min
+    self.max = max
+    assert isinstance(self.v, Instr)
+
+    # TODO
+  def getValue(self):
+    return 1
+
+  def toString(self):
+    return self.v.toString()
+
+
+################################
 class Input(Instr):
   def __init__(self, name, type):
     self.type = type
@@ -155,7 +218,7 @@ class Input(Instr):
   def toString(self):
     return self.getName()
 
-  def toSMT(self, defined, qvars):
+  def toSMT(self, defined, state, qvars):
     return BitVec(self.name, self.type.getIntSize())
 
 
@@ -170,8 +233,8 @@ class CopyOperand(Instr):
   def toString(self):
     return self.v.toString()
 
-  def toSMT(self, defined, qvars):
-    return self.v.toSMT(defined, qvars)
+  def toSMT(self, defined, state, qvars):
+    return state.eval(self.v, defined, qvars)
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(vars),
@@ -192,10 +255,12 @@ class Constant(Instr):
     return self.getName() + '_' + self.id
 
   def toString(self):
+    if isinstance(self.type, PtrType) and self.val == 0:
+      return 'null'
     return str(self.val)
 
-  def toSMT(self, defined, qvars):
-    return BitVecVal(self.val, self.type.getIntSize())
+  def toSMT(self, defined, state, qvars):
+    return BitVecVal(self.val, self.type.getSize())
 
   def getTypeConstraints(self, vars):
     c = self.type.getConstraints(vars)
@@ -220,10 +285,13 @@ class UndefVal(Constant):
   def toString(self):
     return 'undef'
 
-  def toSMT(self, defined, qvars):
+  def toSMT(self, defined, state, qvars):
     v = BitVec('undef' + self.id, self.type.getIntSize())
     qvars += [v]
     return v
+
+  def getTypeConstraints(self, vars):
+    return self.type.getConstraints(vars)
 
 
 ################################
@@ -360,9 +428,9 @@ class BinOp(Instr):
       }[self.op](v1,v2)
     return
 
-  def toSMT(self, defined, qvars):
-    v1 = self.v1.toSMT(defined, qvars)
-    v2 = self.v2.toSMT(defined, qvars)
+  def toSMT(self, defined, state, qvars):
+    v1 = state.eval(self.v1, defined, qvars)
+    v2 = state.eval(self.v2, defined, qvars)
     self._genSMTDefConds(v1, v2, defined)
     return {
       self.Add:  lambda a,b: a + b,
@@ -427,14 +495,13 @@ class ConversionOp(Instr):
       tt = ' to ' + tt
     return '%s%s %s%s' % (self.getOpName(), st, self.v.getName(), tt)
 
-  def toSMT(self, defined, qvars):
-    v = self.v.toSMT(defined, qvars)
+  def toSMT(self, defined, state, qvars):
     delta_bits = self.type.getIntSize() - self.stype.getIntSize()
     return {
       self.Trunc: lambda v: Extract(self.type.getIntSize()-1, 0, v),
       self.ZExt:  lambda v: ZeroExt(delta_bits, v),
       self.SExt:  lambda v: SignExt(delta_bits, v),
-    }[self.op](v)
+    }[self.op](state.eval(self.v, defined, qvars))
 
   def getTypeConstraints(self, vars):
     cnstr = {
@@ -516,12 +583,12 @@ class Icmp(Instr):
               self.opToSMT(ops[0], a, b),
               self.recurseSMT(ops[1:], a, b, i+1))
 
-  def toSMT(self, defined, qvars):
+  def toSMT(self, defined, state, qvars):
     # Generate all possible comparisons if icmp is generic. Set of comparisons
     # can be restricted in the precondition.
     ops = [self.op] if self.op != self.Var else range(self.Var)
-    return self.recurseSMT(ops, self.v1.toSMT(defined, qvars),
-                           self.v2.toSMT(defined, qvars), 0)
+    return self.recurseSMT(ops, state.eval(self.v1, defined, qvars),
+                           state.eval(self.v2, defined, qvars), 0)
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(vars),
@@ -548,10 +615,10 @@ class Select(Instr):
       t = t + ' '
     return 'select i1 %s, %s%s, %s%s' % (self.c, t, self.v1, t, self.v2)
 
-  def toSMT(self, defined, qvars):
-    return If(self.c.toSMT(defined, qvars) == 1,
-              self.v1.toSMT(defined, qvars),
-              self.v2.toSMT(defined, qvars))
+  def toSMT(self, defined, state, qvars):
+    return If(state.eval(self.c, defined, qvars) == 1,
+              state.eval(self.v1, defined, qvars),
+              state.eval(self.v2, defined, qvars))
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(vars),
@@ -565,10 +632,9 @@ class Alloca(Instr):
   def __init__(self, type, elemsType, numElems, align):
     self.type = PtrType(type)
     self.elemsType = elemsType
-    self.numElems = numElems
+    self.numElems = TypeFixedValue(numElems, 1, 32)
     self.align = align
     assert isinstance(self.elemsType, Type)
-    assert isinstance(self.numElems, Instr)
     assert isinstance(self.align, int)
 
   def toString(self):
@@ -583,9 +649,11 @@ class Alloca(Instr):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'alloca %s%s%s' % (str(self.type.type), elems, align)
 
-  def toSMT(self, defined, qvars):
-    # TODO
-    return BoolVal(True)
+  def toSMT(self, defined, state, qvars):
+    ptr = BitVec('ptralloca' + self.getName(), self.type.size)
+    size = self.numElems.getValue() * self.type.getPointeeSize()
+    state.addAlloca(ptr, BitVec('alloca' + self.getName(), size))
+    return ptr
 
 
 ################################
@@ -603,3 +671,13 @@ def getTypeConstraints(p, vars):
 def fixupTypes(p, types):
   for v in p.itervalues():
     v.fixupTypes(types)
+
+
+def toSMT(prog):
+  state = State()
+  for k,v in prog.iteritems():
+    defined = []
+    qvars = []
+    smt = v.toSMT(defined, state, qvars)
+    state.add(v, smt, defined, qvars)
+  return state

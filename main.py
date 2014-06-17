@@ -102,19 +102,17 @@ def print_var_vals(s, vs1, vs2, stopv, types):
 
 def check_opt(src, tgt, types):
   s = Solver()
-  for k,v in src.iteritems():
-    if isinstance(v, Input) or isinstance(v, Constant):
-      continue
+  srcv = toSMT(src)
+  tgtv = toSMT(tgt)
 
+  for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
-    if not tgt.has_key(k):
+    if not tgtv.has_key(k):
       continue
 
-    defa = []
-    defb = []
-    qvars = []
-    a = v.toSMT(defa, qvars)
-    b = tgt[k].toSMT(defb, [])
+    (a, defa, qvars) = v
+    (b, defb, qvarsb) = tgtv[k]
+    qvars += qvarsb
     defa = mk_and(defa)
     defb = mk_and(defb)
 

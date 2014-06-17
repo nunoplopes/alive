@@ -43,23 +43,20 @@ def parseOperand(toks, type):
 
   assert len(toks) == 1
   if toks[0] == 'undef':
-    return UndefVal(type)
+    c = UndefVal(type)
 
   # constant
-  if toks[0] == 'null':
+  elif toks[0] == 'true':
+    c = Constant(1, type)
+  elif toks[0] == 'false':
+    c = Constant(0, type)
+  elif toks[0] == 'null':
     if not isinstance(type, PtrType):
       type = PtrType(IntType())
-    # TODO
-    assert 1 == 0
-
-  if toks[0] == 'true':
-    n = 1
-  elif toks[0] == 'false':
-    n = 0
+    c = Constant(0, type)
   else:
-    n = int(toks[0])
+    c = Constant(int(toks[0]), type)
 
-  c = Constant(n, type)
   identifiers[c.getUniqueName()] = c
   return c
 
