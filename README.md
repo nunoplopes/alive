@@ -10,3 +10,12 @@ WARNING: This tool is not complete and its results should not be relied upon.
 Requirements
 ------------
 ALIVe requires Z3Py, which can be obtained from http://z3.codeplex.com
+
+
+Generating Benchmarks
+---------------------
+ALIVe will automatically generate benchmarks in SMT-LIB 2 format when the
+'bench' directory exists and when python is run in non-optimized mode (the
+default).
+These benchmarks are over the bit-vector theory and may or may not have
+quantifiers.
