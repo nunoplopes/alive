@@ -19,10 +19,36 @@ def toBV(b):
   return If(b, BitVecVal(1, 1), BitVecVal(0, 1))
 
 
+def mk_or(l):
+  if len(l) == 1:
+    return l[0]
+  return Or(l)
+
+
 def mk_distinct(l):
   if len(l) < 2:
     return BoolVal(True)
   return Distinct(l)
+
+
+def truncateOrZExt(src, tgt):
+  srcb = src.sort().size()
+  tgtb = tgt.sort().size()
+  if srcb == tgtb:
+    return src
+  if srcb > tgtb:
+    return Extract(tgtb - 1, 0, src)
+  return ZeroExt(tgtb - srcb, src)
+
+
+def truncateOrPad(src, tgt):
+  srcb = src.sort().size()
+  tgtb = tgt.sort().size()
+  if srcb == tgtb:
+    return src
+  if srcb > tgtb:
+    return Extract(srcb - 1, srcb - tgtb, src)
+  return Concat(src, BitVecVal(0, tgtb - srcb))
 
 
 gbl_unique_id = 0
@@ -44,11 +70,11 @@ class State:
       return
     self.vars[v.getUniqueName()] = (smt, defined, qvars)
 
-  def addAlloca(self, ptr, mem):
-    self.ptrs += [(ptr, mem)]
+  def addAlloca(self, ptr, size, mem):
+    self.ptrs += [(ptr, size, mem)]
 
   def getAllocaConstraints(self):
-    ptrs = [ptr for (ptr, mem) in self.ptrs]
+    ptrs = [ptr for (ptr, size, mem) in self.ptrs]
     return mk_distinct(ptrs)
 
   def eval(self, v, defined, qvars):
@@ -59,6 +85,8 @@ class State:
 
   def iteritems(self):
     for k,v in self.vars.iteritems():
+      ## FIXME: v is an SMT expression; not an AST tree anymore
+      ## the following if is dead code
       if isinstance(v, Input) or isinstance(v, Constant):
         continue
       yield k,v
@@ -216,7 +244,7 @@ class TypeFixedValue(Instr):
 
     # TODO
   def getValue(self):
-    return 1
+    return 3
 
   def toString(self):
     return self.v.toString()
@@ -664,9 +692,11 @@ class Alloca(Instr):
     return 'alloca %s%s%s' % (str(self.type.type), elems, align)
 
   def toSMT(self, defined, state, qvars):
+    ## TODO: size in bits vs bytes
     ptr = BitVec('ptralloca' + self.getName(), self.type.size)
     size = self.numElems.getValue() * self.type.getPointeeSize()
-    state.addAlloca(ptr, BitVec('alloca' + self.getName(), size))
+    defined += [ULT(ptr, ptr + size), ptr != 0]
+    state.addAlloca(ptr, size, BitVec('alloca' + self.getName(), size))
     return ptr
 
 
@@ -685,9 +715,27 @@ class Load(Instr):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'load %s %s%s' % (str(self.stype), self.v.getName(), align)
 
+  def _recPtrLoad(self, l, v):
+    (ptr, size, mem) = l[0]
+    if size != self.type.getSize():
+      offset = v - ptr
+      mem = mem << truncateOrZExt(offset, mem)
+      mem = Extract(size - 1, size - self.type.getSize(), mem)
+
+    if len(l) == 1:
+      return mem
+    return If(And(UGE(v, ptr), ULT(v, ptr+size)),
+              mem,
+              _recPtrLoad(l[1:]))
+
   def toSMT(self, defined, state, qvars):
-    # TODO
-    return BitVecVal(1,1)
+    v = state.eval(self.v, defined, qvars)
+
+    # Reading from a random location is undefined
+    d = [And(UGE(v, ptr), ULT(v, ptr+size)) for (ptr, size, mem) in state.ptrs]
+    defined += [mk_or(d), v != 0]
+
+    return self._recPtrLoad(state.ptrs, v)
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(vars),
@@ -696,6 +744,7 @@ class Load(Instr):
 
 ################################
 class Store(Instr):
+  # v1 = src, v2 = dst
   def __init__(self, stype, v1, type, v2, align):
     self.stype = stype
     self.v1 = v1
@@ -722,9 +771,37 @@ class Store(Instr):
     return 'store %s%s, %s %s%s' % (t, self.v1.getName(), str(self.type),
                                     self.v2.getName(), align)
 
+  def _mkMem(self, src, tgt, ptr, size, mem):
+    write_size = self.stype.getSize()
+    if write_size == size:
+      return src
+    offset = tgt - ptr
+    new = LShR(truncateOrPad(src, mem), truncateOrZExt(offset, mem))
+
+    # mask out bits that will be written
+    mask = BitVecVal((1 << size) - 1, size)
+    m1 = mask << truncateOrZExt(size - offset, mem)
+    m2 = LShR(mask, truncateOrZExt(write_size + offset, mem))
+    old = mem & (m1 | m2)
+    return new | old
+
   def toSMT(self, defined, state, qvars):
-    # TODO
-    return BitVecVal(1,1)
+    src = state.eval(self.v1, defined, qvars)
+    tgt = state.eval(self.v2, defined, qvars)
+
+    # Writing to a random location is undefined
+    d = [And(UGE(tgt, ptr), ULT(tgt, ptr+size)) \
+           for (ptr, size, mem) in state.ptrs]
+    defined += [mk_or(d), tgt != 0]
+
+    newmem = []
+    for (ptr, size, mem) in state.ptrs:
+      mem = If(And(UGE(tgt, ptr), ULT(tgt, ptr+size)),
+               self._mkMem(src, tgt, ptr, size, mem),
+               mem)
+      newmem += [(ptr, size, mem)]
+    state.ptrs = newmem
+    return None
 
   def getTypeConstraints(self, vars):
     return And(self.stype.getConstraints(vars),
