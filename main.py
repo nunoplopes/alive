@@ -13,23 +13,9 @@
 # limitations under the License.
 
 import argparse, collections, glob, re, sys, time
-from z3 import *
+from common import *
 from language import *
 from parser import parse_llvm, parse_opt_file
-
-
-def mk_and(l):
-  if len(l) == 0:
-    return BoolVal(True)
-  if len(l) == 1:
-    return l[0]
-  return And(l)
-
-
-def mk_forall(l, f):
-  if l == []:
-    return f
-  return ForAll(l, f)
 
 
 def block_model(s):

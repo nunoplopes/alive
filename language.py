@@ -12,43 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from z3 import *
 import math, collections, copy
-
-def toBV(b):
-  return If(b, BitVecVal(1, 1), BitVecVal(0, 1))
-
-
-def mk_or(l):
-  if len(l) == 1:
-    return l[0]
-  return Or(l)
-
-
-def mk_distinct(l):
-  if len(l) < 2:
-    return BoolVal(True)
-  return Distinct(l)
-
-
-def truncateOrZExt(src, tgt):
-  srcb = src.sort().size()
-  tgtb = tgt.sort().size()
-  if srcb == tgtb:
-    return src
-  if srcb > tgtb:
-    return Extract(tgtb - 1, 0, src)
-  return ZeroExt(tgtb - srcb, src)
-
-
-def truncateOrPad(src, tgt):
-  srcb = src.sort().size()
-  tgtb = tgt.sort().size()
-  if srcb == tgtb:
-    return src
-  if srcb > tgtb:
-    return Extract(srcb - 1, srcb - tgtb, src)
-  return Concat(src, BitVecVal(0, tgtb - srcb))
+from common import *
 
 
 gbl_unique_id = 0
@@ -217,20 +182,33 @@ class Instr:
     self.name = name
     self.type = copy.deepcopy(self.type)
     self.type.setName(name)
-    if hasattr(self, 'stype'):
-      self.stype = copy.deepcopy(self.stype)
-      self.stype.setName('s' + mk_unique_id() + name)
+    for attr in dir(self):
+      a = getattr(self, attr)
+      if isinstance(a, TypeFixedValue):
+        a.setName(name, attr)
+        setattr(self, attr, a)
+      elif isinstance(a, Type) and attr != 'type':
+        a = copy.deepcopy(a)
+        a.setName('%s_%s_%s' % (name, attr, mk_unique_id()))
+        setattr(self, attr, a)
 
   def getTypeConstraints(self, vars):
-    return self.type.getConstraints(vars)
+    c = []
+    for attr in dir(self):
+      a = getattr(self, attr)
+      if isinstance(a, Type):
+        c += [a.getConstraints(vars)]
+      elif isinstance(a, Instr):
+        c += [a.getTypeConstraints(vars)]
+    return mk_and(c)
 
   def fixupTypes(self, types):
-    self.type.fixup(types)
-    if hasattr(self, 'stype'):
-      self.stype.fixup(types)
-    for attr in ['v', 'v1', 'v2']:
-      if hasattr(self, attr):
-        getattr(self, attr).fixupTypes(types)
+    for attr in dir(self):
+      a = getattr(self, attr)
+      if isinstance(a, Instr):
+        a.fixupTypes(types)
+      elif isinstance(a, Type):
+        a.fixup(types)
 
 
 ################################
@@ -239,15 +217,33 @@ class TypeFixedValue(Instr):
     self.v = v
     self.min = min
     self.max = max
-    self.name = v.getName()
     assert isinstance(self.v, Instr)
 
-    # TODO
+  def setName(self, name, attr):
+    self.name = self.v.getName()
+    self.smtvar = Int('val_%s_%s' % (name, attr))
+
   def getValue(self):
-    return 3
+    return self.val
+
+  def getType(self):
+    return self.v.type
 
   def toString(self):
     return self.v.toString()
+
+  def toSMT(self, defined, state, qvars):
+    defined += [state.eval(self.v, defined, qvars) == self.val]
+    return self.val
+
+  def getTypeConstraints(self, vars):
+    if isinstance(self.v, Constant) and not isinstance(self.v, UndefVal):
+      return self.smtvar == self.v.val
+    return And(self.smtvar >= self.min, self.smtvar <= self.max)
+
+  def fixupTypes(self, types):
+    self.v.fixupTypes(types)
+    self.val = types.evaluate(self.smtvar).as_long()
 
 
 ################################
@@ -331,9 +327,6 @@ class UndefVal(Constant):
     v = BitVec('undef' + self.id, self.type.getIntSize())
     qvars += [v]
     return v
-
-  def getTypeConstraints(self, vars):
-    return self.type.getConstraints(vars)
 
 
 ################################
@@ -674,7 +667,7 @@ class Alloca(Instr):
   def __init__(self, type, elemsType, numElems, align):
     self.type = PtrType(type)
     self.elemsType = elemsType
-    self.numElems = TypeFixedValue(numElems, 1, 32)
+    self.numElems = TypeFixedValue(numElems, 1, 16)
     self.align = align
     assert isinstance(self.elemsType, Type)
     assert isinstance(self.align, int)
@@ -684,10 +677,10 @@ class Alloca(Instr):
     if elems == '1':
       elems = ''
     else:
-      t = ', ' + str(self.elemsType)
+      t = str(self.elemsType)
       if len(t) > 0:
         t += ' '
-      elems = t + elems
+      elems =  ', ' + t + elems
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'alloca %s%s%s' % (str(self.type.type), elems, align)
 
@@ -698,6 +691,13 @@ class Alloca(Instr):
     defined += [ULT(ptr, ptr + size), ptr != 0]
     state.addAlloca(ptr, size, BitVec('alloca' + self.getName(), size))
     return ptr
+
+
+  def getTypeConstraints(self, vars):
+    return And(self.type.getConstraints(vars),
+               self.elemsType.getConstraints(vars),
+               self.numElems.getTypeConstraints(vars),
+               self.numElems.getType() == self.elemsType)
 
 
 ################################
@@ -717,10 +717,14 @@ class Load(Instr):
 
   def _recPtrLoad(self, l, v):
     (ptr, size, mem) = l[0]
-    if size != self.type.getSize():
+    if size > self.type.getSize():
       offset = v - ptr
       mem = mem << truncateOrZExt(offset, mem)
       mem = Extract(size - 1, size - self.type.getSize(), mem)
+    elif size < self.type.getSize():
+      # undef behavior
+      #TODO..
+      mem = BitVecVal(0, size)
 
     if len(l) == 1:
       return mem
@@ -732,7 +736,8 @@ class Load(Instr):
     v = state.eval(self.v, defined, qvars)
 
     # Reading from a random location is undefined
-    d = [And(UGE(v, ptr), ULT(v, ptr+size)) for (ptr, size, mem) in state.ptrs]
+    d = [And(UGE(v, ptr), ULE(v + self.type.getSize(), ptr + size))\
+      for (ptr, size, mem) in state.ptrs]
     defined += [mk_or(d), v != 0]
 
     return self._recPtrLoad(state.ptrs, v)
@@ -744,20 +749,19 @@ class Load(Instr):
 
 ################################
 class Store(Instr):
-  # v1 = src, v2 = dst
-  def __init__(self, stype, v1, type, v2, align):
+  def __init__(self, stype, src, type, dst, align):
     self.stype = stype
-    self.v1 = v1
+    self.src = src
     self.type = type
-    self.v2 = v2
+    self.dst = dst
     self.align = align
     self.setName('store')
     self.id = mk_unique_id()
     self.type.setName(self.getUniqueName())
     assert isinstance(self.stype, Type)
-    assert isinstance(self.v1, Instr)
+    assert isinstance(self.src, Instr)
     assert isinstance(self.type, PtrType)
-    assert isinstance(self.v2, Instr)
+    assert isinstance(self.dst, Instr)
     assert isinstance(self.align, int)
 
   def getUniqueName(self):
@@ -768,8 +772,8 @@ class Store(Instr):
     if len(t) > 0:
       t = t + ' '
     align = ', align %d' % self.align if self.align != 0 else ''
-    return 'store %s%s, %s %s%s' % (t, self.v1.getName(), str(self.type),
-                                    self.v2.getName(), align)
+    return 'store %s%s, %s %s%s' % (t, self.src.getName(), str(self.type),
+                                    self.dst.getName(), align)
 
   def _mkMem(self, src, tgt, ptr, size, mem):
     write_size = self.stype.getSize()
@@ -786,8 +790,8 @@ class Store(Instr):
     return new | old
 
   def toSMT(self, defined, state, qvars):
-    src = state.eval(self.v1, defined, qvars)
-    tgt = state.eval(self.v2, defined, qvars)
+    src = state.eval(self.src, defined, qvars)
+    tgt = state.eval(self.dst, defined, qvars)
 
     # Writing to a random location is undefined
     d = [And(UGE(tgt, ptr), ULT(tgt, ptr+size)) \
@@ -796,7 +800,7 @@ class Store(Instr):
 
     newmem = []
     for (ptr, size, mem) in state.ptrs:
-      mem = If(And(UGE(tgt, ptr), ULT(tgt, ptr+size)),
+      mem = If(And(UGE(tgt, ptr), ULE(tgt + self.stype.getSize(), ptr + size)),
                self._mkMem(src, tgt, ptr, size, mem),
                mem)
       newmem += [(ptr, size, mem)]
@@ -806,8 +810,8 @@ class Store(Instr):
   def getTypeConstraints(self, vars):
     return And(self.stype.getConstraints(vars),
                self.type.getConstraints(vars),
-               self.v1.type == self.stype,
-               self.v2.type == self.type)
+               self.src.type == self.stype,
+               self.dst.type == self.type)
 
 
 ################################
