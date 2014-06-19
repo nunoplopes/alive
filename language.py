@@ -50,9 +50,7 @@ class State:
 
   def iteritems(self):
     for k,v in self.vars.iteritems():
-      ## FIXME: v is an SMT expression; not an AST tree anymore
-      ## the following if is dead code
-      if isinstance(v, Input) or isinstance(v, Constant):
+      if k[0] != '%':
         continue
       yield k,v
 

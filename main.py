@@ -54,6 +54,37 @@ def gen_benchmark(s):
   fd.close()
 
 
+# lazy initialization of portfolio of SMT solvers.
+def initSolvers(cnstrs):
+  global solver_cnstrs, qfbv_solver_inited, bv_solver_inited
+  solver_cnstrs = cnstrs
+  qfbv_solver_inited = False
+  bv_solver_inited   = False
+
+
+def getSolver(qvars):
+  global qfbv_solver_inited, bv_solver_inited
+  if len(qvars) == 0:
+    if not qfbv_solver_inited:
+      qfbv_solver.push()
+      qfbv_solver.add(solver_cnstrs)
+      qfbv_solver_inited = True
+    return qfbv_solver
+
+  if not bv_solver_inited:
+    bv_solver.push()
+    bv_solver.add(solver_cnstrs)
+    bv_solver_inited = True
+  return bv_solver
+
+
+def resetSolvers():
+  if qfbv_solver_inited:
+    qfbv_solver.pop()
+  if bv_solver_inited:
+    bv_solver.pop()
+
+
 def get_var_int_size(var, types):
   return types.evaluate(Int('t'+var)).as_long()
 
@@ -73,11 +104,11 @@ def _print_var_vals(s, vars, stopv, types, seen):
   for k,v in vars.iteritems():
     if k == stopv:
       return
-    if isinstance(v, Constant) or k in seen:
+    if k in seen:
       continue
     seen |= set([k])
     bits = get_var_int_size(k, types)
-    print "%s i%d = %s" % (k, bits, s.model().evaluate(v.toSMT([], [])))
+    print "%s i%d = %s" % (k, bits, s.model().evaluate(v[0]))
 
 
 def print_var_vals(s, vs1, vs2, stopv, types):
@@ -87,11 +118,10 @@ def print_var_vals(s, vs1, vs2, stopv, types):
 
 
 def check_opt(src, tgt, types):
-  s = Solver()
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
-  s.add(srcv.getAllocaConstraints())
-  s.add(tgtv.getAllocaConstraints())
+  initSolvers([srcv.getAllocaConstraints(),
+               tgtv.getAllocaConstraints()])
 
   for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
@@ -105,16 +135,16 @@ def check_opt(src, tgt, types):
     defb = mk_and(defb)
 
     # check if domain of defined values of Src implies that of Tgt
+    s = getSolver(qvars)
     s.push()
     s.add(mk_forall(qvars, And(defa, Not(defb))))
     if s.check() != unsat:
       print '\nDomain of definedness of Target is smaller than Source\'s for '+\
               'i%d %s' % (get_var_int_size(k, types), k)
       print 'Example:'
-      print_var_vals(s, src, tgt, k, types)
+      print_var_vals(s, srcv, tgtv, k, types)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: undef'
-      s.pop()
       exit(-1)
     s.pop()
 
@@ -127,15 +157,16 @@ def check_opt(src, tgt, types):
     if res != unsat:
       if res == unknown:
         print '\nWARNING: The SMT solver gave up. Verification incomplete.'
+        print 'Solver says: ' + s.reason_unknown()
         exit(-1)
       print '\nMismatch in values of i%d %s' % (get_var_int_size(k, types), k)
       print 'Example:'
-      print_var_vals(s, src, tgt, k, types)
+      print_var_vals(s, srcv, tgtv, k, types)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: ' + str_model(s, b)
-      s.pop()
       exit(-1)
     s.pop()
+  resetSolvers()
 
 
 def main():
@@ -179,7 +210,11 @@ def main():
     exit(-1)
 
 
-  # now check for equivalence
+  global qfbv_solver, bv_solver
+  qfbv_solver = SolverFor('QF_BV')
+  bv_solver = SolverFor('BV')
+
+  # now check for correctness
   proofs = 0
   while s.check() == sat:
     fixupTypes(src, s.model())
