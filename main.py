@@ -85,10 +85,6 @@ def resetSolvers():
     bv_solver.pop()
 
 
-def get_var_int_size(var, types):
-  return types.evaluate(Int('t'+var)).as_long()
-
-
 def str_model(s, v):
   val = s.model().evaluate(v, True).as_long()
   return "%d (%s)" % (val, hex(val))
@@ -100,24 +96,23 @@ def print_model(s):
     print '%s = %s' % (d, m[d])
 
 
-def _print_var_vals(s, vars, stopv, types, seen):
+def _print_var_vals(s, vars, stopv, seen):
   for k,v in vars.iteritems():
     if k == stopv:
       return
     if k in seen:
       continue
     seen |= set([k])
-    bits = get_var_int_size(k, types)
-    print "%s i%d = %s" % (k, bits, s.model().evaluate(v[0]))
+    print "%s i%d = %s" % (k, v[0].sort().size(), s.model().evaluate(v[0]))
 
 
-def print_var_vals(s, vs1, vs2, stopv, types):
+def print_var_vals(s, vs1, vs2, stopv):
   seen = set()
-  _print_var_vals(s, vs1, stopv, types, seen)
-  _print_var_vals(s, vs2, stopv, types, seen)
+  _print_var_vals(s, vs1, stopv, seen)
+  _print_var_vals(s, vs2, stopv, seen)
 
 
-def check_opt(src, tgt, types):
+def check_opt(src, tgt):
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
   initSolvers([srcv.getAllocaConstraints(),
@@ -140,9 +135,9 @@ def check_opt(src, tgt, types):
     s.add(mk_forall(qvars, And(defa, Not(defb))))
     if s.check() != unsat:
       print '\nDomain of definedness of Target is smaller than Source\'s for '+\
-              'i%d %s' % (get_var_int_size(k, types), k)
+              'i%d %s' % (a.sort().size(), k)
       print 'Example:'
-      print_var_vals(s, srcv, tgtv, k, types)
+      print_var_vals(s, srcv, tgtv, k)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: undef'
       exit(-1)
@@ -159,9 +154,9 @@ def check_opt(src, tgt, types):
         print '\nWARNING: The SMT solver gave up. Verification incomplete.'
         print 'Solver says: ' + s.reason_unknown()
         exit(-1)
-      print '\nMismatch in values of i%d %s' % (get_var_int_size(k, types), k)
+      print '\nMismatch in values of i%d %s' % (a.sort().size(), k)
       print 'Example:'
-      print_var_vals(s, srcv, tgtv, k, types)
+      print_var_vals(s, srcv, tgtv, k)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: ' + str_model(s, b)
       exit(-1)
@@ -219,7 +214,7 @@ def main():
   while s.check() == sat:
     fixupTypes(src, s.model())
     fixupTypes(tgt, s.model())
-    check_opt(src, tgt, s.model())
+    check_opt(src, tgt)
     block_model(s)
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))

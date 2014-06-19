@@ -48,7 +48,10 @@ def toBV(b):
 
 def truncateOrZExt(src, tgt):
   srcb = src.sort().size()
-  tgtb = tgt.sort().size()
+  if isinstance(tgt, int):
+    tgtb = tgt
+  else:
+    tgtb = tgt.sort().size()
   if srcb == tgtb:
     return src
   if srcb > tgtb:

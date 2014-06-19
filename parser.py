@@ -80,7 +80,10 @@ def parseBinOp(toks):
                parseOperand(toks[4], toks[2]), toks[1])
 
 def parseConversionOp(toks):
-  return ConversionOp(ConversionOp.getOpId(toks[0]), toks[1], toks[2], toks[3])
+  op = ConversionOp.getOpId(toks[0])
+  stype = ensurePtrType(toks[1]) if ConversionOp.enforcePtrSrc(op) else toks[1]
+  type  = ensurePtrType(toks[3]) if ConversionOp.enforcePtrTgt(op) else toks[3]
+  return ConversionOp(op, stype, toks[2], type)
 
 def parseIcmp(toks):
   return Icmp(toks[1], toks[2], toks[3], parseOperand(toks[4], toks[2]))

@@ -255,7 +255,7 @@ class Input(Instr):
     return self.getName()
 
   def toSMT(self, defined, state, qvars):
-    return BitVec(self.name, self.type.getIntSize())
+    return BitVec(self.name, self.type.getSize())
 
 
 ################################
@@ -267,7 +267,10 @@ class CopyOperand(Instr):
     assert isinstance(self.type, Type)
 
   def toString(self):
-    return self.v.toString()
+    t = str(self.type)
+    if len(t) > 0:
+      t += ' '
+    return t + self.v.getName()
 
   def toSMT(self, defined, state, qvars):
     return state.eval(self.v, defined, qvars)
@@ -493,12 +496,15 @@ class BinOp(Instr):
 
 ################################
 class ConversionOp(Instr):
-  Trunc, ZExt, SExt, Last = range(4)
+  Trunc, ZExt, SExt, Ptr2Int, Int2Ptr, Bitcast, Last = range(7)
 
   opnames = {
-    Trunc: 'trunc',
-    ZExt:  'zext',
-    SExt:  'sext',
+    Trunc:   'trunc',
+    ZExt:    'zext',
+    SExt:    'sext',
+    Ptr2Int: 'ptrtoint',
+    Int2Ptr: 'inttoptr',
+    Bitcast: 'bitcast',
   }
   opids = {v:k for k, v in opnames.items()}
 
@@ -509,6 +515,10 @@ class ConversionOp(Instr):
     self.type = ttype
     assert isinstance(self.stype, Type)
     assert isinstance(self.type, Type)
+    if op == self.Ptr2Int:
+      assert isinstance(self.stype, PtrType)
+    if op == self.Int2Ptr:
+      assert isinstance(self.type, PtrType)
     assert isinstance(self.v, Instr)
     assert self.op >= 0 and self.op < self.Last
 
@@ -523,6 +533,14 @@ class ConversionOp(Instr):
       print 'Unknown conversion instruction: ' + name
       exit(-1)
 
+  @staticmethod
+  def enforcePtrSrc(op):
+    return op == ConversionOp.Ptr2Int
+
+  @staticmethod
+  def enforcePtrTgt(op):
+    return op == ConversionOp.Int2Ptr
+
   def toString(self):
     st = str(self.stype)
     if len(st) > 0:
@@ -533,18 +551,25 @@ class ConversionOp(Instr):
     return '%s%s %s%s' % (self.getOpName(), st, self.v.getName(), tt)
 
   def toSMT(self, defined, state, qvars):
-    delta_bits = self.type.getIntSize() - self.stype.getIntSize()
     return {
-      self.Trunc: lambda v: Extract(self.type.getIntSize()-1, 0, v),
-      self.ZExt:  lambda v: ZeroExt(delta_bits, v),
-      self.SExt:  lambda v: SignExt(delta_bits, v),
+      self.Trunc:   lambda v: Extract(self.type.getIntSize()-1, 0, v),
+      self.ZExt:    lambda v: ZeroExt(self.type.getIntSize() -
+                                      self.stype.getIntSize(), v),
+      self.SExt:    lambda v: SignExt(self.type.getIntSize() -
+                                      self.stype.getIntSize(), v),
+      self.Ptr2Int: lambda v: truncateOrZExt(v, self.type.getIntSize()),
+      self.Int2Ptr: lambda v: truncateOrZExt(v, self.type.getSize()),
+      self.Bitcast: lambda v: v,
     }[self.op](state.eval(self.v, defined, qvars))
 
   def getTypeConstraints(self, vars):
     cnstr = {
-      self.Trunc: lambda src,tgt: src > tgt,
-      self.ZExt:  lambda src,tgt: src < tgt,
-      self.SExt:  lambda src,tgt: src < tgt,
+      self.Trunc:   lambda src,tgt: src > tgt,
+      self.ZExt:    lambda src,tgt: src < tgt,
+      self.SExt:    lambda src,tgt: src < tgt,
+      self.Ptr2Int: lambda src,tgt: BoolVal(True),
+      self.Int2Ptr: lambda src,tgt: BoolVal(True),
+      self.Bitcast: lambda src,tgt: src.getSize() == tgt.getSize(),
     } [self.op](self.stype, self.type)
 
     return And(self.type.getConstraints(vars),
