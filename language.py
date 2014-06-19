@@ -235,9 +235,21 @@ class TypeFixedValue(Instr):
     return self.val
 
   def getTypeConstraints(self, vars):
+    c = []
+
     if isinstance(self.v, Constant) and not isinstance(self.v, UndefVal):
-      return self.smtvar == self.v.val
-    return And(self.smtvar >= self.min, self.smtvar <= self.max)
+      c += [self.smtvar == self.v.val]
+      if not self.v.type.defined:
+        c += [self.v.type == int(math.log(self.max, 2))+1]
+    else:
+      if self.v.type.defined:
+        min = self.min(self.min, 1 << self.v.type.getIntSize())
+        max = self.min(self.max, 1 << self.v.type.getIntSize())
+      else:
+        min = self.min
+        max = self.max
+      c += [self.smtvar >= min, self.smtvar <= max]
+    return And(c)
 
   def fixupTypes(self, types):
     self.v.fixupTypes(types)
@@ -515,9 +527,9 @@ class ConversionOp(Instr):
     self.type = ttype
     assert isinstance(self.stype, Type)
     assert isinstance(self.type, Type)
-    if op == self.Ptr2Int:
+    if self.enforcePtrSrc(op):
       assert isinstance(self.stype, PtrType)
-    if op == self.Int2Ptr:
+    if self.enforcePtrTgt(op):
       assert isinstance(self.type, PtrType)
     assert isinstance(self.v, Instr)
     assert self.op >= 0 and self.op < self.Last
@@ -712,8 +724,9 @@ class Alloca(Instr):
     return 'alloca %s%s%s' % (str(self.type.type), elems, align)
 
   def toSMT(self, defined, state, qvars):
+    self.numElems.toSMT(defined, state, qvars)
     ## TODO: size in bits vs bytes
-    ptr = BitVec('ptralloca' + self.getName(), self.type.size)
+    ptr = BitVec('ptralloca' + self.getName(), self.type.getSize())
     size = self.numElems.getValue() * self.type.getPointeeSize()
     defined += [ULT(ptr, ptr + size), ptr != 0]
     state.addAlloca(ptr, size, BitVec('alloca' + self.getName(), size))
