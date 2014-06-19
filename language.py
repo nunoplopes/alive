@@ -328,6 +328,10 @@ class UndefVal(Constant):
     qvars += [v]
     return v
 
+  def getTypeConstraints(self, vars):
+    # overload Constant's method
+    return self.type.getConstraints(vars)
+
 
 ################################
 class BinOp(Instr):
