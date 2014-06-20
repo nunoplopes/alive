@@ -24,6 +24,25 @@ def mk_unique_id():
   return id
 
 
+def getAllocSize(type):
+  # round to nearest byte boundary
+  return int((type.getSize() + 7) / 8) * 8
+
+
+def alignSize(size, align):
+  if align == 0:
+    return size
+  assert align & (align-1) == 0
+  return (size + (align-1)) & ~(align-1)
+
+
+def getPtrAlignCnstr(ptr, align):
+  if align == 0:
+    return BoolVal(True)
+  assert align & (align-1) == 0
+  return ptr & (align-1) == 0
+
+
 ################################
 class State:
   def __init__(self):
@@ -35,8 +54,8 @@ class State:
       return
     self.vars[v.getUniqueName()] = (smt, defined, qvars)
 
-  def addAlloca(self, ptr, size, mem):
-    self.ptrs += [(ptr, size, mem)]
+  def addAlloca(self, ptr, mem, info):
+    self.ptrs += [(ptr, mem, info)]
 
   def getAllocaConstraints(self):
     ptrs = [ptr for (ptr, size, mem) in self.ptrs]
@@ -85,13 +104,10 @@ class IntType(Type):
       return 'i' + str(self.size)
     return ''
 
-  def getIntSize(self):
-    return self.size
-
   def getSize(self):
     return self.size
 
-  def fixup(self, types):
+  def fixupTypes(self, types):
     size = types.evaluate(self.smtvar).as_long()
     assert self.defined == False or self.size == size
     self.size = size
@@ -124,10 +140,10 @@ class IntType(Type):
       return self.smtvar >= other
     assert False
 
-  def getConstraints(self, vars):
+  def getTypeConstraints(self, vars):
     vars += [self.smtvar]
     if self.defined:
-      return self.smtvar == self.getIntSize()
+      return self.smtvar == self.getSize()
     return BoolVal(True)
 
 
@@ -144,25 +160,24 @@ class PtrType(Type):
     self.type.setName('*'+name)
 
   def getSize(self):
-    return self.size
-
-  def getPointeeSize(self):
-    return self.type.getSize()
+    if hasattr(self, 'size'):
+      return self.size
+    return Int('ptrsize')
 
   def __eq__(self, other):
     if isinstance(other, PtrType):
       return self.type == other.type
     assert False
 
-  def fixup(self, types):
+  def fixupTypes(self, types):
     self.size = types.evaluate(Int('ptrsize')).as_long()
-    self.type.fixup(types)
+    self.type.fixupTypes(types)
 
-  def getConstraints(self, vars):
+  def getTypeConstraints(self, vars):
     # Pointers are assumed to be either 32 or 64 bits
     v = Int('ptrsize')
     return And(Or(v == 32, v == 64),
-               self.type.getConstraints(vars))
+               self.type.getTypeConstraints(vars))
 
 
 ################################
@@ -189,24 +204,36 @@ class Instr:
         a = copy.deepcopy(a)
         a.setName('%s_%s_%s' % (name, attr, mk_unique_id()))
         setattr(self, attr, a)
+      elif isinstance(a, list):
+        newa = []
+        for e in a:
+          if isinstance(e, Type):
+            e = copy.deepcopy(e)
+            e.setName('%s_%s_%s' % (name, attr, mk_unique_id()))
+          newa += [e]
+        setattr(self, attr, newa)
 
   def getTypeConstraints(self, vars):
     c = []
     for attr in dir(self):
       a = getattr(self, attr)
-      if isinstance(a, Type):
-        c += [a.getConstraints(vars)]
-      elif isinstance(a, Instr):
+      if isinstance(a, (Type, Instr)):
         c += [a.getTypeConstraints(vars)]
+      elif isinstance(a, list):
+        for e in a:
+          if isinstance(e, (Type, Instr)):
+            c += [e.getTypeConstraints(vars)]
     return mk_and(c)
 
   def fixupTypes(self, types):
     for attr in dir(self):
       a = getattr(self, attr)
-      if isinstance(a, Instr):
+      if isinstance(a, (Type, Instr)):
         a.fixupTypes(types)
-      elif isinstance(a, Type):
-        a.fixup(types)
+      elif isinstance(a, list):
+        for e in a:
+          if isinstance(e, (Type, Instr)):
+            e.fixupTypes(types)
 
 
 ################################
@@ -243,8 +270,8 @@ class TypeFixedValue(Instr):
         c += [self.v.type == int(math.log(self.max, 2))+1]
     else:
       if self.v.type.defined:
-        min = self.min(self.min, 1 << self.v.type.getIntSize())
-        max = self.min(self.max, 1 << self.v.type.getIntSize())
+        min = self.min(self.min, (1 << self.v.type.getSize()) - 1)
+        max = self.min(self.max, (1 << self.v.type.getSize()) - 1)
       else:
         min = self.min
         max = self.max
@@ -288,7 +315,7 @@ class CopyOperand(Instr):
     return state.eval(self.v, defined, qvars)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(vars),
+    return And(self.type.getTypeConstraints(vars),
                self.type == self.v.type)
 
 
@@ -314,12 +341,12 @@ class Constant(Instr):
     return BitVecVal(self.val, self.type.getSize())
 
   def getTypeConstraints(self, vars):
-    c = self.type.getConstraints(vars)
+    c = self.type.getTypeConstraints(vars)
     if self.val != 0:
       if self.val > 0:
-        bits = int(math.floor(math.log(self.val, 2)+1))
+        bits = int(math.log(self.val, 2)+2)
       else:
-        bits = int(math.floor(math.log(abs(self.val)+1, 2)+1))
+        bits = int(math.log(abs(self.val)+1, 2)+1)
       return And(c, self.type >= bits)
     return c
 
@@ -337,13 +364,13 @@ class UndefVal(Constant):
     return 'undef'
 
   def toSMT(self, defined, state, qvars):
-    v = BitVec('undef' + self.id, self.type.getIntSize())
+    v = BitVec('undef' + self.id, self.type.getSize())
     qvars += [v]
     return v
 
   def getTypeConstraints(self, vars):
     # overload Constant's method
-    return self.type.getConstraints(vars)
+    return self.type.getTypeConstraints(vars)
 
 
 ################################
@@ -427,7 +454,7 @@ class BinOp(Instr):
         exit(-1)
 
   def _genSMTDefConds(self, v1, v2, defined):
-    bits = self.type.getIntSize()
+    bits = self.type.getSize()
 
     def_conds = {
       self.Add: {'nsw': lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1,a+b),
@@ -501,7 +528,7 @@ class BinOp(Instr):
     }[self.op](v1, v2)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(vars),
+    return And(self.type.getTypeConstraints(vars),
                self.type == self.v1.type,
                self.type == self.v2.type)
 
@@ -564,12 +591,12 @@ class ConversionOp(Instr):
 
   def toSMT(self, defined, state, qvars):
     return {
-      self.Trunc:   lambda v: Extract(self.type.getIntSize()-1, 0, v),
-      self.ZExt:    lambda v: ZeroExt(self.type.getIntSize() -
-                                      self.stype.getIntSize(), v),
-      self.SExt:    lambda v: SignExt(self.type.getIntSize() -
-                                      self.stype.getIntSize(), v),
-      self.Ptr2Int: lambda v: truncateOrZExt(v, self.type.getIntSize()),
+      self.Trunc:   lambda v: Extract(self.type.getSize()-1, 0, v),
+      self.ZExt:    lambda v: ZeroExt(self.type.getSize() -
+                                      self.stype.getSize(), v),
+      self.SExt:    lambda v: SignExt(self.type.getSize() -
+                                      self.stype.getSize(), v),
+      self.Ptr2Int: lambda v: truncateOrZExt(v, self.type.getSize()),
       self.Int2Ptr: lambda v: truncateOrZExt(v, self.type.getSize()),
       self.Bitcast: lambda v: v,
     }[self.op](state.eval(self.v, defined, qvars))
@@ -584,8 +611,8 @@ class ConversionOp(Instr):
       self.Bitcast: lambda src,tgt: src.getSize() == tgt.getSize(),
     } [self.op](self.stype, self.type)
 
-    return And(self.type.getConstraints(vars),
-               self.stype.getConstraints(vars),
+    return And(self.type.getTypeConstraints(vars),
+               self.stype.getTypeConstraints(vars),
                self.stype == self.v.type,
                cnstr)
 
@@ -665,8 +692,8 @@ class Icmp(Instr):
                            state.eval(self.v2, defined, qvars), 0)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(vars),
-               self.stype.getConstraints(vars),
+    return And(self.type.getTypeConstraints(vars),
+               self.stype.getTypeConstraints(vars),
                self.stype == self.v1.type,
                self.stype == self.v2.type)
 
@@ -695,7 +722,7 @@ class Select(Instr):
               state.eval(self.v2, defined, qvars))
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(vars),
+    return And(self.type.getTypeConstraints(vars),
                self.type == self.v1.type,
                self.type == self.v2.type,
                self.c.type == 1)
@@ -725,18 +752,61 @@ class Alloca(Instr):
 
   def toSMT(self, defined, state, qvars):
     self.numElems.toSMT(defined, state, qvars)
-    ## TODO: size in bits vs bytes
     ptr = BitVec(self.getName(), self.type.getSize())
-    size = self.numElems.getValue() * self.type.getPointeeSize()
+    block_size = getAllocSize(self.type.type)
+    num_elems = self.numElems.getValue()
+    size = num_elems * block_size
+
     defined += [ULT(ptr, ptr + size), ptr != 0]
-    state.addAlloca(ptr, size, BitVec('alloca' + self.getName(), size))
+    defined += [getPtrAlignCnstr(ptr, self.align)]
+
+    mem = BitVec('alloca' + self.getName(), size)
+    state.addAlloca(ptr, mem, (block_size, num_elems, self.align))
     return ptr
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(vars),
-               self.elemsType.getConstraints(vars),
+    return And(self.type.getTypeConstraints(vars),
+               self.elemsType.getTypeConstraints(vars),
                self.numElems.getTypeConstraints(vars),
                self.numElems.getType() == self.elemsType)
+
+
+################################
+class GEP(Instr):
+  def __init__(self, type, ptr, idxs, inbounds):
+    self.type = type
+    self.ptr = ptr
+    self.idxs = idxs
+    self.inbounds = inbounds
+    assert isinstance(self.type, Type)
+    assert isinstance(self.ptr, Instr)
+    assert isinstance(self.idxs, list)
+    assert isinstance(self.inbounds, bool)
+
+  def toString(self):
+    inb = 'inbounds ' if self.inbounds else ''
+    idxs = ''
+    for i in range(len(self.idxs)):
+      if (i & 1) == 1:
+        continue
+      t = str(self.idxs[i])
+      if len(t) > 0:
+        t += ' '
+      idxs += ', %s%s' % (t, self.idxs[i+1])
+    return 'getelementptr %s%s%s' % (inb, self.ptr.getName(), idxs)
+
+  def toSMT(self, defined, state, qvars):
+    # FIXME: support more complicated ptr dereferencing
+    assert len(self.idxs) <= 2
+    ptr = state.eval(self.ptr, defined, qvars)
+    for i in range(len(self.idxs)):
+      if (i & 1) == 1:
+        continue
+      type_size = getAllocSize(self.idxs[i])
+      idx = truncateOrSExt(state.eval(self.idxs[i+1], defined, qvars), ptr)
+      ptr += type_size * idx
+    # TODO: handle inbounds
+    return ptr
 
 
 ################################
@@ -754,33 +824,39 @@ class Load(Instr):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'load %s %s%s' % (str(self.stype), self.v.getName(), align)
 
-  def _recPtrLoad(self, l, v):
-    (ptr, size, mem) = l[0]
+  def _recPtrLoad(self, l, v, defined):
+    (ptr, mem, info) = l[0]
+    (block_size, num_elems, align) = info
+    size = block_size * num_elems
     read_size = self.type.getSize()
+
     if size > read_size:
       offset = v - ptr
       mem = mem << truncateOrZExt(offset, mem)
       mem = Extract(size - 1, size - read_size, mem)
     elif size < read_size:
       # undef behavior; skip this block
-      return self._recPtrLoad(l[1:], v)
+      return self._recPtrLoad(l[1:], v, defined)
 
     if len(l) == 1:
       return mem
-    return If(And(UGE(v, ptr), ULE(v+read_size, ptr+size)),
-              mem,
-              self._recPtrLoad(l[1:], v))
+
+    inbounds = And(UGE(v, ptr), ULE(v+read_size, ptr+size))
+    if self.align != 0:
+      # overestimating the alignment is undefined behavior.
+      defined += [Implies(inbounds, align >= self.align)]
+    return If(inbounds, mem, self._recPtrLoad(l[1:], v, defined))
 
   def toSMT(self, defined, state, qvars):
     v = state.eval(self.v, defined, qvars)
     defined += [v != 0]
     bits = self.type.getSize()
     rndmem = BitVec('%s_%s' % (self.getName(), mk_unique_id()), bits)
-    ptrs = state.ptrs + [(None, bits, rndmem)]
-    return self._recPtrLoad(ptrs, v)
+    ptrs = state.ptrs + [(None, rndmem, (bits, 1, 0))]
+    return self._recPtrLoad(ptrs, v, defined)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getConstraints(vars),
+    return And(self.type.getTypeConstraints(vars),
                self.type == self.v.type.type,
                self.v.type == self.stype)
 
@@ -832,18 +908,26 @@ class Store(Instr):
     tgt = state.eval(self.dst, defined, qvars)
     defined += [tgt != 0]
 
+    write_size = self.stype.getSize()
     newmem = []
-    for (ptr, size, mem) in state.ptrs:
-      mem = If(And(UGE(tgt, ptr), ULE(tgt + self.stype.getSize(), ptr + size)),
-               self._mkMem(src, tgt, ptr, size, mem),
-               mem)
-      newmem += [(ptr, size, mem)]
+    for (ptr, mem, info) in state.ptrs:
+      (block_size, num_elems, align) = info
+      size = block_size * num_elems
+      inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size, ptr + size))
+
+      mem = If(inbounds, self._mkMem(src, tgt, ptr, size, mem), mem)
+      newmem += [(ptr, mem, info)]
+
+      if self.align != 0:
+        # overestimating the alignment is undefined behavior.
+        defined += [Implies(inbounds, align >= self.align)]
+
     state.ptrs = newmem
     return None
 
   def getTypeConstraints(self, vars):
-    return And(self.stype.getConstraints(vars),
-               self.type.getConstraints(vars),
+    return And(self.stype.getTypeConstraints(vars),
+               self.type.getTypeConstraints(vars),
                self.stype == self.type.type,
                self.src.type == self.stype,
                self.dst.type == self.type)

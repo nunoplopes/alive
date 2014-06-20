@@ -59,6 +59,16 @@ def truncateOrZExt(src, tgt):
   return ZeroExt(tgtb - srcb, src)
 
 
+def truncateOrSExt(src, tgt):
+  srcb = src.sort().size()
+  tgtb = tgt.sort().size()
+  if srcb == tgtb:
+    return src
+  if srcb > tgtb:
+    return Extract(tgtb - 1, 0, src)
+  return SignExt(tgtb - srcb, src)
+
+
 def truncateOrPad(src, tgt):
   srcb = src.sort().size()
   tgtb = tgt.sort().size()

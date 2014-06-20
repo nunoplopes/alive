@@ -164,12 +164,11 @@ def check_opt(src, tgt):
 
   # now check that the final memory state is similar in both programs
   s = getSolver([])
-  memsb = {str(ptr) : mem for (ptr, size, mem) in tgtv.ptrs}
-  for (ptr, size, mem) in srcv.ptrs:
+  memsb = {str(ptr) : mem for (ptr, mem, info) in tgtv.ptrs}
+  for (ptr, mem, info) in srcv.ptrs:
     memb = memsb.get(str(ptr))
     if memb == None:
-      print '\nERROR: No memory state for %s (%d bits) in Target' %\
-            (str(ptr), size)
+      print '\nERROR: No memory state for %s in Target' % str(ptr)
       exit(-1)
 
     s.push()
@@ -178,7 +177,7 @@ def check_opt(src, tgt):
     if res != unsat:
       check_incomplete_solver(res, s)
       print '\nERROR: Mismatch in final memory state for %s (%d bits)' %\
-            (str(ptr), size)
+            (str(ptr), mem.sort.size())
       print 'Example:'
       print_var_vals(s, srcv, tgtv, None)
       print 'Source value: ' + str_model(s, mem)

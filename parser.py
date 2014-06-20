@@ -108,6 +108,12 @@ def parseOptionalNumElems(toks):
 def parseAlloca(toks):
   return Alloca(toks[1], toks[2], toks[3], toks[4])
 
+def parseGEP(toks):
+  inbounds = isinstance(toks[1], str)
+  if inbounds:
+    del toks[1]
+  return GEP(ensurePtrType(toks[1]), toks[2], toks[3:], inbounds)
+
 def parseLoad(toks):
   return Load(ensurePtrType(toks[1]), toks[2], toks[3])
 
@@ -179,11 +185,14 @@ alloca = (Literal('alloca') + opttype +\
           Optional(comma + typeoperand).setParseAction(parseOptionalNumElems) +\
           optalign).setParseAction(parseAlloca)
 
+gep = (Literal('getelementptr') + Optional(Literal('inbounds')) + typeoperand +\
+       ZeroOrMore(comma + typeoperand)).setParseAction(parseGEP)
+
 load = (Literal('load') + typeoperand + optalign).setParseAction(parseLoad)
 
 operandinstr = (opttype + operand).setParseAction(parseOperandInstr)
 
-op = icmp | select | alloca | load | binop | conversionop | operandinstr
+op = icmp | select | alloca | gep | load | binop | conversionop | operandinstr
 
 store = (Literal('store') + typeoperand + comma + typeoperand +\
          optalign).setParseAction(parseStore)
