@@ -85,6 +85,13 @@ def resetSolvers():
     bv_solver.pop()
 
 
+def check_incomplete_solver(res, s):
+  if res == unknown:
+    print '\nWARNING: The SMT solver gave up. Verification incomplete.'
+    print 'Solver says: ' + s.reason_unknown()
+    exit(-1)
+
+
 def str_model(s, v):
   val = s.model().evaluate(v, True).as_long()
   return "%d (%s)" % (val, hex(val))
@@ -127,7 +134,9 @@ def check_opt(src, tgt):
     s = getSolver(qvars)
     s.push()
     s.add(mk_forall(qvars, And(defa, Not(defb))))
-    if s.check() != unsat:
+    res = s.check()
+    if res != unsat:
+      check_incomplete_solver(res, s)
       print "\nERROR: Domain of definedness of Target is smaller than Source's"\
             " for i%d %s" % (a.sort().size(), k)
       print 'Example:'
@@ -144,10 +153,7 @@ def check_opt(src, tgt):
 
     res = s.check()
     if res != unsat:
-      if res == unknown:
-        print '\nWARNING: The SMT solver gave up. Verification incomplete.'
-        print 'Solver says: ' + s.reason_unknown()
-        exit(-1)
+      check_incomplete_solver(res, s)
       print '\nERROR: Mismatch in values of i%d %s' % (a.sort().size(), k)
       print 'Example:'
       print_var_vals(s, srcv, tgtv, k)
@@ -158,14 +164,25 @@ def check_opt(src, tgt):
 
   # now check that the final memory state is similar in both programs
   s = getSolver([])
+  memsb = {str(ptr) : mem for (ptr, size, mem) in tgtv.ptrs}
   for (ptr, size, mem) in srcv.ptrs:
+    memb = memsb.get(str(ptr))
+    if memb == None:
+      print '\nERROR: No memory state for %s (%d bits) in Target' %\
+            (str(ptr), size)
+      exit(-1)
+
     s.push()
-    s.add([Implies(ptr == ptrb, mem != memb) \
-            for (ptrb, sizeb, memb) in tgtv.ptrs])
-    if s.check() != unsat:
+    s.add(mem != memb)
+    res = s.check()
+    if res != unsat:
+      check_incomplete_solver(res, s)
       print '\nERROR: Mismatch in final memory state for %s (%d bits)' %\
             (str(ptr), size)
+      print 'Example:'
+      print_var_vals(s, srcv, tgtv, None)
       print 'Source value: ' + str_model(s, mem)
+      print 'Target value: ' + str_model(s, memb)
       exit(-1)
     s.pop()
 
