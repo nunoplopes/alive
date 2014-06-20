@@ -732,7 +732,6 @@ class Alloca(Instr):
     state.addAlloca(ptr, size, BitVec('alloca' + self.getName(), size))
     return ptr
 
-
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(vars),
                self.elemsType.getConstraints(vars),
@@ -757,30 +756,28 @@ class Load(Instr):
 
   def _recPtrLoad(self, l, v):
     (ptr, size, mem) = l[0]
-    if size > self.type.getSize():
+    read_size = self.type.getSize()
+    if size > read_size:
       offset = v - ptr
       mem = mem << truncateOrZExt(offset, mem)
-      mem = Extract(size - 1, size - self.type.getSize(), mem)
-    elif size < self.type.getSize():
-      # undef behavior
-      #TODO..
-      mem = BitVecVal(0, size)
+      mem = Extract(size - 1, size - read_size, mem)
+    elif size < read_size:
+      # undef behavior; skip this block
+      return self._recPtrLoad(l[1:], v)
 
     if len(l) == 1:
       return mem
-    return If(And(UGE(v, ptr), ULT(v, ptr+size)),
+    return If(And(UGE(v, ptr), ULE(v+read_size, ptr+size)),
               mem,
-              _recPtrLoad(l[1:]))
+              self._recPtrLoad(l[1:], v))
 
   def toSMT(self, defined, state, qvars):
     v = state.eval(self.v, defined, qvars)
-
-    # Reading from a random location is undefined
-    d = [And(UGE(v, ptr), ULE(v + self.type.getSize(), ptr + size))\
-      for (ptr, size, mem) in state.ptrs]
-    defined += [mk_or(d), v != 0]
-
-    return self._recPtrLoad(state.ptrs, v)
+    defined += [v != 0]
+    bits = self.type.getSize()
+    rndmem = BitVec('%s_%s' % (self.getName(), mk_unique_id()), bits)
+    ptrs = state.ptrs + [(None, bits, rndmem)]
+    return self._recPtrLoad(ptrs, v)
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(vars),
@@ -832,11 +829,7 @@ class Store(Instr):
   def toSMT(self, defined, state, qvars):
     src = state.eval(self.src, defined, qvars)
     tgt = state.eval(self.dst, defined, qvars)
-
-    # Writing to a random location is undefined
-    d = [And(UGE(tgt, ptr), ULT(tgt, ptr+size)) \
-           for (ptr, size, mem) in state.ptrs]
-    defined += [mk_or(d), tgt != 0]
+    defined += [tgt != 0]
 
     newmem = []
     for (ptr, size, mem) in state.ptrs:
@@ -850,6 +843,7 @@ class Store(Instr):
   def getTypeConstraints(self, vars):
     return And(self.stype.getConstraints(vars),
                self.type.getConstraints(vars),
+               self.stype == self.type.type,
                self.src.type == self.stype,
                self.dst.type == self.type)
 

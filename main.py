@@ -90,12 +90,6 @@ def str_model(s, v):
   return "%d (%s)" % (val, hex(val))
 
 
-def print_model(s):
-  m = s.model()
-  for d in m.decls():
-    print '%s = %s' % (d, m[d])
-
-
 def _print_var_vals(s, vars, stopv, seen):
   for k,v in vars.iteritems():
     if k == stopv:
@@ -103,7 +97,7 @@ def _print_var_vals(s, vars, stopv, seen):
     if k in seen:
       continue
     seen |= set([k])
-    print "%s i%d = %s" % (k, v[0].sort().size(), s.model().evaluate(v[0]))
+    print "%s i%d = %s" % (k, v[0].sort().size(), str_model(s, v[0]))
 
 
 def print_var_vals(s, vs1, vs2, stopv):
