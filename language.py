@@ -726,7 +726,7 @@ class Alloca(Instr):
   def toSMT(self, defined, state, qvars):
     self.numElems.toSMT(defined, state, qvars)
     ## TODO: size in bits vs bytes
-    ptr = BitVec('ptralloca' + self.getName(), self.type.getSize())
+    ptr = BitVec(self.getName(), self.type.getSize())
     size = self.numElems.getValue() * self.type.getPointeeSize()
     defined += [ULT(ptr, ptr + size), ptr != 0]
     state.addAlloca(ptr, size, BitVec('alloca' + self.getName(), size))
@@ -781,6 +781,7 @@ class Load(Instr):
 
   def getTypeConstraints(self, vars):
     return And(self.type.getConstraints(vars),
+               self.type == self.v.type.type,
                self.v.type == self.stype)
 
 

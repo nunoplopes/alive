@@ -128,8 +128,8 @@ def check_opt(src, tgt):
     s.push()
     s.add(mk_forall(qvars, And(defa, Not(defb))))
     if s.check() != unsat:
-      print '\nDomain of definedness of Target is smaller than Source\'s for '+\
-              'i%d %s' % (a.sort().size(), k)
+      print "\nERROR: Domain of definedness of Target is smaller than Source's"\
+            " for i%d %s" % (a.sort().size(), k)
       print 'Example:'
       print_var_vals(s, srcv, tgtv, k)
       print 'Source val: ' + str_model(s, a)
@@ -148,13 +148,27 @@ def check_opt(src, tgt):
         print '\nWARNING: The SMT solver gave up. Verification incomplete.'
         print 'Solver says: ' + s.reason_unknown()
         exit(-1)
-      print '\nMismatch in values of i%d %s' % (a.sort().size(), k)
+      print '\nERROR: Mismatch in values of i%d %s' % (a.sort().size(), k)
       print 'Example:'
       print_var_vals(s, srcv, tgtv, k)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: ' + str_model(s, b)
       exit(-1)
     s.pop()
+
+  # now check that the final memory state is similar in both programs
+  s = getSolver([])
+  for (ptr, size, mem) in srcv.ptrs:
+    s.push()
+    s.add([Implies(ptr == ptrb, mem != memb) \
+            for (ptrb, sizeb, memb) in tgtv.ptrs])
+    if s.check() != unsat:
+      print '\nERROR: Mismatch in final memory state for %s (%d bits)' %\
+            (str(ptr), size)
+      print 'Source value: ' + str_model(s, mem)
+      exit(-1)
+    s.pop()
+
   resetSolvers()
 
 
