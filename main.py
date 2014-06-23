@@ -211,8 +211,6 @@ def main():
 
   s = Solver()
   s.add(type_src)
-  s.add([v > 0 for v in type_vars])
-
   if s.check() != sat:
     print 'Source program does not type check'
     exit(-1)
@@ -220,11 +218,6 @@ def main():
   s.add(type_tgt)
   if s.check() != sat:
     print 'Source and Target programs do not type check'
-    exit(-1)
-
-  s.add([v <= 64 for v in type_vars])
-  if s.check() != sat:
-    print 'Currently limited to 64-bits registers'
     exit(-1)
 
 

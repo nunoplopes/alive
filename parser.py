@@ -27,16 +27,7 @@ def parseType(toks):
 def parseOptType(toks):
   if len(toks) == 1:
     return toks[0]
-  return IntType()
-
-def ensurePtrType(t):
-  if isinstance(t, PtrType):
-    return t
-  if isinstance(t, IntType) and not t.defined:
-    return PtrType(t)
-  print 'Pointer type required, given \'%s\' instead' % str(t)
-  exit(-1)
-
+  return UnknownType()
 
 def parseOperand(toks, type):
   global identifiers
@@ -55,21 +46,27 @@ def parseOperand(toks, type):
 
   # constant
   elif toks[0] == 'true':
-    c = Constant(1, type)
+    c = Constant(1, type.ensureIntType())
   elif toks[0] == 'false':
-    c = Constant(0, type)
+    c = Constant(0, type.ensureIntType())
   elif toks[0] == 'null':
-    if not isinstance(type, PtrType):
-      type = PtrType(IntType())
-    c = Constant(0, type)
+    c = Constant(0, type.ensurePtrType())
   else:
-    c = Constant(int(toks[0]), type)
+    c = Constant(int(toks[0]), type.ensureIntType())
 
   identifiers[c.getUniqueName()] = c
   return c
 
 def parseTypeOperand(toks):
   return [toks[0], parseOperand(toks[1], toks[0])]
+
+def parseIntOperand(toks):
+  t = toks[0].ensureIntType()
+  return [t, parseOperand(toks[1], t)]
+
+def parsePtrOperand(toks):
+  t = toks[0].ensurePtrType()
+  return [t, parseOperand(toks[1], t)]
 
 def parseOptional(default):
   return lambda toks : toks[0] if len(toks) == 1 else\
@@ -81,25 +78,19 @@ def parseBinOp(toks):
 
 def parseConversionOp(toks):
   op = ConversionOp.getOpId(toks[0])
-  stype = ensurePtrType(toks[1]) if ConversionOp.enforcePtrSrc(op) else toks[1]
-  type  = ensurePtrType(toks[3]) if ConversionOp.enforcePtrTgt(op) else toks[3]
-  return ConversionOp(op, stype, toks[2], type)
+  stype = toks[1].ensurePtrType() if ConversionOp.enforcePtrSrc(op) else\
+    toks[1].ensureIntType()
+  type  = toks[3].ensurePtrType() if ConversionOp.enforcePtrTgt(op) else\
+    toks[3].ensureIntType()
+  return ConversionOp(op, stype, parseOperand(toks[2], stype), type)
 
 def parseIcmp(toks):
   return Icmp(toks[1], toks[2], toks[3], parseOperand(toks[4], toks[2]))
 
 def parseSelect(toks):
-  t1 = toks[2]
-  t2 = toks[4]
-  if t1.defined:
-    if t2.defined:
-      if t1.getIntSize() != t2.getIntSize():
-        print 'Error: type mismatch in select: %s vs %s' % (t1, t2)
-        exit(-1)
-    t = t1
-  else:
-    t = t2
-  return Select(t, parseOperand(toks[1], IntType(1)), toks[3], toks[5])
+  t = getMostSpecificType(toks[2], toks[4])
+  return Select(t, parseOperand(toks[1], IntType(1)),
+                parseOperand(toks[3], t), parseOperand(toks[5], t))
 
 def parseOptionalNumElems(toks):
   t = IntType()
@@ -112,10 +103,10 @@ def parseGEP(toks):
   inbounds = isinstance(toks[1], str)
   if inbounds:
     del toks[1]
-  return GEP(ensurePtrType(toks[1]), toks[2], toks[3:], inbounds)
+  return GEP(toks[1], toks[2], toks[3:], inbounds)
 
 def parseLoad(toks):
-  return Load(ensurePtrType(toks[1]), toks[2], toks[3])
+  return Load(toks[1], toks[2], toks[3])
 
 def parseOperandInstr(toks):
   op = parseOperand(toks[1], toks[0])
@@ -123,7 +114,7 @@ def parseOperandInstr(toks):
 
 def parseStore(toks):
   global identifiers
-  s = Store(toks[1], toks[2], ensurePtrType(toks[3]), toks[4], toks[5])
+  s = Store(toks[1], toks[2], toks[3], toks[4], toks[5])
   identifiers[s.getUniqueName()] = s
 
 
@@ -161,12 +152,14 @@ operand = (reg | Regex(r"-?[0-9]+") | Literal('false') | Literal('true') |\
              setParseAction(lambda toks : [toks])
 
 typeoperand = (opttype + operand).setParseAction(parseTypeOperand)
+intoperand  = (opttype + operand).setParseAction(parseIntOperand)
+ptroperand  = (opttype + operand).setParseAction(parsePtrOperand)
 comma = Literal(',').suppress()
 
-binop = (opname + flags + typeoperand + comma + operand).\
+binop = (opname + flags + intoperand + comma + operand).\
           setParseAction(parseBinOp)
 
-conversionop = (opname + typeoperand +\
+conversionop = (opname + opttype + operand +\
                 Optional(Literal('to').suppress() + type).\
                  setParseAction(parseOptType)).setParseAction(parseConversionOp)
 
@@ -176,25 +169,26 @@ icmp = (Literal('icmp') + optionalname + typeoperand + comma + operand).\
          setParseAction(parseIcmp)
 
 select = (Literal('select') + Optional(Literal('i1')).suppress() + operand +\
-          comma + typeoperand + comma + typeoperand).setParseAction(parseSelect)
+          comma + opttype + operand + comma + opttype + operand).\
+            setParseAction(parseSelect)
 
 align = (comma + Literal('align').suppress() + posnum)
 optalign = Optional(align).setParseAction(parseOptional(0))
 
 alloca = (Literal('alloca') + opttype +\
-          Optional(comma + typeoperand).setParseAction(parseOptionalNumElems) +\
+          Optional(comma + intoperand).setParseAction(parseOptionalNumElems) +\
           optalign).setParseAction(parseAlloca)
 
-gep = (Literal('getelementptr') + Optional(Literal('inbounds')) + typeoperand +\
-       ZeroOrMore(comma + typeoperand)).setParseAction(parseGEP)
+gep = (Literal('getelementptr') + Optional(Literal('inbounds')) + ptroperand +\
+       ZeroOrMore(comma + intoperand)).setParseAction(parseGEP)
 
-load = (Literal('load') + typeoperand + optalign).setParseAction(parseLoad)
+load = (Literal('load') + ptroperand + optalign).setParseAction(parseLoad)
 
 operandinstr = (opttype + operand).setParseAction(parseOperandInstr)
 
 op = icmp | select | alloca | gep | load | binop | conversionop | operandinstr
 
-store = (Literal('store') + typeoperand + comma + typeoperand +\
+store = (Literal('store') + typeoperand + comma + ptroperand +\
          optalign).setParseAction(parseStore)
 
 instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\

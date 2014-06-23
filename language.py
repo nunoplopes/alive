@@ -85,6 +85,80 @@ class Type:
   def __repr__(self):
     return ''
 
+  def typeMismatch(self, expected):
+    print '%s type required, given \'%s\' instead' % (expected, self)
+    exit(-1)
+
+  def ensureIntType(self):
+    self.typeMismatch('int')
+
+  def ensurePtrType(self):
+    self.typeMismatch('pointer')
+
+
+################################
+def getMostSpecificType(t1, t2):
+  def _ErrorOnTypeMismatch(cond):
+    if cond:
+      print 'Type mismatch: %s vs %s.' % (t1, t2)
+      exit(-1)
+
+  if isinstance(t1, UnknownType):
+    return t2
+  if isinstance(t2, UnknownType):
+    return t1
+
+  if isinstance(t1, IntType) and isinstance(t2, IntType):
+    _ErrorOnTypeMismatch(t1.defined and t2.defined and
+                         t1.getSize() != t2.getSize())
+    return t1 if t1.defined else t2
+  if isinstance(t1, PtrType) and isinstance(t2, PtrType):
+    t1id = id(t1.type)
+    return t1 if id(getMostSpecificType(t1.type, t2.type)) == t1id else t2
+  _ErrorOnTypeMismatch(True)
+
+
+################################
+class UnknownType(Type):
+  Int, Ptr, Unknown = range(3)
+
+  def __init__(self, d = 0):
+    self.types  = [IntType(), PtrType(depth = d)]
+    self.myType = self.Unknown
+
+  def ensureIntType(self):
+    return IntType()
+
+  def ensurePtrType(self):
+    return PtrType()
+
+  def setName(self, name):
+    self.typevar = Int('t_' + name)
+    for t in self.types:
+      t.setName(name)
+
+  def getSize(self):
+    return self.types[self.myType].getSize()
+
+  def fixupTypes(self, types):
+    self.myType = types.evaluate(self.typevar).as_long()
+    self.types[self.myType].fixupTypes(types)
+
+  def __eq__(self, other):
+    for i in range(len(self.types)):
+      if isinstance(other, type(self.types[i])):
+        self.myType = i
+        return And(self.typevar == i, self.types[i] == other)
+
+    c = [And(self.typevar == i, other.typevar == i, self.types[i] == other)\
+      for i in range(len(self.types))]
+    return Or(c)
+
+  def getTypeConstraints(self, vars):
+    if self.myType != self.Unknown:
+      return self.types[self.myType].getTypeConstraints(vars)
+    return Or([t.getTypeConstraints(vars) for t in self.types])
+
 
 ################################
 class IntType(Type):
@@ -96,8 +170,12 @@ class IntType(Type):
     self.defined = True
     assert isinstance(self.size, int)
 
+  def ensureIntType(self):
+    return self
+
   def setName(self, name):
-    self.smtvar = Int('t' + name)
+    self.typevar = Int('t_' + name)
+    self.bitsvar = Int('size_' + name)
 
   def __repr__(self):
     if self.defined:
@@ -108,50 +186,62 @@ class IntType(Type):
     return self.size
 
   def fixupTypes(self, types):
-    size = types.evaluate(self.smtvar).as_long()
+    size = types.evaluate(self.bitsvar).as_long()
     assert self.defined == False or self.size == size
     self.size = size
 
   def __eq__(self, other):
     if isinstance(other, IntType):
-      return self.smtvar == other.smtvar
+      return self.bitsvar == other.bitsvar
     if isinstance(other, int):
-      return self.smtvar == other
-    assert False
+      return self.bitsvar == other
+    if isinstance(other, UnknownType):
+      return other == self
+    return BoolVal(False)
 
   def __lt__(self, other):
     if isinstance(other, IntType):
-      return self.smtvar < other.smtvar
+      return self.bitsvar < other.bitsvar
     if isinstance(other, int):
-      return self.smtvar < other
+      return self.bitsvar < other
     assert False
 
   def __gt__(self, other):
     if isinstance(other, IntType):
-      return self.smtvar > other.smtvar
+      return self.bitsvar > other.bitsvar
     if isinstance(other, int):
-      return self.smtvar > other
+      return self.bitsvar > other
     assert False
 
   def __ge__(self, other):
     if isinstance(other, IntType):
-      return self.smtvar >= other.smtvar
+      return self.bitsvar >= other.bitsvar
     if isinstance(other, int):
-      return self.smtvar >= other
+      return self.bitsvar >= other
     assert False
 
   def getTypeConstraints(self, vars):
-    vars += [self.smtvar]
+    # Integers are assumed to be up to 64 bits.
+    c = [self.typevar == 0, self.bitsvar > 0, self.bitsvar <= 64]
     if self.defined:
-      return self.smtvar == self.getSize()
-    return BoolVal(True)
+      c += [self.bitsvar == self.getSize()]
+    return And(c)
 
 
 ################################
 class PtrType(Type):
-  def __init__(self, type):
+  def __init__(self, type = None, depth = 0):
+    if type is None:
+      # limit type nesting to 3 levels
+      if depth >= 2:
+        type = IntType()
+      else:
+        type = UnknownType(depth+1)
     self.type = type
     assert isinstance(self.type, Type)
+
+  def ensurePtrType(self):
+    return self
 
   def __repr__(self):
     return str(self.type) + '*'
@@ -167,7 +257,9 @@ class PtrType(Type):
   def __eq__(self, other):
     if isinstance(other, PtrType):
       return self.type == other.type
-    assert False
+    if isinstance(other, UnknownType):
+      return other == self
+    return BoolVal(False)
 
   def fixupTypes(self, types):
     self.size = types.evaluate(Int('ptrsize')).as_long()
@@ -178,6 +270,18 @@ class PtrType(Type):
     v = Int('ptrsize')
     return And(Or(v == 32, v == 64),
                self.type.getTypeConstraints(vars))
+
+
+################################
+class ArrayType(Type):
+  def __init__(self, elems, type):
+    self.elems = elems
+    self.type = type
+    assert isinstance(self.elems, Instr)
+    assert isinstance(self.type, Type)
+
+  def __repr__(self):
+    return '[%s x %s]' % (self.elems, self.type)
 
 
 ################################
@@ -315,8 +419,8 @@ class CopyOperand(Instr):
     return state.eval(self.v, defined, qvars)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getTypeConstraints(vars),
-               self.type == self.v.type)
+    return And(self.type == self.v.type,
+               self.type.getTypeConstraints(vars))
 
 
 ################################
@@ -343,10 +447,8 @@ class Constant(Instr):
   def getTypeConstraints(self, vars):
     c = self.type.getTypeConstraints(vars)
     if self.val != 0:
-      if self.val > 0:
-        bits = int(math.log(self.val, 2)+2)
-      else:
-        bits = int(math.log(abs(self.val)+1, 2)+1)
+      # One more bit for positive integers to allow for sign bit.
+      bits = self.val.bit_length() + int(self.val >= 0)
       return And(c, self.type >= bits)
     return c
 
@@ -403,7 +505,7 @@ class BinOp(Instr):
     self.v2 = v2
     self.flags = flags
     self._check_op_flags()
-    assert isinstance(self.type, Type)
+    assert isinstance(self.type, IntType)
     assert isinstance(self.v1, Instr)
     assert isinstance(self.v2, Instr)
     assert self.op >= 0 and self.op < self.Last
@@ -528,9 +630,9 @@ class BinOp(Instr):
     }[self.op](v1, v2)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getTypeConstraints(vars),
-               self.type == self.v1.type,
-               self.type == self.v2.type)
+    return And(self.type == self.v1.type,
+               self.type == self.v2.type,
+               self.type.getTypeConstraints(vars))
 
 
 ################################
@@ -552,12 +654,8 @@ class ConversionOp(Instr):
     self.stype = stype
     self.v = v
     self.type = ttype
-    assert isinstance(self.stype, Type)
-    assert isinstance(self.type, Type)
-    if self.enforcePtrSrc(op):
-      assert isinstance(self.stype, PtrType)
-    if self.enforcePtrTgt(op):
-      assert isinstance(self.type, PtrType)
+    assert isinstance(self.stype,PtrType if self.enforcePtrSrc(op) else IntType)
+    assert isinstance(self.type, PtrType if self.enforcePtrTgt(op) else IntType)
     assert isinstance(self.v, Instr)
     assert self.op >= 0 and self.op < self.Last
 
@@ -611,9 +709,9 @@ class ConversionOp(Instr):
       self.Bitcast: lambda src,tgt: src.getSize() == tgt.getSize(),
     } [self.op](self.stype, self.type)
 
-    return And(self.type.getTypeConstraints(vars),
+    return And(self.stype == self.v.type,
+               self.type.getTypeConstraints(vars),
                self.stype.getTypeConstraints(vars),
-               self.stype == self.v.type,
                cnstr)
 
 
@@ -692,10 +790,10 @@ class Icmp(Instr):
                            state.eval(self.v2, defined, qvars), 0)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getTypeConstraints(vars),
-               self.stype.getTypeConstraints(vars),
-               self.stype == self.v1.type,
-               self.stype == self.v2.type)
+    return And(self.stype == self.v1.type,
+               self.stype == self.v2.type,
+               self.type.getTypeConstraints(vars),
+               self.stype.getTypeConstraints(vars))
 
 
 ################################
@@ -707,6 +805,7 @@ class Select(Instr):
     self.v2 = v2
     assert isinstance(self.type, Type)
     assert isinstance(self.c, Instr)
+    assert isinstance(self.c.type, IntType)
     assert isinstance(self.v1, Instr)
     assert isinstance(self.v2, Instr)
 
@@ -722,10 +821,10 @@ class Select(Instr):
               state.eval(self.v2, defined, qvars))
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getTypeConstraints(vars),
-               self.type == self.v1.type,
+    return And(self.type == self.v1.type,
                self.type == self.v2.type,
-               self.c.type == 1)
+               self.c.type == 1,
+               self.type.getTypeConstraints(vars))
 
 
 ################################
@@ -735,7 +834,7 @@ class Alloca(Instr):
     self.elemsType = elemsType
     self.numElems = TypeFixedValue(numElems, 1, 16)
     self.align = align
-    assert isinstance(self.elemsType, Type)
+    assert isinstance(self.elemsType, IntType)
     assert isinstance(self.align, int)
 
   def toString(self):
@@ -765,10 +864,10 @@ class Alloca(Instr):
     return ptr
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getTypeConstraints(vars),
+    return And(self.numElems.getType() == self.elemsType,
+               self.type.getTypeConstraints(vars),
                self.elemsType.getTypeConstraints(vars),
-               self.numElems.getTypeConstraints(vars),
-               self.numElems.getType() == self.elemsType)
+               self.numElems.getTypeConstraints(vars))
 
 
 ################################
@@ -782,6 +881,8 @@ class GEP(Instr):
     assert isinstance(self.ptr, Instr)
     assert isinstance(self.idxs, list)
     assert isinstance(self.inbounds, bool)
+    for i in range(len(self.idxs)):
+      assert isinstance(self.idxs[i], IntType if (i & 1) == 0 else Instr)
 
   def toString(self):
     inb = 'inbounds ' if self.inbounds else ''
@@ -857,9 +958,9 @@ class Load(Instr):
     return self._recPtrLoad(ptrs, v, defined)
 
   def getTypeConstraints(self, vars):
-    return And(self.type.getTypeConstraints(vars),
-               self.type == self.v.type.type,
-               self.v.type == self.stype)
+    return And(self.type == self.v.type.type,
+               self.v.type == self.stype,
+               self.type.getTypeConstraints(vars))
 
 
 ################################
@@ -927,11 +1028,11 @@ class Store(Instr):
     return None
 
   def getTypeConstraints(self, vars):
-    return And(self.stype.getTypeConstraints(vars),
-               self.type.getTypeConstraints(vars),
-               self.stype == self.type.type,
+    return And(self.stype == self.type.type,
                self.src.type == self.stype,
-               self.dst.type == self.type)
+               self.dst.type == self.type,
+               self.stype.getTypeConstraints(vars),
+               self.type.getTypeConstraints(vars))
 
 
 ################################
