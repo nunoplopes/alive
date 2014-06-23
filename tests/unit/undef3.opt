@@ -1,0 +1,5 @@
+=== Source ===
+; ERROR: Mismatch in values of
+%A = select undef, %X, %Y
+=== Target ===
+%A = undef
