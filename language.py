@@ -793,7 +793,8 @@ class GEP(Instr):
       if len(t) > 0:
         t += ' '
       idxs += ', %s%s' % (t, self.idxs[i+1])
-    return 'getelementptr %s%s%s%s' % (inb, self.type, self.ptr.getName(), idxs)
+    return 'getelementptr %s%s %s%s' % (inb, self.type, self.ptr.getName(),
+                                        idxs)
 
   def toSMT(self, defined, state, qvars):
     # FIXME: support more complicated ptr dereferencing
