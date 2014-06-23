@@ -126,7 +126,6 @@ def check_opt(src, tgt):
 
     (a, defa, qvars) = v
     (b, defb, qvarsb) = tgtv[k]
-    qvars += qvarsb
     defa = mk_and(defa)
     defb = mk_and(defb)
 
