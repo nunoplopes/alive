@@ -1,0 +1,5 @@
+=== Source ===
+; ERROR: Domain of definedness of Target is smaller than Source
+%A = add %x, %y
+=== Target ===
+%A = add nsw %x, %y

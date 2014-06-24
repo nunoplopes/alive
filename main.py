@@ -22,6 +22,10 @@ def block_model(s, m):
   s.add(Not(And([Int(str(n)) == m[n] for n in m.decls()])))
 
 
+def get_z3_id(x):
+  return Z3_get_ast_id(x.ctx.ref(), x.as_ast())
+
+
 def z3_solver_to_smtlib(s):
   a = s.assertions()
   size = len(a) - 1
@@ -91,6 +95,32 @@ def check_incomplete_solver(res, s):
     exit(-1)
 
 
+correct_exprs = {}
+def check_expr(s, expr, error):
+  id = get_z3_id(expr)
+  if id in correct_exprs:
+    return
+  correct_exprs[id] = expr
+
+  s.push()
+  s.add(expr)
+
+  if __debug__:
+    gen_benchmark(s)
+
+  res = s.check()
+  if res != unsat:
+    check_incomplete_solver(res, s)
+    e, src, tgt, stop, srcv, tgtv, types = error()
+    print '\nERROR: %s' % e
+    print 'Example:'
+    print_var_vals(s, srcv, tgtv, stop, types)
+    print 'Source value: ' + src
+    print 'Target value: ' + tgt
+    exit(-1)
+  s.pop()
+
+
 def var_type(var, types):
   t = types[Int('t_' + var)].as_long()
   if t == Type.Int:
@@ -137,37 +167,17 @@ def check_opt(src, tgt, types):
     defa = mk_and(defa)
     defb = mk_and(defb)
 
-    # check if domain of defined values of Src implies that of Tgt
+    # Check if domain of defined values of Src implies that of Tgt.
     s = getSolver(qvars)
-    s.push()
-    s.add(mk_forall(qvars, And(defa, Not(defb))))
-    res = s.check()
-    if res != unsat:
-      check_incomplete_solver(res, s)
-      print "\nERROR: Domain of definedness of Target is smaller than Source's"\
-            " for %s %s" % (var_type(k, types), k)
-      print 'Example:'
-      print_var_vals(s, srcv, tgtv, k, types)
-      print 'Source val: ' + str_model(s, a)
-      print 'Target val: undef'
-      exit(-1)
-    s.pop()
+    check_expr(s, mk_forall(qvars, And(defa, Not(defb))), lambda :
+      ("Domain of definedness of Target is smaller than Source's for %s %s\n"
+         % (var_type(k, types), k),
+       str_model(s, a), 'undef', k, srcv, tgtv, types))
 
-    s.push()
-    s.add(mk_forall(qvars, And(defa, a != b)))
-    if __debug__:
-      gen_benchmark(s)
-
-    res = s.check()
-    if res != unsat:
-      check_incomplete_solver(res, s)
-      print '\nERROR: Mismatch in values of %s %s' % (var_type(k, types), k)
-      print 'Example:'
-      print_var_vals(s, srcv, tgtv, k, types)
-      print 'Source val: ' + str_model(s, a)
-      print 'Target val: ' + str_model(s, b)
-      exit(-1)
-    s.pop()
+    # Check that final values of vars are equal.
+    check_expr(s, mk_forall(qvars, And(defa, a != b)), lambda :
+      ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
+       str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
   # now check that the final memory state is similar in both programs
   s = getSolver([])
@@ -178,19 +188,10 @@ def check_opt(src, tgt, types):
       print '\nERROR: No memory state for %s in Target' % str(ptr)
       exit(-1)
 
-    s.push()
-    s.add(mem != memb)
-    res = s.check()
-    if res != unsat:
-      check_incomplete_solver(res, s)
-      print '\nERROR: Mismatch in final memory state for %s (%d bits)' %\
-            (str(ptr), mem.sort.size())
-      print 'Example:'
-      print_var_vals(s, srcv, tgtv, None)
-      print 'Source value: ' + str_model(s, mem)
-      print 'Target value: ' + str_model(s, memb)
-      exit(-1)
-    s.pop()
+    check_expr(s, mem != memb, lambda :
+      ('ERROR: Mismatch in final memory state for %s (%d bits)' %
+         (ptr, mem.sort().size()),
+       str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
 
   resetSolvers()
 
