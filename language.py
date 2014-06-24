@@ -415,7 +415,21 @@ class Input(Instr):
     return self.getName()
 
   def toSMT(self, defined, state, qvars):
-    return BitVec(self.name, self.type.getSize())
+    ptr = BitVec(self.name, self.type.getSize())
+    # if we are dealing with an arbitrary pointer, assume it points to something
+    # that can (arbitrarily) hold 7 elements.
+    if isinstance(self.type, PtrType):
+      block_size = self.type.getSize()
+    elif isinstance(self.type, UnknownType) and\
+         (self.type.myType == Type.Ptr or self.type.myType == Type.Unknown):
+      block_size = self.type.types[Type.Ptr].getSize()
+    else:
+      return ptr
+
+    num_elems = 7
+    mem = BitVec('mem_' + self.name, block_size * num_elems)
+    state.addAlloca(ptr, mem, (block_size, num_elems, 1))
+    return ptr
 
 
 ################################
@@ -969,10 +983,7 @@ class Load(Instr):
   def toSMT(self, defined, state, qvars):
     v = state.eval(self.v, defined, qvars)
     defined += [v != 0]
-    bits = self.type.getSize()
-    rndmem = BitVec('%s_%s' % (self.getName(), mk_unique_id()), bits)
-    ptrs = state.ptrs + [(None, rndmem, (bits, 1, 0))]
-    return self._recPtrLoad(ptrs, v, defined)
+    return self._recPtrLoad(state.ptrs, v, defined)
 
   def getTypeConstraints(self, vars):
     return And(self.stype == self.v.type,
@@ -1029,10 +1040,12 @@ class Store(Instr):
 
     write_size = self.stype.getSize()
     newmem = []
+    mustwrite = []
     for (ptr, mem, info) in state.ptrs:
       (block_size, num_elems, align) = info
       size = block_size * num_elems
       inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size, ptr + size))
+      mustwrite += [inbounds]
 
       mem = If(inbounds, self._mkMem(src, tgt, ptr, size, mem), mem)
       newmem += [(ptr, mem, info)]
@@ -1042,6 +1055,7 @@ class Store(Instr):
         defined += [Implies(inbounds, align >= self.align)]
 
     state.ptrs = newmem
+    defined += [mk_or(mustwrite)]
     return None
 
   def getTypeConstraints(self, vars):
