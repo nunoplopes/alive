@@ -48,10 +48,10 @@ class ALIVeTest(FileBasedTest):
 
     m = self.regex.search(input)
     if m == None:
-      if exitCode == 0:
+      if exitCode == 0 and string.find(out, 'Optimization is correct!') != -1:
         return lit.Test.PASS, ''
       return lit.Test.FAIL, out + err
 
-    if string.find(out, m.group(1)) != -1:
+    if exitCode != 0 and string.find(out, m.group(1)) != -1:
       return lit.Test.PASS, ''
     return lit.Test.FAIL, out + err
