@@ -82,6 +82,8 @@ class State:
 
 ################################
 class Type:
+  Int, Ptr, Unknown = range(3)
+
   def __repr__(self):
     return ''
 
@@ -107,21 +109,20 @@ def getMostSpecificType(t1, t2):
     return t2
   if isinstance(t2, UnknownType):
     return t1
+  _ErrorOnTypeMismatch(t1.__class__ != t2.__class__)
 
-  if isinstance(t1, IntType) and isinstance(t2, IntType):
+  if isinstance(t1, IntType):
     _ErrorOnTypeMismatch(t1.defined and t2.defined and
                          t1.getSize() != t2.getSize())
     return t1 if t1.defined else t2
-  if isinstance(t1, PtrType) and isinstance(t2, PtrType):
+  if isinstance(t1, PtrType):
     t1id = id(t1.type)
     return t1 if id(getMostSpecificType(t1.type, t2.type)) == t1id else t2
-  _ErrorOnTypeMismatch(True)
+  assert False
 
 
 ################################
 class UnknownType(Type):
-  Int, Ptr, Unknown = range(3)
-
   def __init__(self, d = 0):
     self.types  = [IntType(), PtrType(depth = d)]
     self.myType = self.Unknown
@@ -140,18 +141,29 @@ class UnknownType(Type):
   def getSize(self):
     return self.types[self.myType].getSize()
 
+  def getPointeeType(self):
+    assert self.myType == self.Unknown or self.myType == self.Ptr
+    self.myType = self.Ptr
+    return self.types[self.Ptr].getPointeeType()
+
   def fixupTypes(self, types):
     self.myType = types.evaluate(self.typevar).as_long()
     self.types[self.myType].fixupTypes(types)
 
   def __eq__(self, other):
+    if self.myType != self.Unknown:
+      return And(self.typevar == self.myType,
+                 self.types[self.myType] == other)
+
     for i in range(len(self.types)):
-      if isinstance(other, type(self.types[i])):
+      if isinstance(other, self.types[i].__class__):
         self.myType = i
         return And(self.typevar == i, self.types[i] == other)
 
-    c = [And(self.typevar == i, other.typevar == i, self.types[i] == other)\
-      for i in range(len(self.types))]
+    assert isinstance(other, UnknownType)
+    c = [And(self.typevar == i,
+             other.typevar == i,
+             self.types[i] == other.types[i]) for i in range(len(self.types))]
     return Or(c)
 
   def getTypeConstraints(self, vars):
@@ -222,7 +234,7 @@ class IntType(Type):
 
   def getTypeConstraints(self, vars):
     # Integers are assumed to be up to 64 bits.
-    c = [self.typevar == 0, self.bitsvar > 0, self.bitsvar <= 64]
+    c = [self.typevar == Type.Int, self.bitsvar > 0, self.bitsvar <= 64]
     if self.defined:
       c += [self.bitsvar == self.getSize()]
     return And(c)
@@ -232,8 +244,8 @@ class IntType(Type):
 class PtrType(Type):
   def __init__(self, type = None, depth = 0):
     if type is None:
-      # limit type nesting to 3 levels
-      if depth >= 2:
+      # limit type nesting to 1 level
+      if depth >= 0:
         type = IntType()
       else:
         type = UnknownType(depth+1)
@@ -247,12 +259,16 @@ class PtrType(Type):
     return str(self.type) + '*'
 
   def setName(self, name):
-    self.type.setName('*'+name)
+    self.typevar = Int('t_' + name)
+    self.type.setName('*' + name)
 
   def getSize(self):
     if hasattr(self, 'size'):
       return self.size
     return Int('ptrsize')
+
+  def getPointeeType(self):
+    return self.type
 
   def __eq__(self, other):
     if isinstance(other, PtrType):
@@ -269,6 +285,7 @@ class PtrType(Type):
     # Pointers are assumed to be either 32 or 64 bits
     v = Int('ptrsize')
     return And(Or(v == 32, v == 64),
+               self.typevar == Type.Ptr,
                self.type.getTypeConstraints(vars))
 
 
@@ -958,8 +975,8 @@ class Load(Instr):
     return self._recPtrLoad(ptrs, v, defined)
 
   def getTypeConstraints(self, vars):
-    return And(self.type == self.v.type.type,
-               self.v.type == self.stype,
+    return And(self.stype == self.v.type,
+               self.type == self.v.type.getPointeeType(),
                self.type.getTypeConstraints(vars))
 
 
