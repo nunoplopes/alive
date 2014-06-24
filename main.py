@@ -18,8 +18,7 @@ from language import *
 from parser import parse_llvm, parse_opt_file
 
 
-def block_model(s):
-  m = s.model()
+def block_model(s, m):
   s.add(Not(And([Int(str(n)) == m[n] for n in m.decls()])))
 
 
@@ -92,28 +91,37 @@ def check_incomplete_solver(res, s):
     exit(-1)
 
 
+def var_type(var, types):
+  t = types[Int('t_' + var)].as_long()
+  if t == Type.Int:
+    return 'i%s' % types[Int('size_' + var)]
+  if t == Type.Ptr:
+    return var_type('*' + var, types) + '*'
+  assert False
+
+
 def str_model(s, v):
   val = s.model().evaluate(v, True).as_long()
   return "%d (%s)" % (val, hex(val))
 
 
-def _print_var_vals(s, vars, stopv, seen):
+def _print_var_vals(s, vars, stopv, seen, types):
   for k,v in vars.iteritems():
     if k == stopv:
       return
     if k in seen:
       continue
     seen |= set([k])
-    print "%s i%d = %s" % (k, v[0].sort().size(), str_model(s, v[0]))
+    print "%s %s = %s" % (k, var_type(k, types), str_model(s, v[0]))
 
 
-def print_var_vals(s, vs1, vs2, stopv):
+def print_var_vals(s, vs1, vs2, stopv, types):
   seen = set()
-  _print_var_vals(s, vs1, stopv, seen)
-  _print_var_vals(s, vs2, stopv, seen)
+  _print_var_vals(s, vs1, stopv, seen, types)
+  _print_var_vals(s, vs2, stopv, seen, types)
 
 
-def check_opt(src, tgt):
+def check_opt(src, tgt, types):
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
   initSolvers([srcv.getAllocaConstraints(),
@@ -137,9 +145,9 @@ def check_opt(src, tgt):
     if res != unsat:
       check_incomplete_solver(res, s)
       print "\nERROR: Domain of definedness of Target is smaller than Source's"\
-            " for i%d %s" % (a.sort().size(), k)
+            " for %s %s" % (var_type(k, types), k)
       print 'Example:'
-      print_var_vals(s, srcv, tgtv, k)
+      print_var_vals(s, srcv, tgtv, k, types)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: undef'
       exit(-1)
@@ -153,9 +161,9 @@ def check_opt(src, tgt):
     res = s.check()
     if res != unsat:
       check_incomplete_solver(res, s)
-      print '\nERROR: Mismatch in values of i%d %s' % (a.sort().size(), k)
+      print '\nERROR: Mismatch in values of %s %s' % (var_type(k, types), k)
       print 'Example:'
-      print_var_vals(s, srcv, tgtv, k)
+      print_var_vals(s, srcv, tgtv, k, types)
       print 'Source val: ' + str_model(s, a)
       print 'Target val: ' + str_model(s, b)
       exit(-1)
@@ -228,10 +236,11 @@ def main():
   # now check for correctness
   proofs = 0
   while s.check() == sat:
-    fixupTypes(src, s.model())
-    fixupTypes(tgt, s.model())
-    check_opt(src, tgt)
-    block_model(s)
+    types = s.model()
+    fixupTypes(src, types)
+    fixupTypes(tgt, types)
+    check_opt(src, tgt, types)
+    block_model(s, types)
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))
     sys.stdout.flush()
