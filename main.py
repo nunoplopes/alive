@@ -57,35 +57,10 @@ def gen_benchmark(s):
   fd.close()
 
 
-# lazy initialization of portfolio of SMT solvers.
-def initSolvers(cnstrs):
-  global solver_cnstrs, qfbv_solver_inited, bv_solver_inited
-  solver_cnstrs = cnstrs
-  qfbv_solver_inited = False
-  bv_solver_inited   = False
-
-
 def getSolver(qvars):
-  global qfbv_solver_inited, bv_solver_inited
-  if len(qvars) == 0:
-    if not qfbv_solver_inited:
-      qfbv_solver.push()
-      qfbv_solver.add(solver_cnstrs)
-      qfbv_solver_inited = True
-    return qfbv_solver
-
-  if not bv_solver_inited:
-    bv_solver.push()
-    bv_solver.add(solver_cnstrs)
-    bv_solver_inited = True
-  return bv_solver
-
-
-def resetSolvers():
-  if qfbv_solver_inited:
-    qfbv_solver.pop()
-  if bv_solver_inited:
-    bv_solver.pop()
+  if qvars == []:
+    return SolverFor('QF_BV')
+  return SolverFor('BV')
 
 
 def check_incomplete_solver(res, s):
@@ -96,13 +71,15 @@ def check_incomplete_solver(res, s):
 
 
 correct_exprs = {}
-def check_expr(s, expr, error):
+def check_expr(qvars, expr, extra, error):
+  expr = mk_forall(qvars, expr)
   id = get_z3_id(expr)
   if id in correct_exprs:
     return
   correct_exprs[id] = expr
 
-  s.push()
+  s = getSolver(qvars)
+  s.add(extra)
   s.add(expr)
 
   if __debug__:
@@ -111,14 +88,13 @@ def check_expr(s, expr, error):
   res = s.check()
   if res != unsat:
     check_incomplete_solver(res, s)
-    e, src, tgt, stop, srcv, tgtv, types = error()
+    e, src, tgt, stop, srcv, tgtv, types = error(s)
     print '\nERROR: %s' % e
     print 'Example:'
     print_var_vals(s, srcv, tgtv, stop, types)
     print 'Source value: ' + src
     print 'Target value: ' + tgt
     exit(-1)
-  s.pop()
 
 
 def var_type(var, types):
@@ -154,8 +130,8 @@ def print_var_vals(s, vs1, vs2, stopv, types):
 def check_opt(src, tgt, types):
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
-  initSolvers([srcv.getAllocaConstraints(),
-               tgtv.getAllocaConstraints()])
+  extra_cnstrs = [srcv.getAllocaConstraints(),
+                  tgtv.getAllocaConstraints()]
 
   for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
@@ -168,19 +144,17 @@ def check_opt(src, tgt, types):
     defb = mk_and(defb)
 
     # Check if domain of defined values of Src implies that of Tgt.
-    s = getSolver(qvars)
-    check_expr(s, mk_forall(qvars, And(defa, Not(defb))), lambda :
+    check_expr(qvars, And(defa, Not(defb)), extra_cnstrs, lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
     # Check that final values of vars are equal.
-    check_expr(s, mk_forall(qvars, And(defa, a != b)), lambda :
+    check_expr(qvars, And(defa, a != b), extra_cnstrs, lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
   # now check that the final memory state is similar in both programs
-  s = getSolver([])
   memsb = {str(ptr) : mem for (ptr, mem, info) in tgtv.ptrs}
   for (ptr, mem, info) in srcv.ptrs:
     memb = memsb.get(str(ptr))
@@ -191,12 +165,10 @@ def check_opt(src, tgt, types):
       print '\nERROR: No memory state for %s in Target' % str(ptr)
       exit(-1)
 
-    check_expr(s, mem != memb, lambda :
+    check_expr([], mem != memb, extra_cnstrs, lambda s :
       ('ERROR: Mismatch in final memory state for %s (%d bits)' %
          (ptr, mem.sort().size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
-
-  resetSolvers()
 
 
 def main():
@@ -232,10 +204,6 @@ def main():
     print 'Source and Target programs do not type check'
     exit(-1)
 
-
-  global qfbv_solver, bv_solver
-  qfbv_solver = SolverFor('QF_BV')
-  bv_solver = SolverFor('BV')
 
   # now check for correctness
   proofs = 0
