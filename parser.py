@@ -46,9 +46,9 @@ def parseOperand(toks, type):
 
   # constant
   elif toks[0] == 'true':
-    c = Constant(1, type.ensureIntType())
+    c = Constant(1, type.ensureIntType(1))
   elif toks[0] == 'false':
-    c = Constant(0, type.ensureIntType())
+    c = Constant(0, type.ensureIntType(1))
   elif toks[0] == 'null':
     c = Constant(0, type.ensurePtrType())
   else:

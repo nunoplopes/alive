@@ -91,7 +91,7 @@ class Type:
     print '%s type required, given \'%s\' instead' % (expected, self)
     exit(-1)
 
-  def ensureIntType(self):
+  def ensureIntType(self, size = None):
     self.typeMismatch('int')
 
   def ensurePtrType(self):
@@ -127,8 +127,8 @@ class UnknownType(Type):
     self.types  = [IntType(), PtrType(depth = d)]
     self.myType = self.Unknown
 
-  def ensureIntType(self):
-    return IntType()
+  def ensureIntType(self, size = None):
+    return IntType(size)
 
   def ensurePtrType(self):
     return PtrType()
@@ -182,7 +182,11 @@ class IntType(Type):
     self.defined = True
     assert isinstance(self.size, int)
 
-  def ensureIntType(self):
+  def ensureIntType(self, size = None):
+    assert self.defined == False or size == None or size == self.size
+    if size != None:
+      self.size = size
+      self.defined = True
     return self
 
   def setName(self, name):
@@ -388,15 +392,15 @@ class TypeFixedValue(Instr):
     if isinstance(self.v, Constant) and not isinstance(self.v, UndefVal):
       c += [self.smtvar == self.v.val]
       if not self.v.type.defined:
-        c += [self.v.type == int(math.log(self.max, 2))+1]
+        c += [self.v.type == self.max.bit_length() + int(self.max >= 0)]
     else:
       if self.v.type.defined:
-        min = self.min(self.min, (1 << self.v.type.getSize()) - 1)
-        max = self.min(self.max, (1 << self.v.type.getSize()) - 1)
+        mymin = min(self.min, (1 << self.v.type.getSize()) - 1)
+        mymax = min(self.max, (1 << self.v.type.getSize()) - 1)
       else:
-        min = self.min
-        max = self.max
-      c += [self.smtvar >= min, self.smtvar <= max]
+        mymin = self.min
+        mymax = self.max
+      c += [self.smtvar >= mymin, self.smtvar <= mymax]
     return And(c)
 
   def fixupTypes(self, types):
@@ -459,7 +463,7 @@ class Constant(Instr):
   def __init__(self, val, type):
     self.val = val
     self.type = type
-    self.setName(str(val))
+    self.setName(self.toString())
     self.id = mk_unique_id()
     self.type.setName(self.getUniqueName())
     assert isinstance(self.type, Type)
@@ -470,6 +474,9 @@ class Constant(Instr):
   def toString(self):
     if isinstance(self.type, PtrType) and self.val == 0:
       return 'null'
+    if isinstance(self.type, IntType) and self.type.defined and\
+       self.type.getSize() == 1:
+      return 'true' if self.val == 1 else 'false'
     return str(self.val)
 
   def toSMT(self, defined, state, qvars):
@@ -477,7 +484,7 @@ class Constant(Instr):
 
   def getTypeConstraints(self, vars):
     c = self.type.getTypeConstraints(vars)
-    if self.val != 0:
+    if self.val != 0 and not self.type.defined:
       # One more bit for positive integers to allow for sign bit.
       bits = self.val.bit_length() + int(self.val >= 0)
       return And(c, self.type >= bits)
@@ -844,7 +851,8 @@ class Select(Instr):
     t = str(self.type)
     if len(t) > 0:
       t = t + ' '
-    return 'select i1 %s, %s%s, %s%s' % (self.c, t, self.v1, t, self.v2)
+    return 'select i1 %s, %s%s, %s%s' % (self.c.getName(), t, self.v1.getName(),
+                                         t, self.v2.getName())
 
   def toSMT(self, defined, state, qvars):
     return If(state.eval(self.c, defined, qvars) == 1,
@@ -924,7 +932,7 @@ class GEP(Instr):
       t = str(self.idxs[i])
       if len(t) > 0:
         t += ' '
-      idxs += ', %s%s' % (t, self.idxs[i+1])
+      idxs += ', %s%s' % (t, self.idxs[i+1].getName())
     return 'getelementptr %s%s %s%s' % (inb, self.type, self.ptr.getName(),
                                         idxs)
 
