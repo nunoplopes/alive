@@ -57,18 +57,21 @@ def gen_benchmark(s):
   fd.close()
 
 
-def getSolver(qvars):
-  if qvars == []:
-    return SolverFor('QF_BV')
-  return SolverFor('BV')
-
-
 def check_incomplete_solver(res, s):
   if res == unknown:
     print '\nWARNING: The SMT solver gave up. Verification incomplete.'
     print 'Solver says: ' + s.reason_unknown()
     exit(-1)
 
+
+tactic = AndThen(
+  Repeat(AndThen(Tactic('simplify'), Tactic('propagate-values'))),
+  Tactic('elim-term-ite'),
+  Tactic('simplify'),
+  Tactic('propagate-values'),
+  Tactic('solve-eqs'),
+  Cond(Probe('is-qfbv'), Tactic('qfbv'), Tactic('bv'))
+)
 
 correct_exprs = {}
 def check_expr(qvars, expr, extra, error):
@@ -78,7 +81,7 @@ def check_expr(qvars, expr, extra, error):
     return
   correct_exprs[id] = expr
 
-  s = getSolver(qvars)
+  s = tactic.solver()
   s.add(extra)
   s.add(expr)
 
