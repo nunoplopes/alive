@@ -106,6 +106,9 @@ def var_type(var, types):
     return 'i%s' % types[Int('size_' + var)]
   if t == Type.Ptr:
     return var_type('*' + var, types) + '*'
+  if t == Type.Array:
+    elems = types[Int('val_%s_%s' % (var, 'elems'))]
+    return '[%s x %s]' % (elems, var_type('[' + var + ']', types))
   assert False
 
 

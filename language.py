@@ -82,7 +82,7 @@ class State:
 
 ################################
 class Type:
-  Int, Ptr, Unknown = range(3)
+  Int, Ptr, Array, Unknown = range(4)
 
   def __repr__(self):
     return ''
@@ -124,7 +124,7 @@ def getMostSpecificType(t1, t2):
 ################################
 class UnknownType(Type):
   def __init__(self, d = 0):
-    self.types  = [IntType(), PtrType(depth = d)]
+    self.types  = [IntType(), PtrType(depth = d), ArrayType(depth = d)]
     self.myType = self.Unknown
 
   def ensureIntType(self, size = None):
@@ -295,20 +295,48 @@ class PtrType(Type):
 
 ################################
 class ArrayType(Type):
-  def __init__(self, elems, type):
-    self.elems = elems
+  def __init__(self, elems = None, type = None, depth = 0):
+    if elems is None:
+      assert type is None
+      # limit type nesting to 1 level
+      if depth >= 0:
+        type = IntType()
+      else:
+        type = UnknownType(depth+1)
+      elems = Input('#', IntType())
+    self.elems = TypeFixedValue(elems, 1, 7)
     self.type = type
-    assert isinstance(self.elems, Instr)
     assert isinstance(self.type, Type)
 
   def __repr__(self):
     return '[%s x %s]' % (self.elems, self.type)
+
+  def setName(self, name):
+    self.typevar = Int('t_' + name)
+    self.type.setName('[' + name + ']')
+    self.elems.setName(name, 'elems')
+
+  def getSize(self):
+    return self.elems.getValue() * self.type.getSize()
+
+  def fixupTypes(self, types):
+    self.elems.fixupTypes(types)
+    self.type.fixupTypes(types)
+
+  def getTypeConstraints(self, vars):
+    return And(self.typevar == Type.Array,
+               self.elems.getTypeConstraints(vars),
+               self.type.getTypeConstraints(vars))
 
 
 ################################
 class Instr:
   def __repr__(self):
     return self.toString()
+
+  def __deepcopy__(self, m):
+    # Disable deep copy of instructions.
+    return self
 
   def getName(self):
     return self.name
@@ -324,7 +352,6 @@ class Instr:
       a = getattr(self, attr)
       if isinstance(a, TypeFixedValue):
         a.setName(name, attr)
-        setattr(self, attr, a)
       elif isinstance(a, Type) and attr != 'type':
         a = copy.deepcopy(a)
         a.setName('%s_%s_%s' % (name, attr, mk_unique_id()))
@@ -368,6 +395,7 @@ class TypeFixedValue(Instr):
     self.min = min
     self.max = max
     assert isinstance(self.v, Instr)
+    assert isinstance(self.v.type, IntType)
 
   def setName(self, name, attr):
     self.name = self.v.getName()
@@ -401,7 +429,7 @@ class TypeFixedValue(Instr):
         mymin = self.min
         mymax = self.max
       c += [self.smtvar >= mymin, self.smtvar <= mymax]
-    return And(c)
+    return mk_and(c)
 
   def fixupTypes(self, types):
     self.v.fixupTypes(types)

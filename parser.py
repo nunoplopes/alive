@@ -18,9 +18,15 @@ from language import *
 identifiers = {}
 
 
-def parseType(toks):
+def parseIntType(toks):
   t = IntType(toks[1])
   for i in range(len(toks)-2):
+    t = PtrType(t)
+  return t
+
+def parseArrayType(toks):
+  t = ArrayType(toks[1], toks[3])
+  for i in range(len(toks)-5):
     t = PtrType(t)
   return t
 
@@ -33,8 +39,8 @@ def parseOperand(toks, type):
   global identifiers
 
   # %var
-  if len(toks) == 2:
-    reg = '%' + toks[1]
+  if len(toks) == 2 or toks[0][0] == 'C':
+    reg = '%' + toks[1] if len(toks) == 2 else toks[0]
     if identifiers.has_key(reg):
       return identifiers[reg]
     identifiers[reg] = v = Input(reg, type)
@@ -43,8 +49,6 @@ def parseOperand(toks, type):
   assert len(toks) == 1
   if toks[0] == 'undef':
     c = UndefVal(type)
-
-  # constant
   elif toks[0] == 'true':
     c = Constant(1, type.ensureIntType(1))
   elif toks[0] == 'false':
@@ -94,7 +98,7 @@ def parseSelect(toks):
 
 def parseOptionalNumElems(toks):
   t = IntType()
-  return parseOptional([t, parseOperand(['1'], t)])(toks)
+  return toks if len(toks) == 2 else [t, parseOperand(['1'], t)]
 
 def parseAlloca(toks):
   return Alloca(toks[1], toks[2], toks[3], toks[4])
@@ -135,20 +139,24 @@ identifier = Word(srange("[a-zA-Z0-9_.]"))
 reg = Literal('%') + identifier
 opname = identifier
 posnum = Word(nums).setParseAction(lambda toks : int(toks[0]))
-
-instrs = Forward()
-prog = instrs + StringEnd()
+intconst = Regex(r"C[0-9]*")
+posnumOrConst = (Word(nums) | intconst).\
+                  setParseAction(lambda toks : parseOperand(toks[0], IntType()))
 
 comment = Literal(';') + restOfLine()
 
-type = (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
-         setParseAction(parseType)
+type = Forward()
+type <<= (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
+           setParseAction(parseIntType) |\
+         (Literal('[') + posnumOrConst + Literal('x') + type + Literal(']') +\
+           ZeroOrMore(Literal('*'))).setParseAction(parseArrayType)
+
 opttype = Optional(type).setParseAction(parseOptType)
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(lambda toks : [toks])
-operand = (reg | Regex(r"-?[0-9]+") | Literal('false') | Literal('true') |\
-           Literal('undef') | Literal('null')).\
+operand = (reg | Regex(r"-?[0-9]+") | intconst | Literal('false') |\
+           Literal('true') | Literal('undef') | Literal('null')).\
              setParseAction(lambda toks : [toks])
 
 typeoperand = (opttype + operand).setParseAction(parseTypeOperand)
@@ -193,7 +201,8 @@ store = (Literal('store') + typeoperand + comma + ptroperand +\
 
 instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\
         store | comment.suppress()
-instrs <<= OneOrMore(instr)
+
+prog = OneOrMore(instr) + StringEnd()
 
 
 def parse_llvm(txt, table):
