@@ -30,6 +30,12 @@ def parseArrayType(toks):
     t = PtrType(t)
   return t
 
+def parseNamedType(toks):
+  t = NamedType(toks[0])
+  for i in range(len(toks)-1):
+    t = PtrType(t)
+  return t
+
 def parseOptType(toks):
   if len(toks) == 1:
     return toks[0]
@@ -149,7 +155,9 @@ type = Forward()
 type <<= (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
            setParseAction(parseIntType) |\
          (Literal('[') + posnumOrConst + Literal('x') + type + Literal(']') +\
-           ZeroOrMore(Literal('*'))).setParseAction(parseArrayType)
+           ZeroOrMore(Literal('*'))).setParseAction(parseArrayType) |\
+         (Regex(r"Ty[0-9]*") + ZeroOrMore(Literal('*'))).\
+           setParseAction(parseNamedType)
 
 opttype = Optional(type).setParseAction(parseOptType)
 

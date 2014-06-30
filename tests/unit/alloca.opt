@@ -1,5 +1,5 @@
 === Source ===
-%p = alloca [5 x i32], 3
+%p = alloca [5 x Ty], 3
 
 === Target ===
-%p = alloca [5 x i32], 3
+%p = alloca [5 x Ty], 3

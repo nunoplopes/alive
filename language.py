@@ -146,6 +146,10 @@ class UnknownType(Type):
     self.myType = self.Ptr
     return self.types[self.Ptr].getPointeeType()
 
+  def getUnderlyingType(self):
+    assert self.myType == self.Ptr or self.myType == self.Array
+    return self.types[self.myType].getUnderlyingType()
+
   def fixupTypes(self, types):
     self.myType = types.evaluate(self.typevar).as_long()
     self.types[self.myType].fixupTypes(types)
@@ -166,10 +170,46 @@ class UnknownType(Type):
              self.types[i] == other.types[i]) for i in range(len(self.types))]
     return Or(c)
 
+  def ensureTypeDepth(self, depth):
+    c = []
+    for i in range(len(self.types)):
+      c += [Or(self.types[i].ensureTypeDepth(depth), self.typevar != i)]
+    return mk_and(c)
+
   def getTypeConstraints(self, vars):
     if self.myType != self.Unknown:
       return self.types[self.myType].getTypeConstraints(vars)
     return Or([t.getTypeConstraints(vars) for t in self.types])
+
+
+################################
+class NamedType(UnknownType):
+  def __init__(self, name):
+    UnknownType.__init__(self)
+    self.type = UnknownType()
+    self.name = name
+
+  def __repr__(self):
+    return self.name
+
+  def ensureIntType(self, size = None):
+    self.myType = self.Int
+    if size != None:
+      self.types[self.Int] = IntType(size)
+    self.type = self.type.ensureIntType(size)
+
+  def ensurePtrType(self):
+    self.myType = self.Ptr
+    self.type = self.type.ensurePtrType()
+
+  def setName(self, name):
+    UnknownType.setName(self, self.name)
+    self.type.setName(name)
+
+  def getTypeConstraints(self, vars):
+    return And(self.type == self,
+               UnknownType.getTypeConstraints(self, vars),
+               self.type.getTypeConstraints(vars))
 
 
 ################################
@@ -236,6 +276,9 @@ class IntType(Type):
       return self.bitsvar >= other
     assert False
 
+  def ensureTypeDepth(self, depth):
+    return BoolVal(depth == 0)
+
   def getTypeConstraints(self, vars):
     # Integers are assumed to be up to 64 bits.
     c = [self.typevar == Type.Int, self.bitsvar > 0, self.bitsvar <= 64]
@@ -274,6 +317,9 @@ class PtrType(Type):
   def getPointeeType(self):
     return self.type
 
+  def getUnderlyingType(self):
+    return self.type
+
   def __eq__(self, other):
     if isinstance(other, PtrType):
       return self.type == other.type
@@ -284,6 +330,9 @@ class PtrType(Type):
   def fixupTypes(self, types):
     self.size = types.evaluate(Int('ptrsize')).as_long()
     self.type.fixupTypes(types)
+
+  def ensureTypeDepth(self, depth):
+    return BoolVal(False) if depth == 0 else self.type.ensureTypeDepth(depth-1)
 
   def getTypeConstraints(self, vars):
     # Pointers are assumed to be either 32 or 64 bits
@@ -319,9 +368,15 @@ class ArrayType(Type):
   def getSize(self):
     return self.elems.getValue() * self.type.getSize()
 
+  def getUnderlyingType(self):
+    return self.type
+
   def fixupTypes(self, types):
     self.elems.fixupTypes(types)
     self.type.fixupTypes(types)
+
+  def ensureTypeDepth(self, depth):
+    return BoolVal(False) if depth == 0 else self.type.ensureTypeDepth(depth-1)
 
   def getTypeConstraints(self, vars):
     return And(self.typevar == Type.Array,
@@ -411,7 +466,6 @@ class TypeFixedValue(Instr):
     return self.v.toString()
 
   def toSMT(self, defined, state, qvars):
-    defined += [state.eval(self.v, defined, qvars) == self.val]
     return self.val
 
   def getTypeConstraints(self, vars):
@@ -429,6 +483,9 @@ class TypeFixedValue(Instr):
         mymin = self.min
         mymax = self.max
       c += [self.smtvar >= mymin, self.smtvar <= mymax]
+      if not self.v.type.defined:
+        c += [self.v.type >= self.max.bit_length() + int(self.max >= 0)]
+
     return mk_and(c)
 
   def fixupTypes(self, types):
@@ -965,17 +1022,22 @@ class GEP(Instr):
                                         idxs)
 
   def toSMT(self, defined, state, qvars):
-    # FIXME: support more complicated ptr dereferencing
-    assert len(self.idxs) <= 2
     ptr = state.eval(self.ptr, defined, qvars)
+    type = self.type
     for i in range(len(self.idxs)):
       if (i & 1) == 1:
         continue
-      type_size = getAllocSize(self.idxs[i])
       idx = truncateOrSExt(state.eval(self.idxs[i+1], defined, qvars), ptr)
-      ptr += type_size * idx
+      ptr += getAllocSize(type) * idx
+      if i + 2 != len(self.idxs):
+        type = type.getUnderlyingType()
+
     # TODO: handle inbounds
     return ptr
+
+  def getTypeConstraints(self, vars):
+    return And(self.type.ensureTypeDepth(len(self.idxs)/2),
+               Instr.getTypeConstraints(self, vars))
 
 
 ################################
