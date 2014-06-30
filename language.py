@@ -138,8 +138,17 @@ class UnknownType(Type):
     for t in self.types:
       t.setName(name)
 
+  def _getSizeUnknown(self, idx):
+    if idx == len(self.types)-1:
+      return self.types[idx].getSize()
+    return If(self.typevar == idx,
+              self.types[idx].getSize(),
+              self._getSizeUnknown(idx+1))
+
   def getSize(self):
-    return self.types[self.myType].getSize()
+    if self.myType != self.Unknown:
+      return self.types[self.myType].getSize()
+    return self._getSizeUnknown(0)
 
   def getPointeeType(self):
     assert self.myType == self.Unknown or self.myType == self.Ptr
@@ -239,7 +248,9 @@ class IntType(Type):
     return ''
 
   def getSize(self):
-    return self.size
+    if hasattr(self, 'size'):
+      return self.size
+    return self.bitsvar
 
   def fixupTypes(self, types):
     size = types.evaluate(self.bitsvar).as_long()
@@ -457,7 +468,7 @@ class TypeFixedValue(Instr):
     self.smtvar = Int('val_%s_%s' % (name, attr))
 
   def getValue(self):
-    return self.val
+    return getattr(self, 'val', self.smtvar)
 
   def getType(self):
     return self.v.type
@@ -777,8 +788,20 @@ class ConversionOp(Instr):
     self.stype = stype
     self.v = v
     self.type = ttype
-    assert isinstance(self.stype,PtrType if self.enforcePtrSrc(op) else IntType)
-    assert isinstance(self.type, PtrType if self.enforcePtrTgt(op) else IntType)
+
+    if self.enforceIntSrc(op):
+      assert isinstance(self.stype, IntType)
+    elif self.enforcePtrSrc(op):
+      assert isinstance(self.stype, PtrType)
+    else:
+      assert isinstance(self.stype, Type)
+
+    if self.enforceIntTgt(op):
+      assert isinstance(self.type, IntType)
+    elif self.enforcePtrTgt(op):
+      assert isinstance(self.type, PtrType)
+    else:
+      assert isinstance(self.type, Type)
     assert isinstance(self.v, Instr)
     assert self.op >= 0 and self.op < self.Last
 
@@ -794,8 +817,22 @@ class ConversionOp(Instr):
       exit(-1)
 
   @staticmethod
+  def enforceIntSrc(op):
+    return op == ConversionOp.Trunc or\
+           op == ConversionOp.ZExt or\
+           op == ConversionOp.SExt or\
+           op == ConversionOp.Int2Ptr
+
+  @staticmethod
   def enforcePtrSrc(op):
     return op == ConversionOp.Ptr2Int
+
+  @staticmethod
+  def enforceIntTgt(op):
+    return op == ConversionOp.Trunc or\
+           op == ConversionOp.ZExt or\
+           op == ConversionOp.SExt or\
+           op == ConversionOp.Ptr2Int
 
   @staticmethod
   def enforcePtrTgt(op):

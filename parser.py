@@ -83,15 +83,26 @@ def parseOptional(default):
                        toks if len(toks) > 0 else default
 
 def parseBinOp(toks):
-  return BinOp(BinOp.getOpId(toks[0]), toks[2], toks[3],
-               parseOperand(toks[4], toks[2]), toks[1])
+  type = toks[2].ensureIntType()
+  return BinOp(BinOp.getOpId(toks[0]), type, parseOperand(toks[3], type),
+               parseOperand(toks[4], type), toks[1])
 
 def parseConversionOp(toks):
   op = ConversionOp.getOpId(toks[0])
-  stype = toks[1].ensurePtrType() if ConversionOp.enforcePtrSrc(op) else\
-    toks[1].ensureIntType()
-  type  = toks[3].ensurePtrType() if ConversionOp.enforcePtrTgt(op) else\
-    toks[3].ensureIntType()
+  if ConversionOp.enforceIntSrc(op):
+    stype = toks[1].ensureIntType()
+  elif ConversionOp.enforcePtrSrc(op):
+    stype = toks[1].ensurePtrType()
+  else:
+    stype = toks[1]
+
+  if ConversionOp.enforceIntTgt(op):
+    type = toks[3].ensureIntType()
+  elif ConversionOp.enforcePtrTgt(op):
+    type = toks[3].ensurePtrType()
+  else:
+    type = toks[3]
+
   return ConversionOp(op, stype, parseOperand(toks[2], stype), type)
 
 def parseIcmp(toks):
@@ -172,7 +183,7 @@ intoperand  = (opttype + operand).setParseAction(parseIntOperand)
 ptroperand  = (opttype + operand).setParseAction(parsePtrOperand)
 comma = Literal(',').suppress()
 
-binop = (opname + flags + intoperand + comma + operand).\
+binop = (opname + flags + opttype + operand + comma + operand).\
           setParseAction(parseBinOp)
 
 conversionop = (opname + opttype + operand +\
