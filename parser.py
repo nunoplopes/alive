@@ -202,7 +202,7 @@ load = (Literal('load') + ptroperand + optalign).setParseAction(parseLoad)
 
 operandinstr = (opttype + operand).setParseAction(parseOperandInstr)
 
-op = icmp | select | alloca | gep | load | binop | conversionop | operandinstr
+op = operandinstr | icmp | select | alloca | gep | load | binop | conversionop
 
 store = (Literal('store') + typeoperand + comma + ptroperand +\
          optalign).setParseAction(parseStore)
@@ -213,11 +213,12 @@ instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\
 prog = OneOrMore(instr) + StringEnd()
 
 
-def parse_llvm(txt, table):
+def parse_llvm(txt):
   global identifiers
   try:
-    identifiers = table
+    identifiers = collections.OrderedDict()
     prog.parseString(txt)
+    return identifiers
   except ParseException, e:
     print 'Parsing error:'
     print e
@@ -225,17 +226,15 @@ def parse_llvm(txt, table):
 
 
 ##########################
-src = Literal('===') + Literal('Source') + Literal('===')
-tgt = Literal('===') + Literal('Target') + Literal('===')
-pre = Literal('===') + Literal('Pre') + Literal('===')
-boolexpr = Literal('true') # TODO
-opt_file = src.suppress() + SkipTo('===') +\
-           tgt.suppress() + (SkipTo('===') | SkipTo(StringEnd())) +\
-           Optional(pre.suppress() + boolexpr) + StringEnd()
+opt_file = SkipTo('=>') + Literal('=>').suppress() +\
+           SkipTo(StringEnd()) + StringEnd()
 
 def parse_opt_file(txt):
   try:
-    return opt_file.parseString(txt)
+    txt = opt_file.parseString(txt)
+    src = parse_llvm(txt[0])
+    tgt = parse_llvm(txt[1])
+    return src, tgt
   except ParseException, e:
     print 'Parsing error:'
     print e

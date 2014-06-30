@@ -1,7 +1,5 @@
-=== Source ===
 %aab = and %a, %b
 %aob = xor %a, %b
 %c = add %aab, %aob
-
-=== Target ===
+  =>
 %c = or %a, %b

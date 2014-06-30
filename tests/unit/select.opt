@@ -1,5 +1,3 @@
-=== Source ===
 %C = select i1 false, %A, %B
-
-=== Target ===
+  =>
 %C = %B

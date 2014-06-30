@@ -1,5 +1,3 @@
-=== Source ===
 %1 = select undef, %x, undef
-
-=== Target ===
+  =>
 %1 = %x

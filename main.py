@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse, collections, glob, re, sys, time
+import argparse, glob, re, sys
 from common import *
 from language import *
 from parser import parse_llvm, parse_opt_file
@@ -179,13 +179,7 @@ def check_opt(src, tgt, types):
 
 def main():
   file = sys.stdin.read()
-  data = parse_opt_file(file)
-
-  src = collections.OrderedDict()
-  parse_llvm(data[0], src)
-
-  tgt = collections.OrderedDict()
-  parse_llvm(data[1], tgt)
+  src, tgt = parse_opt_file(file)
 
   print 'Source:'
   print_prog(src)

@@ -1,9 +1,7 @@
-=== Source ===
 %p = alloca
 store %a, %p
 %b = load %p
-
-=== Target ===
+  =>
 %p = alloca
 store %a, %p
 %b = %a

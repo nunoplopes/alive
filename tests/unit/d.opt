@@ -1,5 +1,4 @@
-=== Source ===
   %A = shl nsw %x, 3
   %B = ashr %A, 1
-=== Target ===
+=>
  %B = shl nsw %x, 2

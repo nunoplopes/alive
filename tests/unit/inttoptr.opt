@@ -1,7 +1,6 @@
-=== Source ===
 %p = alloca
 %x = ptrtoint %p to i64
 %b = inttoptr %x
-=== Target ===
+  =>
 %p = alloca
 %b = i8* %p

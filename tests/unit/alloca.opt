@@ -1,5 +1,3 @@
-=== Source ===
 %p = alloca [5 x Ty], 3
-
-=== Target ===
+  =>
 %p = alloca [5 x Ty], 3

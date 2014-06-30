@@ -1,9 +1,7 @@
-=== Source ===
 %p = alloca
 store %a, %p
 %b = load %p
-
-=== Target ===
+  =>
 ; ERROR: Mismatch in final memory state
 %p = alloca
 %b = %a

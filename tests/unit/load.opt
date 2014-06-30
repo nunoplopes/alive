@@ -1,5 +1,4 @@
-=== Source ===
 %s = select %cond, null, %p
 %a = load %s
-=== Target ===
+  =>
 %a = load %p
