@@ -142,7 +142,7 @@ def check_typed_opt(pre, src, tgt, types):
 
   for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
-    if not tgtv.has_key(k):
+    if k[0] == 'C' or not tgtv.has_key(k):
       continue
 
     (a, defa, qvars) = v

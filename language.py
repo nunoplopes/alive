@@ -69,7 +69,7 @@ class State:
 
   def iteritems(self):
     for k,v in self.vars.iteritems():
-      if k[0] != '%':
+      if k[0] != '%' and k[0] != 'C':
         continue
       yield k,v
 
