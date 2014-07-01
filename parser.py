@@ -237,15 +237,59 @@ def parse_llvm(txt):
 
 
 ##########################
-opt_file = SkipTo('=>') + Literal('=>').suppress() +\
-           SkipTo(StringEnd()) + StringEnd()
+def parse_pre(txt):
+  # TODO
+  return BoolVal(True)
+
+
+##########################
+opt_id = 1
+
+def parseOpt(toks):
+  global opt_id
+  name = str(opt_id)
+  opt_id += 1
+  pre = ''
+  src = tgt = None
+
+  skip = False
+  for i in range(len(toks)):
+    if skip:
+      skip = False
+      continue
+
+    if toks[i] == 'Name:':
+      name = toks[i+1]
+      i += 1
+      skip = True
+    elif toks[i] == 'Pre:':
+      pre = toks[i+1]
+      i += 1
+      skip = True
+    elif src is None:
+      src = toks[i]
+    else:
+      assert tgt is None
+      tgt = toks[i]
+
+  pre = parse_pre(pre)
+  src = parse_llvm(src)
+  tgt = parse_llvm(tgt)
+  return name, pre, src, tgt
+
+
+opt = (Optional(Literal('Name:') + SkipTo(LineEnd())) +\
+       Optional(Literal('Pre:') + SkipTo(LineEnd())) +\
+       SkipTo('=>') + Literal('=>').suppress() +\
+       SkipTo(Literal('Name:') | StringEnd())).\
+         setParseAction(parseOpt)
+
+opt_file = OneOrMore(opt)
+
 
 def parse_opt_file(txt):
   try:
-    txt = opt_file.parseString(txt)
-    src = parse_llvm(txt[0])
-    tgt = parse_llvm(txt[1])
-    return src, tgt
+    return opt_file.parseString(txt)
   except ParseException, e:
     print 'Parsing error:'
     print e

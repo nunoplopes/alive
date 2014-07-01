@@ -1,3 +1,0 @@
-%1 = select undef, %x, undef
-  =>
-%1 = %x

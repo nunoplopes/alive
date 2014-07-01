@@ -1,3 +1,19 @@
+Name: undef 1
 %1 = and %a, undef
   =>
 %1 = 0
+
+Name: undef 2
+%1 = or %a, undef
+  =>
+%1 = -1
+
+Name: undef 3
+%1 = select undef, %x, undef
+  =>
+%1 = %x
+
+Name: undef 4
+%1 = select undef, %x, undef
+  =>
+%1 = undef

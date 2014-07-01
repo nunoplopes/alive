@@ -133,7 +133,7 @@ def print_var_vals(s, vs1, vs2, stopv, types):
   _print_var_vals(s, vs2, stopv, seen, types)
 
 
-def check_opt(src, tgt, types):
+def check_typed_opt(pre, src, tgt, types):
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
   extra_cnstrs = [srcv.getAllocaConstraints(),
@@ -150,13 +150,13 @@ def check_opt(src, tgt, types):
     defb = mk_and(defb)
 
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, And(defa, Not(defb)), extra_cnstrs, lambda s :
+    check_expr(qvars, And(pre, defa, Not(defb)), extra_cnstrs, lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, And(defa, a != b), extra_cnstrs, lambda s :
+    check_expr(qvars, And(pre, defa, a != b), extra_cnstrs, lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
@@ -171,16 +171,17 @@ def check_opt(src, tgt, types):
       print '\nERROR: No memory state for %s in Target' % str(ptr)
       exit(-1)
 
-    check_expr([], mem != memb, extra_cnstrs, lambda s :
+    check_expr([], And(pre, mem != memb), extra_cnstrs, lambda s :
       ('ERROR: Mismatch in final memory state for %s (%d bits)' %
          (ptr, mem.sort().size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
 
 
-def main():
-  file = sys.stdin.read()
-  src, tgt = parse_opt_file(file)
+def check_opt(opt):
+  name, pre, src, tgt = opt
 
+  print '----------------------------------------'
+  print 'Optimization: ' + name
   print 'Source:'
   print_prog(src)
 
@@ -207,19 +208,30 @@ def main():
 
   # now check for correctness
   proofs = 0
-  while s.check() == sat:
+  while True:
+    res = s.check()
+    if res != sat:
+      break
     types = s.model()
     fixupTypes(src, types)
     fixupTypes(tgt, types)
-    check_opt(src, tgt, types)
+    check_typed_opt(pre, src, tgt, types)
     block_model(s, types)
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))
     sys.stdout.flush()
 
-  print '\nOptimization is correct!'
-  if s.check() != unsat:
-    print 'Note: verification incomplete; did not check all bit widths'
+  if res == unsat:
+    print '\nOptimization is correct!\n'
+  else:
+    print '\nVerification incomplete; did not check all bit widths\n'
+
+
+def main():
+  file = sys.stdin.read()
+  opts = parse_opt_file(file)
+  for opt in opts:
+    check_opt(opt)
 
 
 if __name__ == "__main__":
