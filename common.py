@@ -15,6 +15,7 @@
 from z3 import *
 
 def mk_and(l):
+  l = [e for e in l if not is_true(e)]
   if len(l) == 0:
     return BoolVal(True)
   if len(l) == 1:
@@ -23,6 +24,7 @@ def mk_and(l):
 
 
 def mk_or(l):
+  l = [e for e in l if not is_false(e)]
   if len(l) == 0:
     return BoolVal(False)
   if len(l) == 1:

@@ -75,14 +75,13 @@ tactic = AndThen(
 
 correct_exprs = {}
 def check_expr(qvars, expr, extra, error):
-  expr = mk_forall(qvars, expr)
+  expr = mk_and(extra + [mk_forall(qvars, expr)])
   id = get_z3_id(expr)
   if id in correct_exprs:
     return
   correct_exprs[id] = expr
 
   s = tactic.solver()
-  s.add(extra)
   s.add(expr)
 
   if __debug__:
@@ -136,7 +135,9 @@ def print_var_vals(s, vs1, vs2, stopv, types):
 def check_typed_opt(pre, src, tgt, types):
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
-  extra_cnstrs = [srcv.getAllocaConstraints(),
+  pre  = pre.toSMT(srcv, types)
+  extra_cnstrs = [pre,
+                  srcv.getAllocaConstraints(),
                   tgtv.getAllocaConstraints()]
 
   for k,v in srcv.iteritems():
@@ -150,13 +151,13 @@ def check_typed_opt(pre, src, tgt, types):
     defb = mk_and(defb)
 
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, And(pre, defa, Not(defb)), extra_cnstrs, lambda s :
+    check_expr(qvars, And(defa, Not(defb)), extra_cnstrs, lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, And(pre, defa, a != b), extra_cnstrs, lambda s :
+    check_expr(qvars, And(defa, a != b), extra_cnstrs, lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
@@ -171,7 +172,7 @@ def check_typed_opt(pre, src, tgt, types):
       print '\nERROR: No memory state for %s in Target' % str(ptr)
       exit(-1)
 
-    check_expr([], And(pre, mem != memb), extra_cnstrs, lambda s :
+    check_expr([], mem != memb, extra_cnstrs, lambda s :
       ('ERROR: Mismatch in final memory state for %s (%d bits)' %
          (ptr, mem.sort().size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
@@ -182,10 +183,9 @@ def check_opt(opt):
 
   print '----------------------------------------'
   print 'Optimization: ' + name
-  print 'Source:'
+  print 'Precondition: ' + str(pre)
   print_prog(src)
-
-  print '\nTarget:'
+  print '  =>'
   print_prog(tgt)
   print
 

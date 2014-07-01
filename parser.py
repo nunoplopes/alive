@@ -14,6 +14,7 @@
 
 from pyparsing.pyparsing import *
 from language import *
+from precondition import *
 
 identifiers = {}
 
@@ -199,7 +200,7 @@ select = (Literal('select') + Optional(Literal('i1')).suppress() + operand +\
           comma + opttype + operand + comma + opttype + operand).\
             setParseAction(parseSelect)
 
-align = (comma + Literal('align').suppress() + posnum)
+align = (comma + Suppress('align') + posnum)
 optalign = Optional(align).setParseAction(parseOptional(0))
 
 alloca = (Literal('alloca') + opttype +\
@@ -218,7 +219,7 @@ op = operandinstr | icmp | select | alloca | gep | load | binop | conversionop
 store = (Literal('store') + typeoperand + comma + ptroperand +\
          optalign).setParseAction(parseStore)
 
-instr = (reg + Literal('=').suppress() + op).setParseAction(parseInstr) |\
+instr = (reg + Suppress('=') + op).setParseAction(parseInstr) |\
         store | comment.suppress()
 
 prog = OneOrMore(instr) + StringEnd()
@@ -237,9 +238,54 @@ def parse_llvm(txt):
 
 
 ##########################
-def parse_pre(txt):
-  # TODO
-  return BoolVal(True)
+def parsePredArg(toks):
+  if len(toks) == 2 or toks[0][0] == 'C':
+    reg = '%' + toks[1] if len(toks) == 2 else toks[0]
+    if identifiers.has_key(reg):
+      return identifiers[reg]
+    print 'Identifier used in precondition was not defined: ' + reg
+    exit(-1)
+  assert False
+
+def parseBoolPredicate(toks):
+  op = BoolPredicate.getOpId(toks[0])
+  return BoolPredicate(op, toks[1:])
+
+def parseRecursive(toks, l):
+  toks = toks[0]
+  if len(toks) == 1:
+    return toks[0]
+  r = l(toks[0], toks[2])
+  toks = [toks[4:]]
+  if len(toks[0]) == 0:
+    return r
+  return l(r, parseRecursive(toks, l))
+
+def parsePreAnd(toks):
+  return parseRecursive(toks, lambda a,b: PredAnd(a, b))
+
+def parsePreOr(toks):
+  return parseRecursive(toks, lambda a,b: PredOr(a, b))
+
+
+pred_arg = (reg | intconst).setParseAction(parsePredArg)
+pred_args = (pred_arg + ZeroOrMore(comma + pred_arg)) | Empty()
+predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
+              setParseAction(parseBoolPredicate)
+
+pre = infixNotation(predicate,
+                    [('&&', 2, opAssoc.LEFT, parsePreAnd),
+                     ('||', 2, opAssoc.LEFT, parsePreOr),
+                    ]) |\
+      (Literal('true') | StringEnd()).setParseAction(lambda toks: TruePred())
+
+def parse_pre(txt, ids):
+  try:
+    return pre.parseString(txt)[0]
+  except ParseException, e:
+    print 'Parsing error in precondition:'
+    print e
+    exit(-1)
 
 
 ##########################
@@ -272,9 +318,9 @@ def parseOpt(toks):
       assert tgt is None
       tgt = toks[i]
 
-  pre = parse_pre(pre)
   src = parse_llvm(src)
   tgt = parse_llvm(tgt)
+  pre = parse_pre(pre, src)
   return name, pre, src, tgt
 
 

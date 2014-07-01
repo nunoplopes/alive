@@ -1,0 +1,75 @@
+Name: AddSub:922
+Pre: isSignBit(C)
+%a = add %x, C
+  =>
+%a = xor %x, C
+
+
+Name: AddSub:937
+%ax = zext i1 %a
+%c = add %ax, %b
+  =>
+%b1 = add %b, 1
+%c = select %a, %b1, %b
+
+
+Name: AddSub:941, 980
+Pre: isSignBit(C1)
+%b = xor %a, C1
+%d = add %b, C2
+  =>
+%sc = xor C1, C2
+%d = add %a, %sc
+
+
+Name: AddSub:994
+%a = add %b, %b
+  =>
+%a = shl %b, 1
+
+
+Name: AddSub:1003
+%na = sub 0, %a
+%c = add %na, %b
+  =>
+%c = sub %b, %a
+
+
+Name: AddSub:1004
+%na = sub 0, %a
+%nb = sub 0, %b
+%c = add %na, %nb
+  =>
+%ab = add %a, %b
+%c = sub 0, %ab
+
+
+Name: AddSub:1050
+%nb = sub 0, %b
+%c = add %a, %nb
+  =>
+%c = sub %a, %b
+
+
+Name: AddSub:1074
+%nx = xor %x, -1
+%r = add %nx, C
+  =>
+%c1 = sub C, 1
+%r = sub %c1, %x
+
+
+Name: AddSub:1108
+%na = sub %n, %a
+%s = select %x, 0, %na
+%r = add %s, %a
+  =>
+%r = select %x, %a, %n
+
+
+Name: AddSub:1166
+%aab = and %a, %b
+%aob = xor %a, %b
+%c = add %aab, %aob
+  =>
+%c = or %a, %b
