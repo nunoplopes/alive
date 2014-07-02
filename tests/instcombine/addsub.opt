@@ -92,3 +92,10 @@ Name: AddSub:1166
 %c = add %aab, %aob
   =>
 %c = or %a, %b
+
+
+Name: AddSub:1364
+%na = sub 0, %a
+%r = sub %x, %na
+  =>
+%r = add %x, %a
