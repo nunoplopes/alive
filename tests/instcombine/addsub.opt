@@ -67,6 +67,16 @@ Name: AddSub:1108
 %r = select %x, %a, %n
 
 
+Name: AddSub:1149
+Pre: WillNotOverflowSignedAdd(%x,%y)
+%sx = sext %x
+%sy = sext %y
+%c = add %sx, %sy
+  =>
+%xy = add %x, %y
+%c = sext %xy
+
+
 Name: AddSub:1166
 %aab = and %a, %b
 %aob = xor %a, %b

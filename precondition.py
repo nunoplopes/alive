@@ -60,15 +60,17 @@ class PredOr(Predicate):
 
 ################################
 class BoolPredicate(Predicate):
-  isSignBit, Last = range(2)
+  isSignBit, NSWAdd, Last = range(3)
 
   opnames = {
     isSignBit: 'isSignBit',
+    NSWAdd:     'WillNotOverflowSignedAdd',
   }
   opids = {v:k for k, v in opnames.items()}
 
   num_args = {
     isSignBit: 1,
+    NSWAdd:    2,
   }
 
   def __init__(self, op, args):
@@ -101,4 +103,5 @@ class BoolPredicate(Predicate):
     args = [state.eval(v, [], []) for v in self.args]
     return {
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
+      self.NSWAdd   : lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b)
     }[self.op](*args)
