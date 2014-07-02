@@ -14,52 +14,204 @@
 
 from language import *
 
-class Predicate(object):
+class Pred:
   def __repr__(self):
     raise '__repr__ not implemented'
 
+class BoolPred(Pred):
+  pass
+
+class ValPred(Pred):
+  pass
+
 
 ################################
-class TruePred(Predicate):
+class PredConst(ValPred):
+  def __init__(self, val):
+    self.val = val
+    assert isinstance(self.val, int)
+
+  def __repr__(self):
+    return str(self.val)
+
+  def getTypeConstraints(self):
+    ## FIXME
+    bits = self.val.bit_length() + int(self.val >= 0)
+    return []
+
+  def toSMT(self, state, types):
+    return self.val
+
+
+################################
+class PredVar(ValPred):
+  def __init__(self, v):
+    self.v = v
+    assert isinstance(self.v, Instr)
+
+  def __repr__(self):
+    return self.v.getName()
+
+  def getTypeConstraints(self):
+    return []
+
+  def toSMT(self, state, types):
+    return state.eval(self.v, [], [])
+
+
+################################
+class TruePred(BoolPred):
   def __repr__(self):
     return 'true'
+
+  def getTypeConstraints(self):
+    return []
 
   def toSMT(self, state, types):
     return BoolVal(True)
 
 
 ################################
-class PredAnd(Predicate):
+class PredAnd(BoolPred):
   def __init__(self, v1, v2):
     self.v1 = v1
     self.v2 = v2
-    assert isinstance(self.v1, Predicate)
-    assert isinstance(self.v2, Predicate)
+    assert isinstance(self.v1, BoolPred)
+    assert isinstance(self.v2, BoolPred)
 
   def __repr__(self):
     return '(%s && %s)' % (self.v1, self.v2)
+
+  def getTypeConstraints(self):
+    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints()
 
   def toSMT(self, state, types):
     return And(self.v1.toSMT(state, types), self.v2.toSMT(state, types))
 
 
 ################################
-class PredOr(Predicate):
+class PredOr(BoolPred):
   def __init__(self, v1, v2):
     self.v1 = v1
     self.v2 = v2
-    assert isinstance(self.v1, Predicate)
-    assert isinstance(self.v2, Predicate)
+    assert isinstance(self.v1, BoolPred)
+    assert isinstance(self.v2, BoolPred)
 
   def __repr__(self):
     return '(%s || %s)' % (self.v1, self.v2)
+
+  def getTypeConstraints(self):
+    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints()
 
   def toSMT(self, state, types):
     return Or(self.v1.toSMT(state, types), self.v2.toSMT(state, types))
 
 
 ################################
-class BoolPredicate(Predicate):
+class BinaryBoolPred(BoolPred):
+  EQ, NE, Last = range(3)
+
+  opnames = ['==', '!=']
+
+  def __init__(self, op, v1, v2):
+    self.op = op
+    self.v1 = v1
+    self.v2 = v2
+    assert self.op >= 0 and self.op < self.Last
+    assert isinstance(self.v1, Pred)
+    assert isinstance(self.v2, Pred)
+
+  def __repr__(self):
+    return '(%s %s %s)' % (self.v1, self.opnames[self.op], self.v2)
+
+  @staticmethod
+  def getOpId(name):
+    for i in range(BinaryBoolPred.Last):
+      if BinaryBoolPred.opnames[i] == name:
+        return i
+    print 'Unknown boolean operator: ' + name
+    exit(-1)
+
+  def getTypeConstraints(self):
+    ## FIXME: types eq?
+    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints()
+
+  def toSMT(self, state, types):
+    v1 = self.v1.toSMT(state, types)
+    v2 = self.v2.toSMT(state, types)
+    return {
+      self.EQ: lambda a,b: a == b,
+      self.NE: lambda a,b: a != b,
+    }[self.op](v1, v2)
+
+
+################################
+class UnaryValPred(ValPred):
+  Not, Neg, Last = range(3)
+
+  opnames = ['~', '-']
+
+  def __init__(self, op, v):
+    self.op = op
+    self.v = v
+    assert self.op >= 0 and self.op < self.Last
+    assert isinstance(self.v, ValPred)
+
+  def __repr__(self):
+    return '%s%s' % (self.opnames[self.op], self.v)
+
+  @staticmethod
+  def getOpId(name):
+    for i in range(UnaryValPred.Last):
+      if UnaryValPred.opnames[i] == name:
+        return i
+    print 'Unknown unary operator: ' + name
+    exit(-1)
+
+  def getTypeConstraints(self):
+    return self.v.getTypeConstraints()
+
+  def toSMT(self, state, types):
+    return {
+      self.Not: lambda a: ~a,
+      self.Neg: lambda a: -a,
+    }[self.op](self.v.toSMT(state, types))
+
+
+################################
+class BinaryValPred(ValPred):
+  And, Or, Add, Minus, Last = range(5)
+
+  opnames = ['&', '|', '+', '-']
+
+  def __init__(self, op, v1, v2):
+    self.op = op
+    self.v1 = v1
+    self.v2 = v2
+    assert self.op >= 0 and self.op < self.Last
+    assert isinstance(self.v1, ValPred)
+    assert isinstance(self.v2, ValPred)
+
+  def __repr__(self):
+    return '(%s %s %s)' % (self.v1, self.opnames[self.op], self.v2)
+
+  def getTypeConstraints(self):
+    ## FIXME: types eq?
+    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints()
+
+  def toSMT(self, state, types):
+    v1 = self.v1.toSMT(state, types)
+    v2 = self.v2.toSMT(state, types)
+    return {
+      self.And:   lambda a,b: a & b,
+      self.Or:    lambda a,b: a | b,
+      self.Add:   lambda a,b: a + b,
+      self.Minus: lambda a,b: a - b,
+    }[self.op](v1, v2)
+
+
+################################
+class LLVMBoolPred(BoolPred):
   isSignBit, NSWAdd, Last = range(3)
 
   opnames = {
@@ -77,15 +229,15 @@ class BoolPredicate(Predicate):
     self.op = op
     self.args = args
     if self.num_args[op] != len(args):
-      print 'Wrong number of argument to %s (expected=%d)' %\
+      print 'Wrong number of argument to %s (expected %d)' %\
         (self.opnames[op], self.num_args[op])
       exit(-1)
     assert op >= 0 and op < self.Last
     for a in self.args:
-      assert isinstance(a, Instr)
+      assert isinstance(a, Pred)
 
   def __repr__(self):
-    args = [a.getName() for a in self.args]
+    args = [str(a) for a in self.args]
     return '%s(%s)' % (self.opnames[self.op], ', '.join(args))
 
   def getOpName(self):
@@ -94,14 +246,17 @@ class BoolPredicate(Predicate):
   @staticmethod
   def getOpId(name):
     try:
-      return BoolPredicate.opids[name]
+      return LLVMBoolPred.opids[name]
     except:
       print 'Unknown boolean predicate: ' + name
       exit(-1)
 
+  def getTypeConstraints(self):
+    return [v.getTypeConstraints() for v in self.args]
+
   def toSMT(self, state, types):
-    args = [state.eval(v, [], []) for v in self.args]
+    args = [v.toSMT(state, types) for v in self.args]
     return {
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.NSWAdd   : lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b)
+      self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b)
     }[self.op](*args)

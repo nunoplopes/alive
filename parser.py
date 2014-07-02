@@ -239,27 +239,44 @@ def parse_llvm(txt):
 
 ##########################
 def parsePredArg(toks):
-  if len(toks) == 2 or toks[0][0] == 'C':
-    reg = '%' + toks[1] if len(toks) == 2 else toks[0]
-    if identifiers.has_key(reg):
-      return identifiers[reg]
-    print 'Identifier used in precondition was not defined: ' + reg
-    exit(-1)
-  assert False
+  id = toks[0]
+  if id.isdigit():
+    return PredConst(int(id))
+
+  if identifiers.has_key(id):
+    return PredVar(identifiers[id])
+  print 'Identifier used in precondition was not defined: ' + id
+  exit(-1)
 
 def parseBoolPredicate(toks):
-  op = BoolPredicate.getOpId(toks[0])
-  return BoolPredicate(op, toks[1:])
+  op = LLVMBoolPred.getOpId(toks[0])
+  return LLVMBoolPred(op, toks[1:])
 
 def parseRecursive(toks, l):
   toks = toks[0]
   if len(toks) == 1:
     return toks[0]
-  r = l(toks[0], toks[2])
-  toks = [toks[4:]]
-  if len(toks[0]) == 0:
-    return r
-  return l(r, parseRecursive(toks, l))
+  return parseRecursive([[l(toks[0], toks[1])] + toks[2:]], l)
+
+def parsePreBAnd(t):
+  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.And, a, b))
+
+def parsePreBOr(t):
+  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.Or, a, b))
+
+def parsePreAdd(t):
+  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.Add, a, b))
+
+def parsePreMinus(t):
+  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.Minus, a, b))
+
+def parseUnaryPred(toks):
+  op = UnaryValPred.getOpId(toks[0][0])
+  return UnaryValPred(op, toks[0][1])
+
+def parseBoolPred(toks):
+  op = BinaryBoolPred.getOpId(toks[1])
+  return BinaryBoolPred(op, toks[0], toks[2])
 
 def parsePreAnd(toks):
   return parseRecursive(toks, lambda a,b: PredAnd(a, b))
@@ -268,16 +285,34 @@ def parsePreOr(toks):
   return parseRecursive(toks, lambda a,b: PredOr(a, b))
 
 
-pred_arg = (reg | intconst).setParseAction(parsePredArg)
+#pre_expr_atoms = (reg | Regex(r"-?[0-9]+") | intconst) ---  TOO SLOW
+pre_expr_atoms = Word(srange("[a-zA-Z0-9_.%]")).setParseAction(parsePredArg)
+
+pre_expr = infixNotation(pre_expr_atoms,
+                         [(Literal('-'), 1, opAssoc.RIGHT, parseUnaryPred),
+                          (Literal('~'), 1, opAssoc.RIGHT, parseUnaryPred),
+                          (Suppress('&'), 2, opAssoc.LEFT, parsePreBAnd),
+                          (Suppress('|'), 2, opAssoc.LEFT, parsePreBOr),
+                          (Suppress('+'), 2, opAssoc.LEFT, parsePreAdd),
+                          (Suppress('-'), 2, opAssoc.LEFT, parsePreMinus),
+                         ])
+
+pre_bool_expr = (pre_expr + oneOf('== !=') + pre_expr).\
+                  setParseAction(parseBoolPred)
+
+#pred_arg = (reg | intconst).setParseAction(parsePredArg)
+pred_arg = pre_expr_atoms
 pred_args = (pred_arg + ZeroOrMore(comma + pred_arg)) | Empty()
 predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
-              setParseAction(parseBoolPredicate)
+              setParseAction(parseBoolPredicate) |\
+            Literal('true').setParseAction(lambda toks: TruePred()) |\
+            pre_bool_expr
 
 pre = infixNotation(predicate,
-                    [('&&', 2, opAssoc.LEFT, parsePreAnd),
-                     ('||', 2, opAssoc.LEFT, parsePreOr),
+                    [(Suppress('&&'), 2, opAssoc.LEFT, parsePreAnd),
+                     (Suppress('||'), 2, opAssoc.LEFT, parsePreOr),
                     ]) |\
-      (Literal('true') | StringEnd()).setParseAction(lambda toks: TruePred())
+      StringEnd().setParseAction(lambda toks: TruePred())
 
 def parse_pre(txt, ids):
   try:

@@ -59,6 +59,15 @@ Name: AddSub:1074
 %r = sub %c1, %x
 
 
+Name: AddSub:1080
+Pre: ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
+%xc2 = and %x, C2
+%r = add %xc2, C1
+  =>
+%xc1 = add %x, C1
+%r = and %xc1, C2
+
+
 Name: AddSub:1108
 %na = sub %n, %a
 %s = select %x, 0, %na
