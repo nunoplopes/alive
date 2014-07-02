@@ -209,6 +209,54 @@ class BinaryValPred(ValPred):
       self.Minus: lambda a,b: a - b,
     }[self.op](v1, v2)
 
+################################
+class ValFunction(ValPred):
+  width, Last = range(2)
+  
+  opnames = {
+    width: 'width',
+  }
+  opids = {v:k for k,v in opnames.items()}
+  
+  num_args = {
+    width: 1,
+  }
+  
+  def __init__(self, op, args, type):
+    self.op = op
+    self.args = args
+    self.type = type  ## TODO: implement inference of return type
+    assert 0 <= op < self.Last
+    for a in args:
+      assert isinstance(a, ValPred)
+
+    if self.num_args[op] != len(args):
+      raise Exception('Wrong number of arguments to %s (got %d, expected %d)' %
+        (self.opnames[op], len(args), self.num_args[op]))
+      ## FIXME: subclass exception
+  
+  def __repr__(self):
+    args = [str(a) for a in self.args]
+    return '%s(%s)' % (self.opnames[self.op], ', '.join(args))
+  
+  def getOpName(self): return self.opnames[self.op]
+  
+  @staticmethod
+  def getOpId(name):
+    if name in ValFunction.opids:
+      return ValFunction.opids[name]
+
+    raise Exception('Unknown function: %s' % name)  ## FIXME: subclass exception
+  
+  def getTypeConstraints(self):
+    return [v.getTypeConstraints() for v in self.args]
+
+  def toSMT(self, state, types):
+    args = [v.toSMT(state, types) for v in self.args]
+    return {
+      self.width: lambda a: BitVecVal(a.sort().size(), a.sort().size())
+    }[self.op](*args)
+    
 
 ################################
 class LLVMBoolPred(BoolPred):
