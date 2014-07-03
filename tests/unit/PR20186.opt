@@ -1,0 +1,7 @@
+; ERROR: Domain of definedness of Target is smaller
+%a = sdiv %X, C
+%r = sub 0, %a
+  =>
+%c1 = sub 0, C
+%r = sdiv %X, %c1
+;TODO: %r = sdiv X, -C
