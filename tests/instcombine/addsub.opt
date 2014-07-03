@@ -99,3 +99,32 @@ Name: AddSub:1364
 %r = sub %x, %na
   =>
 %r = add %x, %a
+
+
+Name: AddSub:1371
+%r = sub i1 %x, %y
+  =>
+%r = xor %x, %y
+
+
+Name: AddSub:1375
+%r = sub -1, %a
+  =>
+%r = xor %a, -1
+
+
+Name: AddSub:1381
+%nx = xor %x, -1
+%r = sub C, %nx
+  =>
+%c1 = add C, 1
+%r = add %x, %c1
+
+
+Name: AddSub:1386
+Pre: C == width(%a) - 1
+
+%a = lshr %x, C
+%r = sub 0, %a
+  =>
+%r = ashr %x, C
