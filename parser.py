@@ -253,9 +253,7 @@ def parseBoolPredicate(toks):
   return LLVMBoolPred(op, toks[1:])
 
 def parseValFunction(toks):
-  print 'ParseValFunction', toks
   op = ValFunction.getOpId(toks[0])
-  print op
   try:
     return ValFunction(op, toks[1:], IntType())
   except Exception, e:
