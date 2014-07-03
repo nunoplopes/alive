@@ -253,6 +253,14 @@ def parseBoolPredicate(toks):
   op = LLVMBoolPred.getOpId(toks[0])
   return LLVMBoolPred(op, toks[1:])
 
+def parseValFunction(toks):
+  op = ValFunction.getOpId(toks[0])
+  try:
+    return ValFunction(op, toks[1:], IntType())
+  except Exception, e:
+    print e
+    exit(-1)
+
 def parseRecursive(toks, l):
   toks = toks[0]
   if len(toks) == 1:
@@ -280,9 +288,12 @@ def parsePreAnd(toks):
 def parsePreOr(toks):
   return parseRecursive(toks, lambda a,op,b: PredOr(a, b))
 
+pred_args = Forward()
 
 #pre_expr_atoms = (reg | Regex(r"-?[0-9]+") | intconst) ---  TOO SLOW
-pre_expr_atoms = Word(srange("[a-zA-Z0-9_.%]")).setParseAction(parsePredArg)
+pre_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
+                   setParseAction(parseValFunction) |\
+                 Word(srange("[a-zA-Z0-9_.%]")).setParseAction(parsePredArg)
 
 pre_expr = infixNotation(pre_expr_atoms,
                          [(oneOf('- ~'), 1, opAssoc.RIGHT, parseUnaryPred),
@@ -299,7 +310,7 @@ pre_bool_expr = (pre_expr + oneOf('== !=') + pre_expr).\
 
 #pred_arg = (reg | intconst).setParseAction(parsePredArg)
 pred_arg = pre_expr_atoms
-pred_args = (pred_arg + ZeroOrMore(comma + pred_arg)) | Empty()
+pred_args <<= (pred_arg + ZeroOrMore(comma + pred_arg)) | Empty()
 predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
               setParseAction(parseBoolPredicate) |\
             Literal('true').setParseAction(lambda toks: TruePred()) |\
@@ -313,7 +324,9 @@ pre = infixNotation(predicate,
       StringEnd().setParseAction(lambda toks: TruePred())
 
 def parse_pre(txt, ids):
+  global identifiers
   try:
+    identifiers = ids
     return pre.parseString(txt)[0]
   except ParseException, e:
     print 'Parsing error in precondition:'
