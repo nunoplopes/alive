@@ -72,6 +72,22 @@ class TruePred(BoolPred):
 
 
 ################################
+class PredNot(BoolPred):
+  def __init__(self, v):
+    self.v = v
+    assert isinstance(self.v, BoolPred)
+
+  def __repr__(self):
+    return '!%s' % self.v
+
+  def getTypeConstraints(self):
+    return self.v.getTypeConstraints()
+
+  def toSMT(self, state, types):
+    return Not(self.v.toSMT(state, types))
+
+
+################################
 class PredAnd(BoolPred):
   def __init__(self, v1, v2):
     self.v1 = v1
@@ -229,7 +245,7 @@ class LLVMBoolPred(BoolPred):
 
   opnames = {
     isSignBit: 'isSignBit',
-    NSWAdd:     'WillNotOverflowSignedAdd',
+    NSWAdd:    'WillNotOverflowSignedAdd',
   }
   opids = {v:k for k, v in opnames.items()}
 

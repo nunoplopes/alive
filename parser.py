@@ -271,6 +271,9 @@ def parseBoolPred(toks):
   op = BinaryBoolPred.getOpId(toks[1])
   return BinaryBoolPred(op, toks[0], toks[2])
 
+def parsePreNot(toks):
+  return PredNot(toks[0][0])
+
 def parsePreAnd(toks):
   return parseRecursive(toks, lambda a,op,b: PredAnd(a, b))
 
@@ -303,7 +306,8 @@ predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
             pre_bool_expr
 
 pre = infixNotation(predicate,
-                    [(Literal('&&'), 2, opAssoc.LEFT, parsePreAnd),
+                    [(Suppress('!'), 1, opAssoc.RIGHT, parsePreNot),
+                     (Literal('&&'), 2, opAssoc.LEFT, parsePreAnd),
                      (Literal('||'), 2, opAssoc.LEFT, parsePreOr),
                     ]) |\
       StringEnd().setParseAction(lambda toks: TruePred())
