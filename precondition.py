@@ -27,20 +27,32 @@ class ValPred(Pred):
 
 ################################
 class PredConst(ValPred):
-  def __init__(self, val):
+  def __init__(self, val, type = None):
     self.val = val
+    self.id = mk_unique_id()
+    
+    if type == None:
+      self.type = IntType()
+    else:
+      self.type = type
+    self.type.setName(str(val) + "_" + self.id)
     assert isinstance(self.val, int)
+    assert isinstance(self.type, IntType)
 
   def __repr__(self):
     return str(self.val)
 
+  def getType(self):
+    return self.type
+
   def getTypeConstraints(self):
     ## FIXME
     bits = self.val.bit_length() + int(self.val >= 0)
-    return []
+    return [self.type.getTypeConstraints([])]
 
   def toSMT(self, state, types):
     return self.val
+    ## FIXME: return BitVecVal?
 
 
 ################################
@@ -52,8 +64,11 @@ class PredVar(ValPred):
   def __repr__(self):
     return self.v.getName()
 
+  def getType(self):
+    return self.v.type
+
   def getTypeConstraints(self):
-    return []
+    return []  # assumes these are set by the source
 
   def toSMT(self, state, types):
     return state.eval(self.v, [], [])
@@ -134,7 +149,8 @@ class BinaryBoolPred(BoolPred):
 
   def getTypeConstraints(self):
     ## FIXME: types eq?
-    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints()
+    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints() \
+      + [self.v1.getType() == self.v2.getType()]
 
   def toSMT(self, state, types):
     v1 = self.v1.toSMT(state, types)
@@ -167,6 +183,9 @@ class UnaryValPred(ValPred):
         return i
     print 'Unknown unary operator: ' + name
     exit(-1)
+    
+  def getType(self):
+    return self.v.getType()
 
   def getTypeConstraints(self):
     return self.v.getTypeConstraints()
@@ -195,9 +214,14 @@ class BinaryValPred(ValPred):
   def __repr__(self):
     return '(%s %s %s)' % (self.v1, self.opnames[self.op], self.v2)
 
+  def getType(self):
+    "Returns type of first argument, since they will be constrained to be equal."
+    return self.v1.getType()    
+
   def getTypeConstraints(self):
     ## FIXME: types eq?
-    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints()
+    return self.v1.getTypeConstraints() + self.v2.getTypeConstraints() \
+      + [self.v1.getType() == self.v2.getType()]
 
   def toSMT(self, state, types):
     v1 = self.v1.toSMT(state, types)
@@ -223,12 +247,15 @@ class ValFunction(ValPred):
   }
   
   def __init__(self, op, args, type):
-    self.op = op
-    self.args = args
-    self.type = type  ## TODO: implement inference of return type
     assert 0 <= op < self.Last
     for a in args:
       assert isinstance(a, ValPred)
+
+    self.op = op
+    self.args = args
+    self.id = mk_unique_id()
+    self.type = type
+    self.type.setName('%s_%s' % (self.opnames[op], self.id))
 
     if self.num_args[op] != len(args):
       raise Exception('Wrong number of arguments to %s (got %d, expected %d)' %
@@ -248,13 +275,18 @@ class ValFunction(ValPred):
 
     raise Exception('Unknown function: %s' % name)  ## FIXME: subclass exception
   
+  def getType(self):
+    return self.type
+
   def getTypeConstraints(self):
-    return [v.getTypeConstraints() for v in self.args]
+    return [mk_and(v.getTypeConstraints()) for v in self.args] \
+      + [self.type.getTypeConstraints([])]
 
   def toSMT(self, state, types):
     args = [v.toSMT(state, types) for v in self.args]
+    self.type.fixupTypes(types)  ## FIXME: this should probably be happening everywhere
     return {
-      self.width: lambda a: BitVecVal(a.sort().size(), a.sort().size())
+      self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize())
     }[self.op](*args)
     
 
@@ -300,7 +332,7 @@ class LLVMBoolPred(BoolPred):
       exit(-1)
 
   def getTypeConstraints(self):
-    return [v.getTypeConstraints() for v in self.args]
+    return [mk_and(v.getTypeConstraints()) for v in self.args]
 
   def toSMT(self, state, types):
     args = [v.toSMT(state, types) for v in self.args]

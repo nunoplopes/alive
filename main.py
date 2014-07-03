@@ -193,9 +193,11 @@ def check_opt(opt):
   type_vars = []
   type_src = getTypeConstraints(src, type_vars)
   type_tgt = getTypeConstraints(tgt, type_vars)
+  type_pre = pre.getTypeConstraints()
 
   s = Solver()
   s.add(type_src)
+  s.add(mk_and(type_pre))
   if s.check() != sat:
     print 'Source program does not type check'
     exit(-1)
