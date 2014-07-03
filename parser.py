@@ -16,7 +16,8 @@ from pyparsing.pyparsing import *
 from language import *
 from precondition import *
 
-identifiers = {}
+# enable memoization of parsing elements. Gives a nice speedup for large files.
+ParserElement.enablePackrat()
 
 
 def parseIntType(toks):
