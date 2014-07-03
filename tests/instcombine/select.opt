@@ -1,0 +1,99 @@
+Name: Select:851
+%r = select %a, %b, %a
+  =>
+%r = and %a, %b
+
+Name: Select:852
+%r = select %a, %a, %b
+  =>
+%r = or %a, %b
+
+Name: Select:858
+%nota = xor %a, -1
+%r = select %a, %nota, %b
+  =>
+%nota = xor %a, -1
+%r = and %nota, %b
+
+Name: Select:859
+%nota = xor %a, -1
+%r = select %a, %b, %nota
+  =>
+%nota = xor %a, -1
+%r = or %nota, %b
+
+Name: Select:869
+%r = select C, 1, 0
+  =>
+%r = zext C
+
+Name: Select:873
+%r = select C, -1, 0
+  =>
+%r = sext C
+
+Name: Select:877
+%r = select %c, 0, 1
+  =>
+%notc = xor %c, -1
+%r = zext %notc
+
+Name: Select:883
+%r = select %c, 0, -1
+  =>
+%notc = xor %c, -1
+%r = sext %notc
+
+Name: Select:962
+%s1 = add %x, %y
+%s2 = add %x, %z
+%r = select %c, %s1, %s2
+  =>
+%yz = select %c, %y, %z
+%r = add %x, %yz
+
+Name: Select:967a
+%sum = add %x, %y
+%dif = sub %x, %y
+%r = select %c, %sum, %dif
+  =>
+%neg = sub 0, %y
+%sel = select %c, %y, %neg
+%r = add %x, %sel
+
+Name: Select:967b
+%sum = sub %x, %y
+%dif = add %x, %y
+%r = select %c, %sum, %dif
+  =>
+%neg = sub 0, %y
+%sel = select %c, %neg, %y
+%r = add %x, %sel
+
+Name: Select:1031
+%c1 = icmp gt %a, %b
+%r1 = select %c1, %a, %b
+%c2 = icmp gt %a, %r1
+%r2 = select %c2, %a, %r1
+  =>
+%c = icmp gt %a, %b
+%r2 = select %c, %a, %b
+
+Name: Select:1032
+%c1 = icmp lt %a, %b
+%r1 = select %c1, %a, %b
+%c2 = icmp lt %a, %r1
+%r2 = select %c2, %a, %r1
+  =>
+%c = icmp lt %a, %b
+%r2 = select %c, %a, %b
+
+Name: Select:1048
+%x2 = sub 0, %x
+%c = icmp slt %x2, 0
+%negx = sub 0, %x2
+%abs = select %c, %negx, %x2
+  =>
+%c2 = icmp slt %x, 0
+%negx2 = sub 0, %x
+%abs = select %c2, %negx2, %x
