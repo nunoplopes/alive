@@ -257,19 +257,11 @@ def parseRecursive(toks, l):
   toks = toks[0]
   if len(toks) == 1:
     return toks[0]
-  return parseRecursive([[l(toks[0], toks[1])] + toks[2:]], l)
+  return parseRecursive([[l(toks[0], toks[1], toks[2])] + toks[3:]], l)
 
-def parsePreBAnd(t):
-  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.And, a, b))
-
-def parsePreBOr(t):
-  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.Or, a, b))
-
-def parsePreAdd(t):
-  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.Add, a, b))
-
-def parsePreMinus(t):
-  return parseRecursive(t, lambda a,b: BinaryValPred(BinaryValPred.Minus, a, b))
+def parseBinaryPred(toks):
+  return parseRecursive(toks, lambda a,op,b:
+                                BinaryValPred(BinaryValPred.getOpId(op), a, b))
 
 def parseUnaryPred(toks):
   op = UnaryValPred.getOpId(toks[0][0])
@@ -280,22 +272,23 @@ def parseBoolPred(toks):
   return BinaryBoolPred(op, toks[0], toks[2])
 
 def parsePreAnd(toks):
-  return parseRecursive(toks, lambda a,b: PredAnd(a, b))
+  return parseRecursive(toks, lambda a,op,b: PredAnd(a, b))
 
 def parsePreOr(toks):
-  return parseRecursive(toks, lambda a,b: PredOr(a, b))
+  return parseRecursive(toks, lambda a,op,b: PredOr(a, b))
 
 
 #pre_expr_atoms = (reg | Regex(r"-?[0-9]+") | intconst) ---  TOO SLOW
 pre_expr_atoms = Word(srange("[a-zA-Z0-9_.%]")).setParseAction(parsePredArg)
 
 pre_expr = infixNotation(pre_expr_atoms,
-                         [(Literal('-'), 1, opAssoc.RIGHT, parseUnaryPred),
-                          (Literal('~'), 1, opAssoc.RIGHT, parseUnaryPred),
-                          (Suppress('&'), 2, opAssoc.LEFT, parsePreBAnd),
-                          (Suppress('|'), 2, opAssoc.LEFT, parsePreBOr),
-                          (Suppress('+'), 2, opAssoc.LEFT, parsePreAdd),
-                          (Suppress('-'), 2, opAssoc.LEFT, parsePreMinus),
+                         [(oneOf('- ~'), 1, opAssoc.RIGHT, parseUnaryPred),
+                          (oneOf('* / %'), 2, opAssoc.LEFT, parseBinaryPred),
+                          (oneOf('+ -'), 2, opAssoc.LEFT, parseBinaryPred),
+                          (Literal('>>'), 2, opAssoc.LEFT, parseBinaryPred),
+                          (Literal('<<'), 2, opAssoc.LEFT, parseBinaryPred),
+                          (Literal('&'), 2, opAssoc.LEFT, parseBinaryPred),
+                          (Literal('|'), 2, opAssoc.LEFT, parseBinaryPred),
                          ])
 
 pre_bool_expr = (pre_expr + oneOf('== !=') + pre_expr).\
@@ -310,8 +303,8 @@ predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
             pre_bool_expr
 
 pre = infixNotation(predicate,
-                    [(Suppress('&&'), 2, opAssoc.LEFT, parsePreAnd),
-                     (Suppress('||'), 2, opAssoc.LEFT, parsePreOr),
+                    [(Literal('&&'), 2, opAssoc.LEFT, parsePreAnd),
+                     (Literal('||'), 2, opAssoc.LEFT, parsePreOr),
                     ]) |\
       StringEnd().setParseAction(lambda toks: TruePred())
 

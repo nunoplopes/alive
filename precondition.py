@@ -180,9 +180,9 @@ class UnaryValPred(ValPred):
 
 ################################
 class BinaryValPred(ValPred):
-  And, Or, Add, Minus, Last = range(5)
+  And, Or, Add, Sub, Mul, Div, Rem, Shr, Shl, Last = range(10)
 
-  opnames = ['&', '|', '+', '-']
+  opnames = ['&', '|', '+', '-', '*', '/', '%', '>>', '<<']
 
   def __init__(self, op, v1, v2):
     self.op = op
@@ -195,6 +195,14 @@ class BinaryValPred(ValPred):
   def __repr__(self):
     return '(%s %s %s)' % (self.v1, self.opnames[self.op], self.v2)
 
+  @staticmethod
+  def getOpId(name):
+    for i in range(BinaryValPred.Last):
+      if BinaryValPred.opnames[i] == name:
+        return i
+    print 'Unknown binary operator: ' + name
+    exit(-1)
+
   def getTypeConstraints(self):
     ## FIXME: types eq?
     return self.v1.getTypeConstraints() + self.v2.getTypeConstraints()
@@ -203,10 +211,15 @@ class BinaryValPred(ValPred):
     v1 = self.v1.toSMT(state, types)
     v2 = self.v2.toSMT(state, types)
     return {
-      self.And:   lambda a,b: a & b,
-      self.Or:    lambda a,b: a | b,
-      self.Add:   lambda a,b: a + b,
-      self.Minus: lambda a,b: a - b,
+      self.And: lambda a,b: a & b,
+      self.Or:  lambda a,b: a | b,
+      self.Add: lambda a,b: a + b,
+      self.Sub: lambda a,b: a - b,
+      self.Mul: lambda a,b: a * b,
+      self.Div: lambda a,b: a / b,
+      self.Rem: lambda a,b: SRem(a, b),
+      self.Shr: lambda a,b: a >> b,
+      self.Shl: lambda a,b: a << b,
     }[self.op](v1, v2)
 
 
