@@ -1,4 +1,0 @@
-%A = shl nuw  %x, 1
-%B = lshr %A, 3
-  =>
-%B = lshr %x, 2

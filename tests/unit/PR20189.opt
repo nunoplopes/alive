@@ -1,0 +1,5 @@
+; ERROR: Domain of definedness of Target is smaller
+%B = sub 0, %A
+%C = sub nsw %x, %B
+  =>
+%C = add nsw %x, %A

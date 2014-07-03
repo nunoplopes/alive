@@ -1,0 +1,26 @@
+Name: shift 1
+%sh = shl nsw 1, %b
+%mul = mul nsw %a, %sh
+  =>
+%mul = shl nsw %a, %b
+
+
+Name: shift 2
+%A = shl nsw %x, 1
+%B = ashr %A, 3
+  =>
+%B = ashr %x, 2
+
+
+Name: shift 3
+%A = shl nuw  %x, 1
+%B = lshr %A, 3
+  =>
+%B = lshr %x, 2
+
+
+Name: shift 4
+%A = shl nsw %x, 3
+%B = ashr %A, 1
+  =>
+%B = shl nsw %x, 2

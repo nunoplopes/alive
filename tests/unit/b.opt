@@ -1,4 +1,0 @@
-  %A = shl nsw %x, 1
-  %B = ashr %A, 3
-=>
-  %B = ashr %x, 2
