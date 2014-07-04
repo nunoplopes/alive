@@ -391,7 +391,7 @@ class Icmp(Instr):
     if self.op == self.Var:
       self.opname = op
     self.type = IntType(1)
-    self.stype = type
+    self.stype = type.ensureIntPtrOrVector()
     self.v1 = v1
     self.v2 = v2
 
@@ -458,7 +458,7 @@ class Select(Instr):
     assert isinstance(c.type, IntType)
     assert isinstance(v1, Value)
     assert isinstance(v2, Value)
-    self.type = type
+    self.type = type.ensureFirstClass()
     self.c = c
     self.v1 = v1
     self.v2 = v2
@@ -578,6 +578,7 @@ class Load(Instr):
     assert isinstance(v, Value)
     assert isinstance(align, int)
     self.stype = stype
+    stype.type = stype.type.ensureFirstClass()
     self.type = stype.type
     self.v = v
     self.align = align
@@ -628,7 +629,7 @@ class Store(Instr):
     assert isinstance(type, PtrType)
     assert isinstance(dst, Value)
     assert isinstance(align, int)
-    self.stype = stype
+    self.stype = stype.ensureFirstClass()
     self.src = src
     self.type = type
     self.dst = dst

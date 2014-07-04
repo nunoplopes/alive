@@ -32,6 +32,12 @@ class Type:
   def ensurePtrType(self):
     self.typeMismatch('pointer')
 
+  def ensureFirstClass(self):
+    self.typeMismatch('first class')
+
+  def ensureIntPtrOrVector(self):
+    self.typeMismatch('int/ptr/vector')
+
 
 ################################
 def getMostSpecificType(t1, t2):
@@ -59,7 +65,10 @@ def getMostSpecificType(t1, t2):
 ################################
 class UnknownType(Type):
   def __init__(self, d = 0):
-    self.types  = [IntType(), PtrType(depth = d), ArrayType(depth = d)]
+    self.types = {self.Int: IntType(),
+                  self.Ptr: PtrType(depth = d),
+                  self.Array: ArrayType(depth = d),
+                 }
     self.myType = self.Unknown
 
   def ensureIntType(self, size = None):
@@ -68,9 +77,19 @@ class UnknownType(Type):
   def ensurePtrType(self):
     return PtrType()
 
+  def ensureFirstClass(self):
+    # Restrict to ints, pointers, FPs, vectors
+    del self.types[self.Array]
+    return self
+
+  def ensureIntPtrOrVector(self):
+    # only ints, ptrs, or vectors of ints/ptrs
+    del self.types[self.Array]
+    return self
+
   def setName(self, name):
     self.typevar = Int('t_' + name)
-    for t in self.types:
+    for t in self.types.itervalues():
       t.setName(name)
 
   def _getSizeUnknown(self, idx):
@@ -103,16 +122,19 @@ class UnknownType(Type):
       return And(self.typevar == self.myType,
                  self.types[self.myType] == other)
 
-    for i in range(len(self.types)):
-      if isinstance(other, self.types[i].__class__):
+    for i,type in self.types.iteritems():
+      if isinstance(other, type.__class__):
         self.myType = i
-        return And(self.typevar == i, self.types[i] == other)
+        return And(self.typevar == i, type == other)
 
     assert isinstance(other, UnknownType)
-    c = [And(self.typevar == i,
-             other.typevar == i,
-             self.types[i] == other.types[i]) for i in range(len(self.types))]
-    return Or(c)
+    c = []
+    for i,type in self.types.iteritems():
+      if other.types.has_key(i):
+        c += [And(self.typevar == i,
+                  other.typevar == i,
+                  type == other.types[i])]
+    return mk_or(c)
 
   def ensureTypeDepth(self, depth):
     c = []
@@ -123,7 +145,7 @@ class UnknownType(Type):
   def getTypeConstraints(self):
     if self.myType != self.Unknown:
       return self.types[self.myType].getTypeConstraints()
-    return Or([t.getTypeConstraints() for t in self.types])
+    return mk_or([t.getTypeConstraints() for t in self.types.itervalues()])
 
 
 ################################
@@ -171,6 +193,12 @@ class IntType(Type):
     if size != None:
       self.size = size
       self.defined = True
+    return self
+
+  def ensureFirstClass(self):
+    return self
+
+  def ensureIntPtrOrVector(self):
     return self
 
   def setName(self, name):
@@ -248,6 +276,12 @@ class PtrType(Type):
   def ensurePtrType(self):
     return self
 
+  def ensureFirstClass(self):
+    return self
+
+  def ensureIntPtrOrVector(self):
+    return self
+
   def __repr__(self):
     return str(self.type) + '*'
 
@@ -298,7 +332,7 @@ class ArrayType(Type):
         type = IntType()
       else:
         type = UnknownType(depth+1)
-      elems = Input('#' + mk_unique_id(), IntType())
+      elems = Input('#' + mk_unique_id(), IntType(4)) # enough for [1,7]
     self.elems = TypeFixedValue(elems, 1, 7)
     self.type = type
     assert isinstance(self.type, Type)
@@ -310,6 +344,13 @@ class ArrayType(Type):
     self.typevar = Int('t_' + name)
     self.type.setName('[' + name + ']')
     self.elems.setName(name, 'elems')
+
+  def __eq__(self, other):
+    if isinstance(other, ArrayType):
+      return And(self.type == other.type, self.elems == other.elems)
+    if isinstance(other, UnknownType):
+      return other == self
+    return BoolVal(False)
 
   def getSize(self):
     return self.elems.getValue() * self.type.getSize()
@@ -411,11 +452,15 @@ class TypeFixedValue(Value):
   def __repr__(self):
     return str(self.v)
 
+  def __eq__(self, other):
+    assert isinstance(other, TypeFixedValue)
+    return self.smtvar == other.smtvar
+
   def toSMT(self, defined, state, qvars):
     return self.val
 
   def getTypeConstraints(self):
-    c = []
+    c = [self.v.getTypeConstraints()]
 
     if self.v.isConst():
       c += [self.smtvar == self.v.val]

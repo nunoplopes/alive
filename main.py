@@ -17,8 +17,29 @@ from language import *
 from parser import parse_llvm, parse_opt_file
 
 
-def block_model(s, m):
-  s.add(Not(And([Int(str(n)) == m[n] for n in m.decls()])))
+def block_model(s, sneg, m):
+  # First simplify the model.
+  sneg.push()
+  bools = []
+  exprs = []
+  for n in m.decls():
+    b = FreshBool()
+    expr = (Int(str(n)) == m[n])
+    sneg.add(b == expr)
+    bools += [b]
+    exprs += [expr]
+
+  req = []
+  req_exprs = []
+  for i in range(len(bools)):
+    if sneg.check(req + bools[i+1:]) != unsat:
+      req += [bools[i]]
+      req_exprs += [exprs[i]]
+  assert sneg.check(req) == unsat
+  sneg.pop()
+
+  # Now block the simplified model.
+  s.add(Not(mk_and(req_exprs)))
 
 
 def get_z3_id(x):
@@ -205,6 +226,8 @@ def check_opt(opt):
     print 'Source and Target programs do not type check'
     exit(-1)
 
+  sneg = Solver()
+  sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
   # now check for correctness
   proofs = 0
@@ -217,7 +240,7 @@ def check_opt(opt):
     fixupTypes(tgt, types)
     pre.fixupTypes(types)
     check_typed_opt(pre, src, tgt, types)
-    block_model(s, types)
+    block_model(s, sneg, types)
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))
     sys.stdout.flush()
