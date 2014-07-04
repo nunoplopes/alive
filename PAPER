@@ -1,0 +1,36 @@
+-------------------------------------------------------------------------
+motivation
+
+reasoning about optimizations is hard
+- instcombine was very buggy according to Csmith-- find exact statistics
+
+-------------------------------------------------------------------------
+research contribution: a new DSL for LLVM optimizations
+
+1. automatically proving optimizations correct
+  - found bugs while translating LLVM into the new language
+
+2. generating C++ that runs in LLVM
+
+3. usability features
+  - approachable syntax for people who understand LLVM
+    - optimization MUCH cleaner than when embedded in C++
+  - type inference
+  - nsw/exact inference, which LLVM developers don't seem very good at
+  - counterexamples when bugs are found
+  - debugging feedback about the optimization
+
+-------------------------------------------------------------------------
+experimental evaluation:
+
+1. optimizations are correct -- we can compile lots of codes with the new
+optimizations and things don't break
+
+2. optimizations are efficient -- x% slowdown in compiler due to using our
+optimizations
+
+3. optimizations are effecive: we comment out the parts of InstCombine that we
+have replaced and show that the generated code is the same -- but this might be
+tricky due to the order in which optimizations run
+
+-------------------------------------------------------------------------
