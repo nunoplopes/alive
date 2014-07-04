@@ -214,7 +214,7 @@ def check_opt(opt):
   type_tgt = getTypeConstraints(tgt)
   type_pre = pre.getTypeConstraints()
 
-  s = Solver()
+  s = SimpleSolver()
   s.add(type_pre)
   s.add(type_src)
   if s.check() != sat:
@@ -226,7 +226,7 @@ def check_opt(opt):
     print 'Source and Target programs do not type check'
     exit(-1)
 
-  sneg = Solver()
+  sneg = SimpleSolver()
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
   # now check for correctness
