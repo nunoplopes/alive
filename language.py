@@ -12,16 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math, collections, copy
-from common import *
-
-
-gbl_unique_id = 0
-def mk_unique_id():
-  global gbl_unique_id
-  id = str(gbl_unique_id)
-  gbl_unique_id += 1
-  return id
+import collections
+from constants import *
 
 
 def getAllocSize(type):
@@ -81,455 +73,8 @@ class State:
 
 
 ################################
-class Type:
-  Int, Ptr, Array, Unknown = range(4)
-
-  def __repr__(self):
-    return ''
-
-  def typeMismatch(self, expected):
-    print '%s type required, given \'%s\' instead' % (expected, self)
-    exit(-1)
-
-  def ensureIntType(self, size = None):
-    self.typeMismatch('int')
-
-  def ensurePtrType(self):
-    self.typeMismatch('pointer')
-
-
-################################
-def getMostSpecificType(t1, t2):
-  def _ErrorOnTypeMismatch(cond):
-    if cond:
-      print 'Type mismatch: %s vs %s.' % (t1, t2)
-      exit(-1)
-
-  if isinstance(t1, UnknownType):
-    return t2
-  if isinstance(t2, UnknownType):
-    return t1
-  _ErrorOnTypeMismatch(t1.__class__ != t2.__class__)
-
-  if isinstance(t1, IntType):
-    _ErrorOnTypeMismatch(t1.defined and t2.defined and
-                         t1.getSize() != t2.getSize())
-    return t1 if t1.defined else t2
-  if isinstance(t1, PtrType):
-    t1id = id(t1.type)
-    return t1 if id(getMostSpecificType(t1.type, t2.type)) == t1id else t2
-  assert False
-
-
-################################
-class UnknownType(Type):
-  def __init__(self, d = 0):
-    self.types  = [IntType(), PtrType(depth = d), ArrayType(depth = d)]
-    self.myType = self.Unknown
-
-  def ensureIntType(self, size = None):
-    return IntType(size)
-
-  def ensurePtrType(self):
-    return PtrType()
-
-  def setName(self, name):
-    self.typevar = Int('t_' + name)
-    for t in self.types:
-      t.setName(name)
-
-  def _getSizeUnknown(self, idx):
-    if idx == len(self.types)-1:
-      return self.types[idx].getSize()
-    return If(self.typevar == idx,
-              self.types[idx].getSize(),
-              self._getSizeUnknown(idx+1))
-
-  def getSize(self):
-    if self.myType != self.Unknown:
-      return self.types[self.myType].getSize()
-    return self._getSizeUnknown(0)
-
-  def getPointeeType(self):
-    assert self.myType == self.Unknown or self.myType == self.Ptr
-    self.myType = self.Ptr
-    return self.types[self.Ptr].getPointeeType()
-
-  def getUnderlyingType(self):
-    assert self.myType == self.Ptr or self.myType == self.Array
-    return self.types[self.myType].getUnderlyingType()
-
-  def fixupTypes(self, types):
-    self.myType = types.evaluate(self.typevar).as_long()
-    self.types[self.myType].fixupTypes(types)
-
-  def __eq__(self, other):
-    if self.myType != self.Unknown:
-      return And(self.typevar == self.myType,
-                 self.types[self.myType] == other)
-
-    for i in range(len(self.types)):
-      if isinstance(other, self.types[i].__class__):
-        self.myType = i
-        return And(self.typevar == i, self.types[i] == other)
-
-    assert isinstance(other, UnknownType)
-    c = [And(self.typevar == i,
-             other.typevar == i,
-             self.types[i] == other.types[i]) for i in range(len(self.types))]
-    return Or(c)
-
-  def ensureTypeDepth(self, depth):
-    c = []
-    for i in range(len(self.types)):
-      c += [Or(self.types[i].ensureTypeDepth(depth), self.typevar != i)]
-    return mk_and(c)
-
-  def getTypeConstraints(self, vars):
-    if self.myType != self.Unknown:
-      return self.types[self.myType].getTypeConstraints(vars)
-    return Or([t.getTypeConstraints(vars) for t in self.types])
-
-
-################################
-class NamedType(UnknownType):
-  def __init__(self, name):
-    UnknownType.__init__(self)
-    self.type = UnknownType()
-    self.name = name
-
-  def __repr__(self):
-    return self.name
-
-  def ensureIntType(self, size = None):
-    self.myType = self.Int
-    if size != None:
-      self.types[self.Int] = IntType(size)
-    self.type = self.type.ensureIntType(size)
-
-  def ensurePtrType(self):
-    self.myType = self.Ptr
-    self.type = self.type.ensurePtrType()
-
-  def setName(self, name):
-    UnknownType.setName(self, self.name)
-    self.type.setName(name)
-
-  def getTypeConstraints(self, vars):
-    return And(self.type == self,
-               UnknownType.getTypeConstraints(self, vars),
-               self.type.getTypeConstraints(vars))
-
-
-################################
-class IntType(Type):
-  def __init__(self, size = None):
-    if size == None:
-      self.defined = False
-      return
-    self.size = size
-    self.defined = True
-    assert isinstance(self.size, int)
-
-  def ensureIntType(self, size = None):
-    assert self.defined == False or size == None or size == self.size
-    if size != None:
-      self.size = size
-      self.defined = True
-    return self
-
-  def setName(self, name):
-    self.typevar = Int('t_' + name)
-    self.bitsvar = Int('size_' + name)
-
-  def __repr__(self):
-    if self.defined:
-      return 'i' + str(self.size)
-    return ''
-
-  def getSize(self):
-    if hasattr(self, 'size'):
-      return self.size
-    return self.bitsvar
-
-  def fixupTypes(self, types):
-    size = types.evaluate(self.bitsvar).as_long()
-    assert self.defined == False or self.size == size
-    self.size = size
-
-  def __eq__(self, other):
-    if isinstance(other, IntType):
-      return self.bitsvar == other.bitsvar
-    if isinstance(other, int):
-      return self.bitsvar == other
-    if isinstance(other, UnknownType):
-      return other == self
-    return BoolVal(False)
-
-  def __lt__(self, other):
-    if isinstance(other, IntType):
-      return self.bitsvar < other.bitsvar
-    if isinstance(other, int):
-      return self.bitsvar < other
-    assert False
-
-  def __gt__(self, other):
-    if isinstance(other, IntType):
-      return self.bitsvar > other.bitsvar
-    if isinstance(other, int):
-      return self.bitsvar > other
-    assert False
-
-  def __ge__(self, other):
-    if isinstance(other, IntType):
-      return self.bitsvar >= other.bitsvar
-    if isinstance(other, int):
-      return self.bitsvar >= other
-    assert False
-
-  def ensureTypeDepth(self, depth):
-    return BoolVal(depth == 0)
-
-  def getTypeConstraints(self, vars):
-    # Integers are assumed to be up to 64 bits.
-    c = [self.typevar == Type.Int, self.bitsvar > 0, self.bitsvar <= 64]
-    if self.defined:
-      c += [self.bitsvar == self.getSize()]
-    return And(c)
-
-
-################################
-class PtrType(Type):
-  def __init__(self, type = None, depth = 0):
-    if type is None:
-      # limit type nesting to 1 level
-      if depth >= 0:
-        type = IntType()
-      else:
-        type = UnknownType(depth+1)
-    self.type = type
-    assert isinstance(self.type, Type)
-
-  def ensurePtrType(self):
-    return self
-
-  def __repr__(self):
-    return str(self.type) + '*'
-
-  def setName(self, name):
-    self.typevar = Int('t_' + name)
-    self.type.setName('*' + name)
-
-  def getSize(self):
-    if hasattr(self, 'size'):
-      return self.size
-    return Int('ptrsize')
-
-  def getPointeeType(self):
-    return self.type
-
-  def getUnderlyingType(self):
-    return self.type
-
-  def __eq__(self, other):
-    if isinstance(other, PtrType):
-      return self.type == other.type
-    if isinstance(other, UnknownType):
-      return other == self
-    return BoolVal(False)
-
-  def fixupTypes(self, types):
-    self.size = types.evaluate(Int('ptrsize')).as_long()
-    self.type.fixupTypes(types)
-
-  def ensureTypeDepth(self, depth):
-    return BoolVal(False) if depth == 0 else self.type.ensureTypeDepth(depth-1)
-
-  def getTypeConstraints(self, vars):
-    # Pointers are assumed to be either 32 or 64 bits
-    v = Int('ptrsize')
-    return And(Or(v == 32, v == 64),
-               self.typevar == Type.Ptr,
-               self.type.getTypeConstraints(vars))
-
-
-################################
-class ArrayType(Type):
-  def __init__(self, elems = None, type = None, depth = 0):
-    if elems is None:
-      assert type is None
-      # limit type nesting to 1 level
-      if depth >= 0:
-        type = IntType()
-      else:
-        type = UnknownType(depth+1)
-      elems = Input('#', IntType())
-    self.elems = TypeFixedValue(elems, 1, 7)
-    self.type = type
-    assert isinstance(self.type, Type)
-
-  def __repr__(self):
-    return '[%s x %s]' % (self.elems, self.type)
-
-  def setName(self, name):
-    self.typevar = Int('t_' + name)
-    self.type.setName('[' + name + ']')
-    self.elems.setName(name, 'elems')
-
-  def getSize(self):
-    return self.elems.getValue() * self.type.getSize()
-
-  def getUnderlyingType(self):
-    return self.type
-
-  def fixupTypes(self, types):
-    self.elems.fixupTypes(types)
-    self.type.fixupTypes(types)
-
-  def ensureTypeDepth(self, depth):
-    return BoolVal(False) if depth == 0 else self.type.ensureTypeDepth(depth-1)
-
-  def getTypeConstraints(self, vars):
-    return And(self.typevar == Type.Array,
-               self.elems.getTypeConstraints(vars),
-               self.type.getTypeConstraints(vars))
-
-
-################################
-class Instr:
-  def __repr__(self):
-    return self.toString()
-
-  def __deepcopy__(self, m):
-    # Disable deep copy of instructions.
-    return self
-
-  def getName(self):
-    return self.name
-
-  def getUniqueName(self):
-    return self.name
-
-  def setName(self, name):
-    self.name = name
-    self.type = copy.deepcopy(self.type)
-    self.type.setName(name)
-    for attr in dir(self):
-      a = getattr(self, attr)
-      if isinstance(a, TypeFixedValue):
-        a.setName(name, attr)
-      elif isinstance(a, Type) and attr != 'type':
-        a = copy.deepcopy(a)
-        a.setName('%s_%s_%s' % (name, attr, mk_unique_id()))
-        setattr(self, attr, a)
-      elif isinstance(a, list):
-        newa = []
-        for e in a:
-          if isinstance(e, Type):
-            e = copy.deepcopy(e)
-            e.setName('%s_%s_%s' % (name, attr, mk_unique_id()))
-          newa += [e]
-        setattr(self, attr, newa)
-
-  def getTypeConstraints(self, vars):
-    c = []
-    for attr in dir(self):
-      a = getattr(self, attr)
-      if isinstance(a, (Type, Instr)):
-        c += [a.getTypeConstraints(vars)]
-      elif isinstance(a, list):
-        for e in a:
-          if isinstance(e, (Type, Instr)):
-            c += [e.getTypeConstraints(vars)]
-    return mk_and(c)
-
-  def fixupTypes(self, types):
-    for attr in dir(self):
-      a = getattr(self, attr)
-      if isinstance(a, (Type, Instr)):
-        a.fixupTypes(types)
-      elif isinstance(a, list):
-        for e in a:
-          if isinstance(e, (Type, Instr)):
-            e.fixupTypes(types)
-
-
-################################
-class TypeFixedValue(Instr):
-  def __init__(self, v, min, max):
-    self.v = v
-    self.min = min
-    self.max = max
-    assert isinstance(self.v, Instr)
-    assert isinstance(self.v.type, IntType)
-
-  def setName(self, name, attr):
-    self.name = self.v.getName()
-    self.smtvar = Int('val_%s_%s' % (name, attr))
-
-  def getValue(self):
-    return getattr(self, 'val', self.smtvar)
-
-  def getType(self):
-    return self.v.type
-
-  def toString(self):
-    return self.v.toString()
-
-  def toSMT(self, defined, state, qvars):
-    return self.val
-
-  def getTypeConstraints(self, vars):
-    c = []
-
-    if isinstance(self.v, Constant) and not isinstance(self.v, UndefVal):
-      c += [self.smtvar == self.v.val]
-      if not self.v.type.defined:
-        c += [self.v.type == self.max.bit_length() + int(self.max >= 0)]
-    else:
-      if self.v.type.defined:
-        mymin = min(self.min, (1 << self.v.type.getSize()) - 1)
-        mymax = min(self.max, (1 << self.v.type.getSize()) - 1)
-      else:
-        mymin = self.min
-        mymax = self.max
-      c += [self.smtvar >= mymin, self.smtvar <= mymax]
-      if not self.v.type.defined:
-        c += [self.v.type >= self.max.bit_length() + int(self.max >= 0)]
-
-    return mk_and(c)
-
-  def fixupTypes(self, types):
-    self.v.fixupTypes(types)
-    self.val = types.evaluate(self.smtvar).as_long()
-
-
-################################
-class Input(Instr):
-  def __init__(self, name, type):
-    self.type = type
-    self.setName(name)
-    assert isinstance(self.type, Type)
-
-  def toString(self):
-    return self.getName()
-
-  def toSMT(self, defined, state, qvars):
-    ptr = BitVec(self.name, self.type.getSize())
-    # if we are dealing with an arbitrary pointer, assume it points to something
-    # that can (arbitrarily) hold 7 elements.
-    if isinstance(self.type, PtrType):
-      block_size = self.type.getSize()
-    elif isinstance(self.type, UnknownType) and\
-         (self.type.myType == Type.Ptr or self.type.myType == Type.Unknown):
-      block_size = self.type.types[Type.Ptr].getSize()
-    else:
-      return ptr
-
-    num_elems = 7
-    mem = BitVec('mem_' + self.name, block_size * num_elems)
-    state.addAlloca(ptr, mem, (block_size, num_elems, 1))
-    return ptr
+class Instr(Value):
+  pass
 
 
 ################################
@@ -537,10 +82,10 @@ class CopyOperand(Instr):
   def __init__(self, v, type):
     self.v = v
     self.type = type
-    assert isinstance(self.v, Instr)
+    assert isinstance(self.v, Value)
     assert isinstance(self.type, Type)
 
-  def toString(self):
+  def __repr__(self):
     t = str(self.type)
     if len(t) > 0:
       t += ' '
@@ -549,64 +94,9 @@ class CopyOperand(Instr):
   def toSMT(self, defined, state, qvars):
     return state.eval(self.v, defined, qvars)
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.type == self.v.type,
-               self.type.getTypeConstraints(vars))
-
-
-################################
-class Constant(Instr):
-  def __init__(self, val, type):
-    self.val = val
-    self.type = type
-    self.setName(self.toString())
-    self.id = mk_unique_id()
-    self.type.setName(self.getUniqueName())
-    assert isinstance(self.type, Type)
-
-  def getUniqueName(self):
-    return self.getName() + '_' + self.id
-
-  def toString(self):
-    if isinstance(self.type, PtrType) and self.val == 0:
-      return 'null'
-    if isinstance(self.type, IntType) and self.type.defined and\
-       self.type.getSize() == 1:
-      return 'true' if self.val == 1 else 'false'
-    return str(self.val)
-
-  def toSMT(self, defined, state, qvars):
-    return BitVecVal(self.val, self.type.getSize())
-
-  def getTypeConstraints(self, vars):
-    c = self.type.getTypeConstraints(vars)
-    if self.val != 0 and not self.type.defined:
-      # One more bit for positive integers to allow for sign bit.
-      bits = self.val.bit_length() + int(self.val >= 0)
-      return And(c, self.type >= bits)
-    return c
-
-
-################################
-class UndefVal(Constant):
-  def __init__(self, type):
-    self.type = type
-    self.setName('undef')
-    self.id = mk_unique_id()
-    self.type.setName(self.getUniqueName())
-    assert isinstance(self.type, Type)
-
-  def toString(self):
-    return 'undef'
-
-  def toSMT(self, defined, state, qvars):
-    v = BitVec('undef' + self.id, self.type.getSize())
-    qvars += [v]
-    return v
-
-  def getTypeConstraints(self, vars):
-    # overload Constant's method
-    return self.type.getTypeConstraints(vars)
+               self.type.getTypeConstraints())
 
 
 ################################
@@ -633,16 +123,16 @@ class BinOp(Instr):
 
 
   def __init__(self, op, type, v1, v2, flags = []):
+    assert isinstance(type, IntType)
+    assert isinstance(v1, Value)
+    assert isinstance(v2, Value)
+    assert 0 <= op < self.Last
     self.op = op
     self.type = type
     self.v1 = v1
     self.v2 = v2
     self.flags = flags
     self._check_op_flags()
-    assert isinstance(self.type, IntType)
-    assert isinstance(self.v1, Instr)
-    assert isinstance(self.v2, Instr)
-    assert self.op >= 0 and self.op < self.Last
 
   def getOpName(self):
     return self.opnames[self.op]
@@ -655,7 +145,7 @@ class BinOp(Instr):
       print 'Unknown binary instruction: ' + name
       exit(-1)
 
-  def toString(self):
+  def __repr__(self):
     t = str(self.type)
     if len(t) > 0:
       t = ' ' + t
@@ -763,10 +253,10 @@ class BinOp(Instr):
       self.Xor:  lambda a,b: a ^ b,
     }[self.op](v1, v2)
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.type == self.v1.type,
                self.type == self.v2.type,
-               self.type.getTypeConstraints(vars))
+               self.type.getTypeConstraints())
 
 
 ################################
@@ -783,27 +273,26 @@ class ConversionOp(Instr):
   }
   opids = {v:k for k, v in opnames.items()}
 
-  def __init__(self, op, stype, v, ttype):
+  def __init__(self, op, stype, v, type):
+    if self.enforceIntSrc(op):
+      assert isinstance(stype, IntType)
+    elif self.enforcePtrSrc(op):
+      assert isinstance(stype, PtrType)
+    else:
+      assert isinstance(stype, Type)
+
+    if self.enforceIntTgt(op):
+      assert isinstance(type, IntType)
+    elif self.enforcePtrTgt(op):
+      assert isinstance(type, PtrType)
+    else:
+      assert isinstance(type, Type)
+    assert isinstance(v, Value)
+    assert 0 <= op < self.Last
     self.op = op
     self.stype = stype
     self.v = v
-    self.type = ttype
-
-    if self.enforceIntSrc(op):
-      assert isinstance(self.stype, IntType)
-    elif self.enforcePtrSrc(op):
-      assert isinstance(self.stype, PtrType)
-    else:
-      assert isinstance(self.stype, Type)
-
-    if self.enforceIntTgt(op):
-      assert isinstance(self.type, IntType)
-    elif self.enforcePtrTgt(op):
-      assert isinstance(self.type, PtrType)
-    else:
-      assert isinstance(self.type, Type)
-    assert isinstance(self.v, Instr)
-    assert self.op >= 0 and self.op < self.Last
+    self.type = type
 
   def getOpName(self):
     return self.opnames[self.op]
@@ -838,7 +327,7 @@ class ConversionOp(Instr):
   def enforcePtrTgt(op):
     return op == ConversionOp.Int2Ptr
 
-  def toString(self):
+  def __repr__(self):
     st = str(self.stype)
     if len(st) > 0:
       st = ' ' + st
@@ -859,7 +348,7 @@ class ConversionOp(Instr):
       self.Bitcast: lambda v: v,
     }[self.op](state.eval(self.v, defined, qvars))
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     cnstr = {
       self.Trunc:   lambda src,tgt: src > tgt,
       self.ZExt:    lambda src,tgt: src < tgt,
@@ -870,8 +359,8 @@ class ConversionOp(Instr):
     } [self.op](self.stype, self.type)
 
     return And(self.stype == self.v.type,
-               self.type.getTypeConstraints(vars),
-               self.stype.getTypeConstraints(vars),
+               self.type.getTypeConstraints(),
+               self.stype.getTypeConstraints(),
                cnstr)
 
 
@@ -895,6 +384,9 @@ class Icmp(Instr):
 
 
   def __init__(self, op, type, v1, v2):
+    assert isinstance(type, Type)
+    assert isinstance(v1, Value)
+    assert isinstance(v2, Value)
     self.op = self.getOpId(op)
     if self.op == self.Var:
       self.opname = op
@@ -902,15 +394,12 @@ class Icmp(Instr):
     self.stype = type
     self.v1 = v1
     self.v2 = v2
-    assert isinstance(self.stype, Type)
-    assert isinstance(self.v1, Instr)
-    assert isinstance(self.v2, Instr)
 
   @staticmethod
   def getOpId(name):
     return Icmp.opids.get(name, Icmp.Var)
 
-  def toString(self):
+  def __repr__(self):
     op = self.opname if self.op == Icmp.Var else Icmp.opnames[self.op]
     if len(op) > 0:
       op = ' ' + op
@@ -949,27 +438,27 @@ class Icmp(Instr):
     return self.recurseSMT(ops, state.eval(self.v1, defined, qvars),
                            state.eval(self.v2, defined, qvars), 0)
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.stype == self.v1.type,
                self.stype == self.v2.type,
-               self.type.getTypeConstraints(vars),
-               self.stype.getTypeConstraints(vars))
+               self.type.getTypeConstraints(),
+               self.stype.getTypeConstraints())
 
 
 ################################
 class Select(Instr):
   def __init__(self, type, c, v1, v2):
+    assert isinstance(type, Type)
+    assert isinstance(c, Value)
+    assert isinstance(c.type, IntType)
+    assert isinstance(v1, Value)
+    assert isinstance(v2, Value)
     self.type = type
     self.c = c
     self.v1 = v1
     self.v2 = v2
-    assert isinstance(self.type, Type)
-    assert isinstance(self.c, Instr)
-    assert isinstance(self.c.type, IntType)
-    assert isinstance(self.v1, Instr)
-    assert isinstance(self.v2, Instr)
 
-  def toString(self):
+  def __repr__(self):
     t = str(self.type)
     if len(t) > 0:
       t = t + ' '
@@ -981,24 +470,24 @@ class Select(Instr):
               state.eval(self.v1, defined, qvars),
               state.eval(self.v2, defined, qvars))
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.type == self.v1.type,
                self.type == self.v2.type,
                self.c.type == 1,
-               self.type.getTypeConstraints(vars))
+               self.type.getTypeConstraints())
 
 
 ################################
 class Alloca(Instr):
   def __init__(self, type, elemsType, numElems, align):
+    assert isinstance(elemsType, IntType)
+    assert isinstance(align, int)
     self.type = PtrType(type)
     self.elemsType = elemsType
     self.numElems = TypeFixedValue(numElems, 1, 16)
     self.align = align
-    assert isinstance(self.elemsType, IntType)
-    assert isinstance(self.align, int)
 
-  def toString(self):
+  def __repr__(self):
     elems = self.numElems.getName()
     if elems == '1':
       elems = ''
@@ -1024,28 +513,28 @@ class Alloca(Instr):
     state.addAlloca(ptr, mem, (block_size, num_elems, self.align))
     return ptr
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.numElems.getType() == self.elemsType,
-               self.type.getTypeConstraints(vars),
-               self.elemsType.getTypeConstraints(vars),
-               self.numElems.getTypeConstraints(vars))
+               self.type.getTypeConstraints(),
+               self.elemsType.getTypeConstraints(),
+               self.numElems.getTypeConstraints())
 
 
 ################################
 class GEP(Instr):
   def __init__(self, type, ptr, idxs, inbounds):
+    assert isinstance(type, Type)
+    assert isinstance(ptr, Value)
+    assert isinstance(idxs, list)
+    assert isinstance(inbounds, bool)
+    for i in range(len(idxs)):
+      assert isinstance(idxs[i], IntType if (i & 1) == 0 else Value)
     self.type = type
     self.ptr = ptr
     self.idxs = idxs
     self.inbounds = inbounds
-    assert isinstance(self.type, Type)
-    assert isinstance(self.ptr, Instr)
-    assert isinstance(self.idxs, list)
-    assert isinstance(self.inbounds, bool)
-    for i in range(len(self.idxs)):
-      assert isinstance(self.idxs[i], IntType if (i & 1) == 0 else Instr)
 
-  def toString(self):
+  def __repr__(self):
     inb = 'inbounds ' if self.inbounds else ''
     idxs = ''
     for i in range(len(self.idxs)):
@@ -1072,23 +561,23 @@ class GEP(Instr):
     # TODO: handle inbounds
     return ptr
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.type.ensureTypeDepth(len(self.idxs)/2),
-               Instr.getTypeConstraints(self, vars))
+               Instr.getTypeConstraints(self))
 
 
 ################################
 class Load(Instr):
   def __init__(self, stype, v, align):
+    assert isinstance(stype, PtrType)
+    assert isinstance(v, Value)
+    assert isinstance(align, int)
     self.stype = stype
     self.type = stype.type
     self.v = v
     self.align = align
-    assert isinstance(self.stype, PtrType)
-    assert isinstance(self.v, Instr)
-    assert isinstance(self.align, int)
 
-  def toString(self):
+  def __repr__(self):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'load %s %s%s' % (str(self.stype), self.v.getName(), align)
 
@@ -1120,15 +609,20 @@ class Load(Instr):
     defined += [v != 0]
     return self._recPtrLoad(state.ptrs, v, defined)
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.stype == self.v.type,
                self.type == self.v.type.getPointeeType(),
-               self.type.getTypeConstraints(vars))
+               self.type.getTypeConstraints())
 
 
 ################################
 class Store(Instr):
   def __init__(self, stype, src, type, dst, align):
+    assert isinstance(stype, Type)
+    assert isinstance(src, Value)
+    assert isinstance(type, PtrType)
+    assert isinstance(dst, Value)
+    assert isinstance(align, int)
     self.stype = stype
     self.src = src
     self.type = type
@@ -1137,16 +631,11 @@ class Store(Instr):
     self.setName('store')
     self.id = mk_unique_id()
     self.type.setName(self.getUniqueName())
-    assert isinstance(self.stype, Type)
-    assert isinstance(self.src, Instr)
-    assert isinstance(self.type, PtrType)
-    assert isinstance(self.dst, Instr)
-    assert isinstance(self.align, int)
 
   def getUniqueName(self):
     return self.getName() + '_' + self.id
 
-  def toString(self):
+  def __repr__(self):
     t = str(self.stype)
     if len(t) > 0:
       t = t + ' '
@@ -1193,18 +682,18 @@ class Store(Instr):
     defined += [mk_or(mustwrite)]
     return None
 
-  def getTypeConstraints(self, vars):
+  def getTypeConstraints(self):
     return And(self.stype == self.type.type,
                self.src.type == self.stype,
                self.dst.type == self.type,
-               self.stype.getTypeConstraints(vars),
-               self.type.getTypeConstraints(vars))
+               self.stype.getTypeConstraints(),
+               self.type.getTypeConstraints())
 
 
 ################################
 def print_prog(p):
   for k,v in p.iteritems():
-    if isinstance(v, Input) or isinstance(v, Constant):
+    if isinstance(v, (Input, Constant)):
       continue
     if isinstance(v, Store):
       print v
@@ -1212,8 +701,8 @@ def print_prog(p):
       print '%s = %s' % (k, v)
 
 
-def getTypeConstraints(p, vars):
-  return [v.getTypeConstraints(vars) for v in p.itervalues()]
+def getTypeConstraints(p):
+  return [v.getTypeConstraints() for v in p.itervalues()]
 
 
 def fixupTypes(p, types):

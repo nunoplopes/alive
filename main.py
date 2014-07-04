@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import argparse, glob, re, sys
-from common import *
 from language import *
 from parser import parse_llvm, parse_opt_file
 
@@ -135,7 +134,7 @@ def print_var_vals(s, vs1, vs2, stopv, types):
 def check_typed_opt(pre, src, tgt, types):
   srcv = toSMT(src)
   tgtv = toSMT(tgt)
-  pre  = pre.toSMT(srcv, types)
+  pre  = pre.toSMT(srcv)
   extra_cnstrs = [pre,
                   srcv.getAllocaConstraints(),
                   tgtv.getAllocaConstraints()]
@@ -190,9 +189,8 @@ def check_opt(opt):
   print
 
   # infer allowed types for registers
-  type_vars = []
-  type_src = getTypeConstraints(src, type_vars)
-  type_tgt = getTypeConstraints(tgt, type_vars)
+  type_src = getTypeConstraints(src)
+  type_tgt = getTypeConstraints(tgt)
   type_pre = pre.getTypeConstraints()
 
   s = Solver()
@@ -217,6 +215,7 @@ def check_opt(opt):
     types = s.model()
     fixupTypes(src, types)
     fixupTypes(tgt, types)
+    pre.fixupTypes(types)
     check_typed_opt(pre, src, tgt, types)
     block_model(s, types)
     proofs += 1

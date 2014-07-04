@@ -14,6 +14,14 @@
 
 from z3 import *
 
+gbl_unique_id = 0
+def mk_unique_id():
+  global gbl_unique_id
+  id = str(gbl_unique_id)
+  gbl_unique_id += 1
+  return id
+
+
 def mk_and(l):
   l = [e for e in l if not is_true(e)]
   if len(l) == 0:

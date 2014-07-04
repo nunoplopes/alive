@@ -19,6 +19,9 @@ from precondition import *
 # enable memoization of parsing elements. Gives a nice speedup for large files.
 ParserElement.enablePackrat()
 
+# Parsing phases
+Source, Target, Pre = range(3)
+
 
 def parseIntType(toks):
   t = IntType(toks[1])
@@ -46,25 +49,31 @@ def parseOptType(toks):
 def parseOperand(toks, type):
   global identifiers
 
+  if isinstance(toks[0], Value):
+    c = toks[0]
+    key = c.getUniqueName()
+    if not identifiers.has_key(key):
+      identifiers[key] = c
+    return c
+
   # %var
-  if len(toks) == 2 or toks[0][0] == 'C':
-    reg = '%' + toks[1] if len(toks) == 2 else toks[0]
+  if toks[0][0] == '%' or toks[0][0] == 'C':
+    reg = toks[0]
     if identifiers.has_key(reg):
       return identifiers[reg]
     identifiers[reg] = v = Input(reg, type)
     return v
 
-  assert len(toks) == 1
   if toks[0] == 'undef':
     c = UndefVal(type)
   elif toks[0] == 'true':
-    c = Constant(1, type.ensureIntType(1))
+    c = ConstantVal(1, type.ensureIntType(1))
   elif toks[0] == 'false':
-    c = Constant(0, type.ensureIntType(1))
+    c = ConstantVal(0, type.ensureIntType(1))
   elif toks[0] == 'null':
-    c = Constant(0, type.ensurePtrType())
+    c = ConstantVal(0, type.ensurePtrType())
   else:
-    c = Constant(int(toks[0]), type.ensureIntType())
+    c = ConstantVal(int(toks[0]), type.ensureIntType())
 
   identifiers[c.getUniqueName()] = c
   return c
@@ -144,30 +153,90 @@ def parseStore(toks):
 def parseInstr(toks):
   global identifiers
 
-  reg = '%' + toks[1]
+  reg = toks[0]
   if identifiers.has_key(reg):
     print 'Redifinition of ' + reg
     exit(-1)
 
-  toks[2].setName(reg)
-  identifiers[reg] = toks[2]
+  toks[1].setName(reg)
+  identifiers[reg] = toks[1]
   return
 
 
+################################
+# Constant expr language
+
+def parseCnstVar(toks):
+  id = toks[0]
+  if id.isdigit():
+    return ConstantVal(int(id), IntType())
+
+  if identifiers.has_key(id):
+    return identifiers[id]
+
+  if parsing_phase == Pre:
+    print 'Identifier used in precondition was not defined: ' + id
+    exit(-1)
+
+  if id[0] == '%':
+    print 'Cannot use registers in constant expressions'
+    exit(-1)
+  return parseOperand([id], IntType())
+
+def parseCnstFunction(toks):
+  op = CnstFunction.getOpId(toks[0])
+  return CnstFunction(op, toks[1:], IntType())
+
+def parseRecursive(toks, l):
+  toks = toks[0]
+  if len(toks) == 1:
+    return toks[0]
+  return parseRecursive([[l(toks[0], toks[1], toks[2])] + toks[3:]], l)
+
+def parseBinaryPred(toks):
+  return parseRecursive(toks, lambda a,op,b:
+                                CnstBinaryOp(CnstBinaryOp.getOpId(op), a, b))
+
+def parseUnaryPred(toks):
+  op = CnstUnaryOp.getOpId(toks[0][0])
+  return CnstUnaryOp(op, toks[0][1])
+
+
 identifier = Word(srange("[a-zA-Z0-9_.]"))
-reg = Literal('%') + identifier
+comma = Suppress(',')
+pred_args = Forward()
+
+cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
+                    setParseAction(parseCnstFunction) |\
+                 Regex(r"C\d*|\d+|%[a-zA-Z0-9_.]+").setParseAction(parseCnstVar)
+
+pred_args <<= (cnst_expr_atoms + ZeroOrMore(comma + cnst_expr_atoms)) | Empty()
+
+cnst_expr = infixNotation(cnst_expr_atoms,
+                          [(oneOf('- ~'), 1, opAssoc.RIGHT, parseUnaryPred),
+                           (oneOf('* / %'), 2, opAssoc.LEFT, parseBinaryPred),
+                           (oneOf('+ -'), 2, opAssoc.LEFT, parseBinaryPred),
+                           (Literal('>>'), 2, opAssoc.LEFT, parseBinaryPred),
+                           (Literal('<<'), 2, opAssoc.LEFT, parseBinaryPred),
+                           (Literal('&'), 2, opAssoc.LEFT, parseBinaryPred),
+                           (Literal('|'), 2, opAssoc.LEFT, parseBinaryPred),
+                          ])
+
+
+################################
+# Template program language
+
+identifier = Word(srange("[a-zA-Z0-9_.]"))
+reg = Regex(r"%[a-zA-Z0-9_.]+")
 opname = identifier
 posnum = Word(nums).setParseAction(lambda toks : int(toks[0]))
-intconst = Regex(r"C[0-9]*")
-posnumOrConst = (Word(nums) | intconst).\
-                  setParseAction(lambda toks : parseOperand(toks[0], IntType()))
 
 comment = Literal(';') + restOfLine()
 
 type = Forward()
 type <<= (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
            setParseAction(parseIntType) |\
-         (Literal('[') + posnumOrConst + Literal('x') + type + Literal(']') +\
+         (Literal('[') + cnst_expr + Literal('x') + type + Literal(']') +\
            ZeroOrMore(Literal('*'))).setParseAction(parseArrayType) |\
          (Regex(r"Ty[0-9]*") + ZeroOrMore(Literal('*'))).\
            setParseAction(parseNamedType)
@@ -176,14 +245,13 @@ opttype = Optional(type).setParseAction(parseOptType)
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(lambda toks : [toks])
-operand = (reg | Regex(r"-?[0-9]+") | intconst | Literal('false') |\
+operand = (reg | Regex(r"-?[0-9]+") | cnst_expr | Literal('false') |\
            Literal('true') | Literal('undef') | Literal('null')).\
              setParseAction(lambda toks : [toks])
 
 typeoperand = (opttype + operand).setParseAction(parseTypeOperand)
 intoperand  = (opttype + operand).setParseAction(parseIntOperand)
 ptroperand  = (opttype + operand).setParseAction(parsePtrOperand)
-comma = Literal(',').suppress()
 
 binop = (opname + flags + opttype + operand + comma + operand).\
           setParseAction(parseBinOp)
@@ -239,41 +307,9 @@ def parse_llvm(txt):
 
 
 ##########################
-def parsePredArg(toks):
-  id = toks[0]
-  if id.isdigit():
-    return PredConst(int(id))
-
-  if identifiers.has_key(id):
-    return PredVar(identifiers[id])
-  print 'Identifier used in precondition was not defined: ' + id
-  exit(-1)
-
 def parseBoolPredicate(toks):
   op = LLVMBoolPred.getOpId(toks[0])
   return LLVMBoolPred(op, toks[1:])
-
-def parseValFunction(toks):
-  op = ValFunction.getOpId(toks[0])
-  try:
-    return ValFunction(op, toks[1:], IntType())
-  except Exception, e:
-    print e
-    exit(-1)
-
-def parseRecursive(toks, l):
-  toks = toks[0]
-  if len(toks) == 1:
-    return toks[0]
-  return parseRecursive([[l(toks[0], toks[1], toks[2])] + toks[3:]], l)
-
-def parseBinaryPred(toks):
-  return parseRecursive(toks, lambda a,op,b:
-                                BinaryValPred(BinaryValPred.getOpId(op), a, b))
-
-def parseUnaryPred(toks):
-  op = UnaryValPred.getOpId(toks[0][0])
-  return UnaryValPred(op, toks[0][1])
 
 def parseBoolPred(toks):
   op = BinaryBoolPred.getOpId(toks[1])
@@ -288,39 +324,22 @@ def parsePreAnd(toks):
 def parsePreOr(toks):
   return parseRecursive(toks, lambda a,op,b: PredOr(a, b))
 
-pred_args = Forward()
 
-#pre_expr_atoms = (reg | Regex(r"-?[0-9]+") | intconst) ---  TOO SLOW
-pre_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
-                   setParseAction(parseValFunction) |\
-                 Word(srange("[a-zA-Z0-9_.%]")).setParseAction(parsePredArg)
-
-pre_expr = infixNotation(pre_expr_atoms,
-                         [(oneOf('- ~'), 1, opAssoc.RIGHT, parseUnaryPred),
-                          (oneOf('* / %'), 2, opAssoc.LEFT, parseBinaryPred),
-                          (oneOf('+ -'), 2, opAssoc.LEFT, parseBinaryPred),
-                          (Literal('>>'), 2, opAssoc.LEFT, parseBinaryPred),
-                          (Literal('<<'), 2, opAssoc.LEFT, parseBinaryPred),
-                          (Literal('&'), 2, opAssoc.LEFT, parseBinaryPred),
-                          (Literal('|'), 2, opAssoc.LEFT, parseBinaryPred),
-                         ])
-
-pre_bool_expr = (pre_expr + oneOf('== !=') + pre_expr).\
+pre_bool_expr = (cnst_expr + oneOf('== !=') + cnst_expr).\
                   setParseAction(parseBoolPred)
 
-#pred_arg = (reg | intconst).setParseAction(parsePredArg)
-pred_arg = pre_expr_atoms
-pred_args <<= (pred_arg + ZeroOrMore(comma + pred_arg)) | Empty()
 predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
               setParseAction(parseBoolPredicate) |\
             Literal('true').setParseAction(lambda toks: TruePred()) |\
             pre_bool_expr
 
-pre = infixNotation(predicate,
-                    [(Suppress('!'), 1, opAssoc.RIGHT, parsePreNot),
-                     (Literal('&&'), 2, opAssoc.LEFT, parsePreAnd),
-                     (Literal('||'), 2, opAssoc.LEFT, parsePreOr),
-                    ]) |\
+pre_expr = infixNotation(predicate,
+                         [(Suppress('!'), 1, opAssoc.RIGHT, parsePreNot),
+                          (Literal('&&'), 2, opAssoc.LEFT, parsePreAnd),
+                          (Literal('||'), 2, opAssoc.LEFT, parsePreOr),
+                         ])
+
+pre = pre_expr + Optional(comment).suppress() + StringEnd() |\
       StringEnd().setParseAction(lambda toks: TruePred())
 
 def parse_pre(txt, ids):
@@ -338,7 +357,7 @@ def parse_pre(txt, ids):
 opt_id = 1
 
 def parseOpt(toks):
-  global opt_id
+  global opt_id, parsing_phase
   name = str(opt_id)
   opt_id += 1
   pre = ''
@@ -364,8 +383,13 @@ def parseOpt(toks):
       assert tgt is None
       tgt = toks[i]
 
+  parsing_phase = Source
   src = parse_llvm(src)
+
+  parsing_phase = Target
   tgt = parse_llvm(tgt)
+
+  parsing_phase = Pre
   pre = parse_pre(pre, src)
   return name, pre, src, tgt
 

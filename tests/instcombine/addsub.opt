@@ -55,8 +55,7 @@ Name: AddSub:1074
 %nx = xor %x, -1
 %r = add %nx, C
   =>
-%c1 = sub C, 1
-%r = sub %c1, %x
+%r = sub C-1, %x
 
 
 Name: AddSub:1080
@@ -117,8 +116,7 @@ Name: AddSub:1381
 %nx = xor %x, -1
 %r = sub C, %nx
   =>
-%c1 = add C, 1
-%r = add %x, %c1
+%r = add %x, C+1
 
 
 Name: AddSub:1386
