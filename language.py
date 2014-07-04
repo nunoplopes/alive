@@ -395,6 +395,11 @@ class Icmp(Instr):
     self.v1 = v1
     self.v2 = v2
 
+  def setName(self, name):
+    if self.op == self.Var and self.opname == '':
+      self.opname = name
+    Value.setName(self, name)
+
   @staticmethod
   def getOpId(name):
     return Icmp.opids.get(name, Icmp.Var)

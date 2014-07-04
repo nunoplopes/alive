@@ -71,21 +71,12 @@ Name: Select:967b
 %r = add %x, %sel
 
 Name: Select:1031
-%c1 = icmp gt %a, %b
+%c1 = icmp cmp %a, %b
 %r1 = select %c1, %a, %b
-%c2 = icmp gt %a, %r1
+%c2 = icmp cmp %a, %r1
 %r2 = select %c2, %a, %r1
   =>
-%c = icmp gt %a, %b
-%r2 = select %c, %a, %b
-
-Name: Select:1032
-%c1 = icmp lt %a, %b
-%r1 = select %c1, %a, %b
-%c2 = icmp lt %a, %r1
-%r2 = select %c2, %a, %r1
-  =>
-%c = icmp lt %a, %b
+%c = icmp cmp %a, %b
 %r2 = select %c, %a, %b
 
 Name: Select:1048
