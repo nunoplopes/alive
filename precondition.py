@@ -168,8 +168,13 @@ class LLVMBoolPred(BoolPred):
       print 'Unknown boolean predicate: ' + name
       exit(-1)
 
+  argConstraints = {
+    isSignBit: lambda a: [a.type.typevar == Type.Int]
+  }
+  
   def getTypeConstraints(self):
-    return mk_and([v.getTypeConstraints() for v in self.args])
+    c = self.argConstraints[self.op](*self.args) if self.op in self.argConstraints else []
+    return mk_and(c + [v.getTypeConstraints() for v in self.args])
 
   def toSMT(self, state):
     args = [v.toSMT([], state, []) for v in self.args]
