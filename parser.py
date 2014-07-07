@@ -159,7 +159,7 @@ def parseInstr(toks):
 
   reg = toks[0]
   if identifiers.has_key(reg):
-    print 'Redifinition of ' + reg
+    print 'Redefinition of ' + reg
     exit(-1)
 
   toks[1].setName(reg)
