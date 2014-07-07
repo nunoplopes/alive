@@ -1,0 +1,16 @@
+----------------------------------------------------------------------
+
+support comments at more or less arbitrary places
+
+error message improvements
+  print line number for errors like "print 'Redifinition of ' + reg"
+
+inference of nsw, nuw, exact on both the LHS and RHS
+
+inference of undef on the RHS as a debugging aid
+
+generation of C++ code that can be pasted into LLVM
+
+documentation
+
+----------------------------------------------------------------------
