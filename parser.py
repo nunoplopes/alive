@@ -61,6 +61,10 @@ def parseOperand(toks, type):
     reg = toks[0]
     if identifiers.has_key(reg):
       return identifiers[reg]
+    if parsing_phase == Target:
+      print "ERROR: Cannot declare new input variables or constants in Target"
+      print "Tried to declare: " + reg
+      exit(-1)
     identifiers[reg] = v = Input(reg, type)
     return v
 
@@ -297,7 +301,14 @@ prog = OneOrMore(instr) + StringEnd()
 def parse_llvm(txt):
   global identifiers
   try:
-    identifiers = collections.OrderedDict()
+    if parsing_phase == Target:
+      old_ids = identifiers
+      identifiers = collections.OrderedDict()
+      for name, val in old_ids.iteritems():
+        if isinstance(val, Input):
+          identifiers[name] = val
+    else:
+      identifiers = collections.OrderedDict()
     prog.parseString(txt)
     return identifiers
   except ParseException, e:

@@ -1,0 +1,4 @@
+; ERROR: Cannot declare new input variables or constants in Target
+%x = C1
+  =>
+%x = C2
