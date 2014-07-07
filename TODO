@@ -3,11 +3,31 @@
 support comments at more or less arbitrary places
 
 error message improvements
-  print line number for errors like "print 'Redifinition of ' + reg"
+  print line number for errors like "print 'Redefinition of ' + reg"
 
 inference of nsw, nuw, exact on both the LHS and RHS
 
-inference of undef on the RHS as a debugging aid
+support for debugging / understanding optimizations
+- inference of undefs on the RHS (and LHS?) to help spot badly specified
+  optimizations
+- (optionally) print stuff like...
+  - inferred types of operands, including range of bitwidths
+  - inferred icmp conditions that work
+  - which registers are ins and outs on the LHS and RHS
+  - DAG view of the LHS and RHS, with arrows connecting registers that
+    are the same across the two
+- optionally print example operands for correct optimizations, not just
+  incorrect ones
+- increment an LLVM Statistic each time a generated optimziation fires
+
+support sets of things as previously implemented by David
+
+figure out ways to deal wtih solver timeout
+- induction over bitwidth would be nice
+- supporting multiple solvers would be nice
+
+support definition of new symbols such as INT_MAX, John suggests macro semantics
+- make these available by default via an implicit include file, perhaps
 
 generation of C++ code that can be pasted into LLVM
 
