@@ -235,7 +235,7 @@ reg = Regex(r"%[a-zA-Z0-9_.]+")
 opname = identifier
 posnum = Word(nums).setParseAction(lambda toks : int(toks[0]))
 
-comment = Literal(';') + restOfLine()
+comment = Suppress(Literal(';') + restOfLine())
 
 type = Forward()
 type <<= (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
@@ -293,7 +293,7 @@ store = (Literal('store') + typeoperand + comma + ptroperand +\
          optalign).setParseAction(parseStore)
 
 instr = (reg + Suppress('=') + op).setParseAction(parseInstr) |\
-        store | comment.suppress()
+        store | comment
 
 prog = OneOrMore(instr) + StringEnd()
 
@@ -350,7 +350,7 @@ pre_expr = infixNotation(predicate,
                           (Literal('||'), 2, opAssoc.LEFT, parsePreOr),
                          ])
 
-pre = pre_expr + Optional(comment).suppress() + StringEnd() |\
+pre = pre_expr + Optional(comment) + StringEnd() |\
       StringEnd().setParseAction(lambda toks: TruePred())
 
 def parse_pre(txt, ids):
@@ -405,7 +405,11 @@ def parseOpt(toks):
   return name, pre, src, tgt
 
 
-opt = (Optional(Literal('Name:') + SkipTo(LineEnd())) +\
+comments = ZeroOrMore(comment + LineEnd()).suppress()
+
+opt = comments +\
+       (Optional(Literal('Name:') + SkipTo(LineEnd())) +\
+       comments +\
        Optional(Literal('Pre:') + SkipTo(LineEnd())) +\
        SkipTo('=>') + Literal('=>').suppress() +\
        SkipTo(Literal('Name:') | StringEnd())).\

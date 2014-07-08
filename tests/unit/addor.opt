@@ -3,3 +3,15 @@
 %c = add %aab, %aob
   =>
 %c = or %a, %b
+
+
+; a comment
+Name: test comments
+; something
+Pre: C == 1
+; foo
+%r = sdiv %x, C ; bar
+  =>
+; foo
+%r = %x ; ok
+; more

@@ -1,7 +1,5 @@
 ----------------------------------------------------------------------
 
-support comments at more or less arbitrary places
-
 error message improvements
   print line number for errors like "print 'Redefinition of ' + reg"
 
