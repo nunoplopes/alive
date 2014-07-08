@@ -98,8 +98,7 @@ class CnstUnaryOp(Constant):
     for i in range(CnstUnaryOp.Last):
       if CnstUnaryOp.opnames[i] == name:
         return i
-    print 'Unknown unary operator: ' + name
-    exit(-1)
+    assert False
 
   def getType(self):
     return self.v.getType()
@@ -140,8 +139,7 @@ class CnstBinaryOp(Constant):
     for i in range(CnstBinaryOp.Last):
       if CnstBinaryOp.opnames[i] == name:
         return i
-    print 'Unknown constant binary operator: ' + name
-    exit(-1)
+    assert False
 
   def getTypeConstraints(self):
     return mk_and([self.type == self.v1.type,
@@ -190,9 +188,8 @@ class CnstFunction(Constant):
     self.mk_name()
 
     if self.num_args[op] != len(args):
-      raise Exception('Wrong number of arguments to %s (got %d, expected %d)' %
-        (self.opnames[op], len(args), self.num_args[op]))
-      ## FIXME: subclass exception
+      raise ParseError('Wrong number of arguments (got %d, expected %d)' %\
+                       (len(args), self.num_args[op]))
 
   def __repr__(self):
     args = [str(a) for a in self.args]
@@ -205,7 +202,7 @@ class CnstFunction(Constant):
   def getOpId(name):
     if name in CnstFunction.opids:
       return CnstFunction.opids[name]
-    raise Exception('Unknown function: %s' % name)  ## FIXME: subclass exception
+    raise ParseError('Unknown function:')
 
   def getTypeConstraints(self):
     return mk_and([v.getTypeConstraints() for v in self.args] +\

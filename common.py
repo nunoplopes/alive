@@ -95,3 +95,50 @@ def truncateOrPad(src, tgt):
   if srcb > tgtb:
     return Extract(srcb - 1, srcb - tgtb, src)
   return Concat(src, BitVecVal(0, tgtb - srcb))
+
+
+##########################
+# Error handling
+
+class ParseError():
+  def __init__(self, msgs, token = None):
+    if isinstance(msgs, list):
+      self.msgs = msgs
+    else:
+      self.msgs = [msgs]
+    self.token = token
+
+  def __repr__(self):
+    lineno = get_lineno()
+    line = get_line(lineno)
+    s  = "ERROR: " + "\n".join(self.msgs)
+    s += " (line: %d)\n" % lineno
+    s += line + '\n'
+    col = get_column(line, self.token)
+    for i in range(col):
+      s += ' '
+    s += '^'
+    return s
+
+def get_lineno():
+  return gbl_parse_str.count('\n', 0, gbl_parse_loc) + 1
+
+def get_line(lineno):
+  return gbl_parse_str.split('\n')[lineno-1]
+
+def get_column(s, tok):
+  col = gbl_parse_loc - (gbl_parse_str.rfind('\n', 0, gbl_parse_loc)+1)
+  if not tok:
+    return col
+  token_col = s.find(tok)
+  return token_col if token_col >= 0 else col
+
+def save_parse_str(s):
+  global gbl_parse_str
+  s = s.strip()
+  gbl_parse_str = s
+  return s
+
+def save_loc(loc):
+  global gbl_parse_loc
+  gbl_parse_loc = loc

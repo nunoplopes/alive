@@ -142,8 +142,7 @@ class BinOp(Instr):
     try:
       return BinOp.opids[name]
     except:
-      print 'Unknown binary instruction: ' + name
-      exit(-1)
+      raise ParseError('Unknown binary instruction')
 
   def __repr__(self):
     t = str(self.type)
@@ -175,9 +174,7 @@ class BinOp(Instr):
 
     for f in self.flags:
       if f not in allowed_flags:
-        print 'Flag \'%s\' not support by instruction \'%s\'' %\
-              (f, self.getOpName())
-        exit(-1)
+        raise ParseError('Flag not supported by ' + self.getOpName(), f)
 
   def _genSMTDefConds(self, v1, v2, defined):
     bits = self.type.getSize()
@@ -302,8 +299,7 @@ class ConversionOp(Instr):
     try:
       return ConversionOp.opids[name]
     except:
-      print 'Unknown conversion instruction: ' + name
-      exit(-1)
+      raise ParseError('Unknown conversion instruction')
 
   @staticmethod
   def enforceIntSrc(op):

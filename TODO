@@ -1,8 +1,5 @@
 ----------------------------------------------------------------------
 
-error message improvements
-  print line number for errors like "print 'Redefinition of ' + reg"
-
 inference of nsw, nuw, exact on both the LHS and RHS
 
 support for debugging / understanding optimizations

@@ -23,8 +23,7 @@ class Type:
     return ''
 
   def typeMismatch(self, expected):
-    print '%s type required, given \'%s\' instead' % (expected, self)
-    exit(-1)
+    raise ParseError('%s type required' % expected, str(self))
 
   def ensureIntType(self, size = None):
     self.typeMismatch('int')
@@ -43,8 +42,7 @@ class Type:
 def getMostSpecificType(t1, t2):
   def _ErrorOnTypeMismatch(cond):
     if cond:
-      print 'Type mismatch: %s vs %s.' % (t1, t2)
-      exit(-1)
+      raise ParseError('Type mismatch: %s vs %s' % (t1, t2))
 
   if isinstance(t1, UnknownType):
     return t2

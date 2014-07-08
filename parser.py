@@ -23,6 +23,12 @@ ParserElement.enablePackrat()
 Source, Target, Pre = range(3)
 
 
+def pa(fn):
+  def z(loc, toks):
+    save_loc(loc)
+    return fn(toks)
+  return z
+
 def parseIntType(toks):
   t = IntType(toks[1])
   for i in range(len(toks)-2):
@@ -62,9 +68,8 @@ def parseOperand(toks, type):
     if identifiers.has_key(reg):
       return identifiers[reg]
     if parsing_phase == Target:
-      print "ERROR: Cannot declare new input variables or constants in Target"
-      print "Tried to declare: " + reg
-      exit(-1)
+      raise ParseError('Cannot declare new input variables or constants in '
+                       'Target')
     identifiers[reg] = v = Input(reg, type)
     return v
 
@@ -159,8 +164,7 @@ def parseInstr(toks):
 
   reg = toks[0]
   if identifiers.has_key(reg):
-    print 'Redefinition of ' + reg
-    exit(-1)
+    raise ParseError('Redefinition of register')
 
   toks[1].setName(reg)
   identifiers[reg] = toks[1]
@@ -179,12 +183,8 @@ def parseCnstVar(toks):
     return identifiers[id]
 
   if parsing_phase == Pre:
-    print 'Identifier used in precondition was not defined: ' + id
-    exit(-1)
+    raise ParseError('Identifier used in precondition was not defined')
 
-  if id[0] == '%':
-    print 'Cannot use registers in constant expressions'
-    exit(-1)
   return parseOperand([id], IntType())
 
 def parseCnstFunction(toks):
@@ -211,8 +211,9 @@ comma = Suppress(',')
 pred_args = Forward()
 
 cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
-                    setParseAction(parseCnstFunction) |\
-                 Regex(r"C\d*|\d+|%[a-zA-Z0-9_.]+").setParseAction(parseCnstVar)
+                    setParseAction(pa(parseCnstFunction)) |\
+                 Regex(r"C\d*|\d+|%[a-zA-Z0-9_.]+").\
+                   setParseAction(pa(parseCnstVar))
 
 pred_args <<= (cnst_expr_atoms + ZeroOrMore(comma + cnst_expr_atoms)) | Empty()
 
@@ -233,66 +234,68 @@ cnst_expr = infixNotation(cnst_expr_atoms,
 identifier = Word(srange("[a-zA-Z0-9_.]"))
 reg = Regex(r"%[a-zA-Z0-9_.]+")
 opname = identifier
-posnum = Word(nums).setParseAction(lambda toks : int(toks[0]))
+posnum = Word(nums).setParseAction(pa(lambda toks : int(toks[0])))
 
 comment = Suppress(Literal(';') + restOfLine())
 
 type = Forward()
 type <<= (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
-           setParseAction(parseIntType) |\
+           setParseAction(pa(parseIntType)) |\
          (Literal('[') + cnst_expr + Literal('x') + type + Literal(']') +\
-           ZeroOrMore(Literal('*'))).setParseAction(parseArrayType) |\
+           ZeroOrMore(Literal('*'))).setParseAction(pa(parseArrayType)) |\
          (Regex(r"Ty[0-9]*") + ZeroOrMore(Literal('*'))).\
-           setParseAction(parseNamedType)
+           setParseAction(pa(parseNamedType))
 
-opttype = Optional(type).setParseAction(parseOptType)
+opttype = Optional(type).setParseAction(pa(parseOptType))
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
-        setParseAction(lambda toks : [toks])
+        setParseAction(pa(lambda toks : [toks]))
 operand = (reg | Regex(r"-?[0-9]+") | cnst_expr | Literal('false') |\
            Literal('true') | Literal('undef') | Literal('null')).\
-             setParseAction(lambda toks : [toks])
+             setParseAction(pa(lambda toks : [toks]))
 
-typeoperand = (opttype + operand).setParseAction(parseTypeOperand)
-intoperand  = (opttype + operand).setParseAction(parseIntOperand)
-ptroperand  = (opttype + operand).setParseAction(parsePtrOperand)
+typeoperand = (opttype + operand).setParseAction(pa(parseTypeOperand))
+intoperand  = (opttype + operand).setParseAction(pa(parseIntOperand))
+ptroperand  = (opttype + operand).setParseAction(pa(parsePtrOperand))
 
 binop = (opname + flags + opttype + operand + comma + operand).\
-          setParseAction(parseBinOp)
+          setParseAction(pa(parseBinOp))
 
 conversionop = (opname + opttype + operand +\
-                Optional(Literal('to').suppress() + type).\
-                 setParseAction(parseOptType)).setParseAction(parseConversionOp)
+                Optional(Suppress('to') + type).\
+                 setParseAction(pa(parseOptType))).\
+                   setParseAction(pa(parseConversionOp))
 
-optionalname = Optional(identifier).setParseAction(parseOptional(''))
+optionalname = Optional(identifier).setParseAction(pa(parseOptional('')))
 
 icmp = (Literal('icmp') + optionalname + typeoperand + comma + operand).\
-         setParseAction(parseIcmp)
+         setParseAction(pa(parseIcmp))
 
-select = (Literal('select') + Optional(Literal('i1')).suppress() + operand +\
+select = (Literal('select') + Suppress(Optional('i1')) + operand +\
           comma + opttype + operand + comma + opttype + operand).\
-            setParseAction(parseSelect)
+            setParseAction(pa(parseSelect))
 
 align = (comma + Suppress('align') + posnum)
-optalign = Optional(align).setParseAction(parseOptional(0))
+optalign = Optional(align).setParseAction(pa(parseOptional(0)))
 
 alloca = (Literal('alloca') + opttype +\
-          Optional(comma + intoperand).setParseAction(parseOptionalNumElems) +\
-          optalign).setParseAction(parseAlloca)
+          Optional(comma + intoperand).\
+            setParseAction(pa(parseOptionalNumElems)) +\
+          optalign).setParseAction(pa(parseAlloca))
 
-gep = (Literal('getelementptr') + Optional(Literal('inbounds')) + ptroperand +\
-       ZeroOrMore(comma + intoperand)).setParseAction(parseGEP)
+gep = (Literal('getelementptr') + Optional('inbounds') + ptroperand +\
+       ZeroOrMore(comma + intoperand)).setParseAction(pa(parseGEP))
 
-load = (Literal('load') + ptroperand + optalign).setParseAction(parseLoad)
+load = (Literal('load') + ptroperand + optalign).setParseAction(pa(parseLoad))
 
-operandinstr = (opttype + operand).setParseAction(parseOperandInstr)
+operandinstr = (opttype + operand).setParseAction(pa(parseOperandInstr))
 
 op = operandinstr | icmp | select | alloca | gep | load | binop | conversionop
 
 store = (Literal('store') + typeoperand + comma + ptroperand +\
-         optalign).setParseAction(parseStore)
+         optalign).setParseAction(pa(parseStore))
 
-instr = (reg + Suppress('=') + op).setParseAction(parseInstr) |\
+instr = (reg + Suppress('=') + op).setParseAction(pa(parseInstr)) |\
         store | comment
 
 prog = OneOrMore(instr) + StringEnd()
@@ -300,21 +303,16 @@ prog = OneOrMore(instr) + StringEnd()
 
 def parse_llvm(txt):
   global identifiers
-  try:
-    if parsing_phase == Target:
-      old_ids = identifiers
-      identifiers = collections.OrderedDict()
-      for name, val in old_ids.iteritems():
-        if isinstance(val, Input):
-          identifiers[name] = val
-    else:
-      identifiers = collections.OrderedDict()
-    prog.parseString(txt)
-    return identifiers
-  except ParseException, e:
-    print 'Parsing error:'
-    print e
-    exit(-1)
+  if parsing_phase == Target:
+    old_ids = identifiers
+    identifiers = collections.OrderedDict()
+    for name, val in old_ids.iteritems():
+      if isinstance(val, Input):
+        identifiers[name] = val
+  else:
+    identifiers = collections.OrderedDict()
+  prog.parseString(txt)
+  return identifiers
 
 
 ##########################
@@ -337,11 +335,11 @@ def parsePreOr(toks):
 
 
 pre_bool_expr = (cnst_expr + oneOf('== !=') + cnst_expr).\
-                  setParseAction(parseBoolPred)
+                  setParseAction(pa(parseBoolPred))
 
 predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
-              setParseAction(parseBoolPredicate) |\
-            Literal('true').setParseAction(lambda toks: TruePred()) |\
+              setParseAction(pa(parseBoolPredicate)) |\
+            Literal('true').setParseAction(pa(lambda toks: TruePred())) |\
             pre_bool_expr
 
 pre_expr = infixNotation(predicate,
@@ -351,17 +349,12 @@ pre_expr = infixNotation(predicate,
                          ])
 
 pre = pre_expr + Optional(comment) + StringEnd() |\
-      StringEnd().setParseAction(lambda toks: TruePred())
+      StringEnd().setParseAction(pa(lambda toks: TruePred()))
 
 def parse_pre(txt, ids):
   global identifiers
-  try:
-    identifiers = ids
-    return pre.parseString(txt)[0]
-  except ParseException, e:
-    print 'Parsing error in precondition:'
-    print e
-    exit(-1)
+  identifiers = ids
+  return pre.parseString(txt)[0]
 
 
 ##########################
@@ -395,13 +388,13 @@ def parseOpt(toks):
       tgt = toks[i]
 
   parsing_phase = Source
-  src = parse_llvm(src)
+  src = parse_llvm(save_parse_str(src))
 
   parsing_phase = Target
-  tgt = parse_llvm(tgt)
+  tgt = parse_llvm(save_parse_str(tgt))
 
   parsing_phase = Pre
-  pre = parse_pre(pre, src)
+  pre = parse_pre(save_parse_str(pre), src)
   return name, pre, src, tgt
 
 
@@ -411,9 +404,9 @@ opt = comments +\
        (Optional(Literal('Name:') + SkipTo(LineEnd())) +\
        comments +\
        Optional(Literal('Pre:') + SkipTo(LineEnd())) +\
-       SkipTo('=>') + Literal('=>').suppress() +\
+       SkipTo('=>') + Suppress('=>') +\
        SkipTo(Literal('Name:') | StringEnd())).\
-         setParseAction(parseOpt)
+         setParseAction(pa(parseOpt))
 
 opt_file = OneOrMore(opt)
 
@@ -422,6 +415,12 @@ def parse_opt_file(txt):
   try:
     return opt_file.parseString(txt)
   except ParseException, e:
-    print 'Parsing error:'
+    phases = {Source: 'Source',
+              Target: 'Target',
+              Pre: 'precondition'}
+    print 'Parsing error in %s:' % phases[parsing_phase]
+    print e
+    exit(-1)
+  except ParseError, e:
     print e
     exit(-1)

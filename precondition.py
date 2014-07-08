@@ -110,8 +110,7 @@ class BinaryBoolPred(BoolPred):
     for i in range(BinaryBoolPred.Last):
       if BinaryBoolPred.opnames[i] == name:
         return i
-    print 'Unknown boolean operator: ' + name
-    exit(-1)
+    assert False
 
   def getTypeConstraints(self):
     return mk_and([self.v1.type == self.v2.type,
@@ -149,9 +148,8 @@ class LLVMBoolPred(BoolPred):
     self.op = op
     self.args = args
     if self.num_args[op] != len(args):
-      print 'Wrong number of argument to %s (expected %d)' %\
-        (self.opnames[op], self.num_args[op])
-      exit(-1)
+      raise ParseError('Wrong number of arguments (got %d, expected %d)' %\
+                       (len(args), self.num_args[op]))
 
   def __repr__(self):
     args = [str(a) for a in self.args]
@@ -165,15 +163,15 @@ class LLVMBoolPred(BoolPred):
     try:
       return LLVMBoolPred.opids[name]
     except:
-      print 'Unknown boolean predicate: ' + name
-      exit(-1)
+      raise ParseError('Unknown boolean predicate')
 
   argConstraints = {
     isSignBit: lambda a: [a.type.typevar == Type.Int]
   }
-  
+
   def getTypeConstraints(self):
-    c = self.argConstraints[self.op](*self.args) if self.op in self.argConstraints else []
+    c = self.argConstraints[self.op](*self.args) \
+          if self.op in self.argConstraints else []
     return mk_and(c + [v.getTypeConstraints() for v in self.args])
 
   def toSMT(self, state):
