@@ -94,8 +94,8 @@ tactic = AndThen(
 )
 
 correct_exprs = {}
-def check_expr(qvars, expr, extra, error):
-  expr = mk_and(extra + [mk_forall(qvars, expr)])
+def check_expr(qvars, expr, error):
+  expr = mk_forall(qvars, mk_and(expr))
   id = get_z3_id(expr)
   if id in correct_exprs:
     return
@@ -167,17 +167,16 @@ def check_typed_opt(pre, src, tgt, types):
 
     (a, defa, qvars) = v
     (b, defb, qvarsb) = tgtv[k]
-    defa = mk_and(defa)
     defb = mk_and(defb)
 
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, And(defa, Not(defb)), extra_cnstrs, lambda s :
+    check_expr(qvars, defa + [mk_not(defb)] + extra_cnstrs, lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, And(defa, a != b), extra_cnstrs, lambda s :
+    check_expr(qvars, defa + [a != b] + extra_cnstrs, lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
@@ -192,7 +191,7 @@ def check_typed_opt(pre, src, tgt, types):
       print '\nERROR: No memory state for %s in Target' % str(ptr)
       exit(-1)
 
-    check_expr([], mem != memb, extra_cnstrs, lambda s :
+    check_expr([], [mem != memb] + extra_cnstrs, lambda s :
       ('ERROR: Mismatch in final memory state for %s (%d bits)' %
          (ptr, mem.sort().size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))

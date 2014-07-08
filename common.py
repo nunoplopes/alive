@@ -40,6 +40,14 @@ def mk_or(l):
   return Or(l)
 
 
+def mk_not(e):
+  if is_false(e):
+    return BoolVal(True)
+  if is_true(e):
+    return BoolVal(False)
+  return Not(e)
+
+
 def mk_distinct(l):
   if len(l) < 2:
     return BoolVal(True)
