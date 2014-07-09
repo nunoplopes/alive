@@ -422,11 +422,7 @@ def parse_opt_file(txt):
   try:
     return opt_file.parseString(txt)
   except ParseException, e:
-    phases = {Source: 'Source',
-              Target: 'Target',
-              Pre: 'precondition'}
-    print 'Parsing error in %s:' % phases[parsing_phase]
-    print e
+    print exception2str(e.msg, e.line, e.lineno, e.col)
     exit(-1)
   except ParseError, e:
     print e

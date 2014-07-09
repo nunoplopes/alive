@@ -111,14 +111,17 @@ class ParseError():
   def __repr__(self):
     lineno = get_lineno()
     line = get_line(lineno)
-    s  = "ERROR: " + "\n".join(self.msgs)
-    s += " (line: %d)\n" % (gbl_line_offset + lineno)
-    s += line + '\n'
     col = get_column(line, self.token)
-    for i in range(col):
-      s += ' '
-    s += '^'
-    return s
+    return exception2str("\n".join(self.msgs), line, lineno, col)
+
+gbl_line_offset = 0
+def exception2str(msg, line, lineno, col):
+  s  = "ERROR: %s (line: %d)\n" % (msg, gbl_line_offset + lineno)
+  s += line + '\n'
+  for i in range(col):
+    s += ' '
+  s += '^'
+  return s
 
 def get_lineno():
   return gbl_parse_str.count('\n', 0, gbl_parse_loc) + 1
