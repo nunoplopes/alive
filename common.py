@@ -112,7 +112,7 @@ class ParseError():
     lineno = get_lineno()
     line = get_line(lineno)
     s  = "ERROR: " + "\n".join(self.msgs)
-    s += " (line: %d)\n" % lineno
+    s += " (line: %d)\n" % (gbl_line_offset + lineno)
     s += line + '\n'
     col = get_column(line, self.token)
     for i in range(col):
@@ -133,11 +133,10 @@ def get_column(s, tok):
   token_col = s.find(tok)
   return token_col if token_col >= 0 else col
 
-def save_parse_str(s):
-  global gbl_parse_str
-  s = s.strip()
+def save_parse_str(s, line):
+  global gbl_parse_str, gbl_line_offset
   gbl_parse_str = s
-  return s
+  gbl_line_offset = line-1
 
 def save_loc(loc):
   global gbl_parse_loc

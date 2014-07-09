@@ -360,11 +360,12 @@ def parse_pre(txt, ids):
 ##########################
 opt_id = 1
 
-def parseOpt(toks):
+def parseOpt(s, loc, toks):
   global opt_id, parsing_phase
   name = str(opt_id)
   opt_id += 1
   pre = ''
+  pre_line = 0
   src = tgt = None
 
   skip = False
@@ -378,23 +379,29 @@ def parseOpt(toks):
       i += 1
       skip = True
     elif toks[i] == 'Pre:':
-      pre = toks[i+1]
+      pre = toks[i+1][1]
+      pre_line = lineno(toks[i+1][0], s)
       i += 1
       skip = True
     elif src is None:
-      src = toks[i]
+      src = toks[i][1]
+      src_line = lineno(toks[i][0], s)
     else:
       assert tgt is None
-      tgt = toks[i]
+      tgt = toks[i][1]
+      tgt_line = lineno(toks[i][0], s)
 
   parsing_phase = Source
-  src = parse_llvm(save_parse_str(src))
+  save_parse_str(src, src_line)
+  src = parse_llvm(src)
 
   parsing_phase = Target
-  tgt = parse_llvm(save_parse_str(tgt))
+  save_parse_str(tgt, tgt_line)
+  tgt = parse_llvm(tgt)
 
   parsing_phase = Pre
-  pre = parse_pre(save_parse_str(pre), src)
+  save_parse_str(pre, pre_line)
+  pre = parse_pre(pre, src)
   return name, pre, src, tgt
 
 
@@ -403,10 +410,10 @@ comments = ZeroOrMore(comment + LineEnd()).suppress()
 opt = comments +\
        (Optional(Literal('Name:') + SkipTo(LineEnd())) +\
        comments +\
-       Optional(Literal('Pre:') + SkipTo(LineEnd())) +\
-       SkipTo('=>') + Suppress('=>') +\
-       SkipTo(Literal('Name:') | StringEnd())).\
-         setParseAction(pa(parseOpt))
+       Optional(Literal('Pre:') + locatedExpr(SkipTo(LineEnd()))) +\
+       locatedExpr(SkipTo('=>')) + Suppress('=>') +\
+       locatedExpr(SkipTo(Literal('Name:') | StringEnd()))).\
+         setParseAction(parseOpt)
 
 opt_file = OneOrMore(opt)
 
