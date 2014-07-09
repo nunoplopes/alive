@@ -56,38 +56,39 @@ def parseOptType(toks):
 def parseOperand(v, type):
   global identifiers
 
+  if isinstance(v, ParseResults):
+    (loc, v, loc_end) = v
+    v = v[0] if isinstance(v, ParseResults) else v
+    save_loc(loc)
+
   if isinstance(v, Value):
     key = v.getUniqueName()
     if not identifiers.has_key(key):
       identifiers[key] = v
     return v
 
-  (loc, id, loc_end) = v
-  id = id[0] if isinstance(id, ParseResults) else id
-  save_loc(loc)
-
   # %var
-  if id[0] == '%' or id[0] == 'C':
-    if identifiers.has_key(id):
-      return identifiers[id]
+  if v[0] == '%' or v[0] == 'C':
+    if identifiers.has_key(v):
+      return identifiers[v]
     if parsing_phase == Target:
       raise ParseError('Cannot declare new input variables or constants in '
                        'Target')
-    if id[0] == 'C':
+    if v[0] == 'C':
       type = type.ensureIntType()
-    identifiers[id] = v = Input(id, type)
-    return v
+    identifiers[v] = var = Input(v, type)
+    return var
 
-  if id == 'undef':
+  if v == 'undef':
     c = UndefVal(type)
-  elif id == 'true':
+  elif v == 'true':
     c = ConstantVal(1, type.ensureIntType(1))
-  elif id == 'false':
+  elif v == 'false':
     c = ConstantVal(0, type.ensureIntType(1))
-  elif id == 'null':
+  elif v == 'null':
     c = ConstantVal(0, type.ensurePtrType())
   else:
-    c = ConstantVal(int(id), type.ensureIntType())
+    c = ConstantVal(int(v), type.ensureIntType())
 
   identifiers[c.getUniqueName()] = c
   return c
