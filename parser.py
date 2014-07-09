@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 from pyparsing.pyparsing import *
 from language import *
 from precondition import *
@@ -36,7 +37,7 @@ def parseIntType(toks):
   return t
 
 def parseArrayType(toks):
-  t = ArrayType(toks[1], toks[3])
+  t = ArrayType(parseCnstVar(toks[1]), toks[3])
   for i in range(len(toks)-5):
     t = PtrType(t)
   return t
@@ -52,37 +53,41 @@ def parseOptType(toks):
     return toks[0]
   return UnknownType()
 
-def parseOperand(toks, type):
+def parseOperand(v, type):
   global identifiers
 
-  if isinstance(toks[0], Value):
-    c = toks[0]
-    key = c.getUniqueName()
+  if isinstance(v, Value):
+    key = v.getUniqueName()
     if not identifiers.has_key(key):
-      identifiers[key] = c
-    return c
+      identifiers[key] = v
+    return v
+
+  (loc, id, loc_end) = v
+  id = id[0] if isinstance(id, ParseResults) else id
+  save_loc(loc)
 
   # %var
-  if toks[0][0] == '%' or toks[0][0] == 'C':
-    reg = toks[0]
-    if identifiers.has_key(reg):
-      return identifiers[reg]
+  if id[0] == '%' or id[0] == 'C':
+    if identifiers.has_key(id):
+      return identifiers[id]
     if parsing_phase == Target:
       raise ParseError('Cannot declare new input variables or constants in '
                        'Target')
-    identifiers[reg] = v = Input(reg, type)
+    if id[0] == 'C':
+      type = type.ensureIntType()
+    identifiers[id] = v = Input(id, type)
     return v
 
-  if toks[0] == 'undef':
+  if id == 'undef':
     c = UndefVal(type)
-  elif toks[0] == 'true':
+  elif id == 'true':
     c = ConstantVal(1, type.ensureIntType(1))
-  elif toks[0] == 'false':
+  elif id == 'false':
     c = ConstantVal(0, type.ensureIntType(1))
-  elif toks[0] == 'null':
+  elif id == 'null':
     c = ConstantVal(0, type.ensurePtrType())
   else:
-    c = ConstantVal(int(toks[0]), type.ensureIntType())
+    c = ConstantVal(int(id), type.ensureIntType())
 
   identifiers[c.getUniqueName()] = c
   return c
@@ -133,9 +138,9 @@ def parseSelect(toks):
   return Select(t, parseOperand(toks[1], IntType(1)),
                 parseOperand(toks[3], t), parseOperand(toks[5], t))
 
-def parseOptionalNumElems(toks):
+def parseOptionalNumElems(loc, toks):
   t = IntType()
-  return toks if len(toks) == 2 else [t, parseOperand(['1'], t)]
+  return toks if len(toks) == 2 else [t, parseOperand([loc, '1', loc], t)]
 
 def parseAlloca(toks):
   return Alloca(toks[1], toks[2], toks[3], toks[4])
@@ -174,10 +179,20 @@ def parseInstr(toks):
 ################################
 # Constant expr language
 
-def parseCnstVar(toks):
-  id = toks[0]
-  if id.isdigit():
+def parseCnstVar(v):
+  if isinstance(v, Value):
+    return v
+
+  (loc, id, loc_end) = v
+  if isinstance(id, Value):
+    return id
+
+  if re.match(r"(?:-\s*)?\d+", id):
     return ConstantVal(int(id), IntType())
+
+  save_loc(loc)
+  if id[0] == '%':
+    raise ParseError('Only constants allowed in expressions')
 
   if identifiers.has_key(id):
     return identifiers[id]
@@ -185,9 +200,14 @@ def parseCnstVar(toks):
   if parsing_phase == Pre:
     raise ParseError('Identifier used in precondition was not defined')
 
-  return parseOperand([id], IntType())
+  return parseOperand(v, IntType())
+
+def check_not_src():
+  if parsing_phase == Source:
+    raise ParseError('Expressions not allowed in Source')
 
 def parseCnstFunction(toks):
+  check_not_src()
   op = CnstFunction.getOpId(toks[0])
   return CnstFunction(op, toks[1:], IntType())
 
@@ -198,12 +218,16 @@ def parseRecursive(toks, l):
   return parseRecursive([[l(toks[0], toks[1], toks[2])] + toks[3:]], l)
 
 def parseBinaryPred(toks):
+  check_not_src()
   return parseRecursive(toks, lambda a,op,b:
-                                CnstBinaryOp(CnstBinaryOp.getOpId(op), a, b))
+                                CnstBinaryOp(CnstBinaryOp.getOpId(op),
+                                             parseCnstVar(a),
+                                             parseCnstVar(b)))
 
 def parseUnaryPred(toks):
+  check_not_src()
   op = CnstUnaryOp.getOpId(toks[0][0])
-  return CnstUnaryOp(op, toks[0][1])
+  return CnstUnaryOp(op, parseCnstVar(toks[0][1]))
 
 
 identifier = Word(srange("[a-zA-Z0-9_.]"))
@@ -212,14 +236,16 @@ pred_args = Forward()
 
 cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
                     setParseAction(pa(parseCnstFunction)) |\
-                 Regex(r"C\d*|\d+|%[a-zA-Z0-9_.]+").\
-                   setParseAction(pa(parseCnstVar))
+                  Regex(r"C\d*|(?:-\s*)?\d+|%[a-zA-Z0-9_.]+")
+cnst_expr_atoms = locatedExpr(cnst_expr_atoms)
 
-pred_args <<= (cnst_expr_atoms + ZeroOrMore(comma + cnst_expr_atoms)) | Empty()
+pred_arg = cnst_expr_atoms.copy().\
+             setParseAction(lambda toks: parseOperand(toks[0], UnknownType()))
+pred_args <<= (pred_arg + ZeroOrMore(comma + pred_arg)) | Empty()
 
 cnst_expr = infixNotation(cnst_expr_atoms,
-                          [(oneOf('- ~'), 1, opAssoc.RIGHT, parseUnaryPred),
-                           (oneOf('* / %'), 2, opAssoc.LEFT, parseBinaryPred),
+                          [(Regex(r"~|-(?!\s*\d)"), 1, opAssoc.RIGHT, parseUnaryPred),
+                           (oneOf('* /'), 2, opAssoc.LEFT, parseBinaryPred),
                            (oneOf('+ -'), 2, opAssoc.LEFT, parseBinaryPred),
                            (Literal('>>'), 2, opAssoc.LEFT, parseBinaryPred),
                            (Literal('<<'), 2, opAssoc.LEFT, parseBinaryPred),
@@ -231,7 +257,6 @@ cnst_expr = infixNotation(cnst_expr_atoms,
 ################################
 # Template program language
 
-identifier = Word(srange("[a-zA-Z0-9_.]"))
 reg = Regex(r"%[a-zA-Z0-9_.]+")
 opname = identifier
 posnum = Word(nums).setParseAction(pa(lambda toks : int(toks[0])))
@@ -250,9 +275,9 @@ opttype = Optional(type).setParseAction(pa(parseOptType))
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(pa(lambda toks : [toks]))
-operand = (reg | Regex(r"-?[0-9]+") | cnst_expr | Literal('false') |\
-           Literal('true') | Literal('undef') | Literal('null')).\
-             setParseAction(pa(lambda toks : [toks]))
+operand = cnst_expr |\
+          (locatedExpr(Literal('false') | Literal('true') | Literal('undef') |\
+                       Literal('null')))
 
 typeoperand = (opttype + operand).setParseAction(pa(parseTypeOperand))
 intoperand  = (opttype + operand).setParseAction(pa(parseIntOperand))
@@ -280,7 +305,7 @@ optalign = Optional(align).setParseAction(pa(parseOptional(0)))
 
 alloca = (Literal('alloca') + opttype +\
           Optional(comma + intoperand).\
-            setParseAction(pa(parseOptionalNumElems)) +\
+            setParseAction(parseOptionalNumElems) +\
           optalign).setParseAction(pa(parseAlloca))
 
 gep = (Literal('getelementptr') + Optional('inbounds') + ptroperand +\
@@ -322,7 +347,7 @@ def parseBoolPredicate(toks):
 
 def parseBoolPred(toks):
   op = BinaryBoolPred.getOpId(toks[1])
-  return BinaryBoolPred(op, toks[0], toks[2])
+  return BinaryBoolPred(op, parseCnstVar(toks[0]), parseCnstVar(toks[2]))
 
 def parsePreNot(toks):
   return PredNot(toks[0][0])
@@ -415,7 +440,7 @@ opt = comments +\
        locatedExpr(SkipTo(Literal('Name:') | StringEnd()))).\
          setParseAction(parseOpt)
 
-opt_file = OneOrMore(opt)
+opt_file = OneOrMore(opt) + StringEnd()
 
 
 def parse_opt_file(txt):

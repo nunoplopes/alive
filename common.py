@@ -118,9 +118,7 @@ gbl_line_offset = 0
 def exception2str(msg, line, lineno, col):
   s  = "ERROR: %s (line: %d)\n" % (msg, gbl_line_offset + lineno)
   s += line + '\n'
-  for i in range(col):
-    s += ' '
-  s += '^'
+  s += ' ' * col + '^'
   return s
 
 def get_lineno():
@@ -133,7 +131,7 @@ def get_column(s, tok):
   col = gbl_parse_loc - (gbl_parse_str.rfind('\n', 0, gbl_parse_loc)+1)
   if not tok:
     return col
-  token_col = s.find(tok)
+  token_col = s.find(tok, col)
   return token_col if token_col >= 0 else col
 
 def save_parse_str(s, line):

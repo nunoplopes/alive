@@ -192,7 +192,7 @@ class CnstFunction(Constant):
                        (len(args), self.num_args[op]))
 
   def __repr__(self):
-    args = [str(a) for a in self.args]
+    args = [a.getName() for a in self.args]
     return '%s(%s)' % (self.opnames[self.op], ', '.join(args))
 
   def getOpName(self):
