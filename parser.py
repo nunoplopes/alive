@@ -56,7 +56,7 @@ def parseOptType(toks):
 def parseOperand(v, type):
   global identifiers
 
-  if isinstance(v, ParseResults):
+  if isinstance(v, (ParseResults, list)):
     (loc, v, loc_end) = v
     v = v[0] if isinstance(v, ParseResults) else v
     save_loc(loc)
