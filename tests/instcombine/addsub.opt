@@ -126,3 +126,137 @@ Pre: C == width(%a) - 1
 %r = sub 0, %a
   =>
 %r = ashr %x, C
+
+
+Name: AddSub:1400, FoldOpIntoSelect
+; symmetric over which argument is constant
+
+%1 = select %c, C1, %f
+%r = sub C0, %1
+  =>
+%f2 = sub C0, %f
+%r = select %c, C0 - C1, %f2
+
+
+Name: AddSub:1405
+%a = add %x, C2
+%r = sub C, %a
+  =>
+%r = sub C - C2, %x
+
+
+Name: AddSub:1413
+%x = zext i1 %b
+%r = sub 0, %x
+  =>
+%r = sext i1 %b
+
+
+Name: AddSub:1413
+%x = sext i1 %b
+%r = sub 0, %x
+  =>
+%r = zext i1 %b
+
+
+Name: AddSub:1431
+%xy = sub %x, %y
+%r = sub %xy, %x
+=>
+%r = sub 0, %y
+
+
+Name: AddSub:1441
+%yz = sub %y, %z
+%r = sub %x, %yz
+  =>
+%zy = sub %z, %y
+%r = add %x, %zy
+
+
+Name: AddSub:1447
+%xy = and %x, %y
+%r = sub %x, %xy
+  =>
+%ny = xor %y, -1
+%r = and %x, %ny
+
+
+Name: AddSub:1453
+Pre: C != 1 && !isSignBit(C)
+; single-typed, because it takes so long
+%1 = sdiv i8 %x, C
+%r = sub 0, %1
+  =>
+%r = sdiv %x, -C
+
+
+Name: AddSub:1458
+; Slow
+%1 = shl %x, %y
+%r = sub 0, %1
+  =>
+%nx = sub 0, %x
+%r = shl %nx, %y
+
+
+Name: AddSub:1462
+
+%1 = mul %x, C
+%r = sub %x, %1
+  =>
+%r = mul %x, 1 - C
+
+
+Name: AddSub:1468
+; Slow
+%1 = shl %x, C
+%r = sub %x, %1
+  =>
+%r = mul %x, 1 - (1<<C)
+
+
+Name: AddSub:1475
+; X - A*-B -> X + A*B
+; X - -A*B -> X + A*B
+; flexible order
+
+%nb = sub 0, %b
+%1 = mul %a, %nb
+%r = sub %x, %1
+  =>
+%ab = mul %a, %b
+%r = add %x, %ab
+
+
+Name: AddSub:1484
+; X - A*CI -> X + A*-C1
+; also commute *
+
+%1 = mul %a,C
+%r = sub %x, %1
+  =>
+%2 = mul %a, -C
+%r = add %x, %2
+
+
+Name: AddSub:1492
+; X*C - X -> X * (C-1)
+
+%0 = mul %x, C
+%r = sub %0, %x
+  =>
+%r = mul %x, C-1
+
+
+Name: AddSub:1492, 1497
+; X*C1 - X*C2 -> X * (C1-C2)
+
+%0 = mul %x, C1
+%1 = mul %x, C2
+%r = sub %0, %1
+  =>
+%r = mul %x, C1-C2
+
+
+; Skipping 1503, GEP
