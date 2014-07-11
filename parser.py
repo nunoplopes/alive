@@ -231,6 +231,7 @@ def parseUnaryPred(toks):
   return CnstUnaryOp(op, parseCnstVar(toks[0][1]))
 
 
+ParserElement.DEFAULT_WHITE_CHARS = " \t\r"
 identifier = Word(srange("[a-zA-Z0-9_.]"))
 comma = Suppress(',')
 pred_args = Forward()
@@ -324,7 +325,9 @@ store = (Literal('store') + typeoperand + comma + ptroperand +\
 instr = (reg + Suppress('=') + op).setParseAction(pa(parseInstr)) |\
         store | comment
 
-prog = OneOrMore(instr) + StringEnd()
+instrc = instr + Optional(comment)
+prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\
+       Suppress(Optional(White())) + StringEnd()
 
 
 def parse_llvm(txt):
@@ -360,6 +363,7 @@ def parsePreOr(toks):
   return parseRecursive(toks, lambda a,op,b: PredOr(a, b))
 
 
+ParserElement.DEFAULT_WHITE_CHARS = " \n\t\r"
 pre_bool_expr = (cnst_expr + oneOf('== !=') + cnst_expr).\
                   setParseAction(pa(parseBoolPred))
 
@@ -386,7 +390,7 @@ def parse_pre(txt, ids):
 ##########################
 opt_id = 1
 
-def parseOpt(s, loc, toks):
+def _parseOpt(s, loc, toks):
   global opt_id, parsing_phase
   name = str(opt_id)
   opt_id += 1
@@ -430,8 +434,15 @@ def parseOpt(s, loc, toks):
   pre = parse_pre(pre, src)
   return name, pre, src, tgt
 
+def parseOpt(s, loc, toks):
+  try:
+    return _parseOpt(s, loc, toks)
+  except ParseException, e:
+    print exception2str(e.msg, e.line, e.lineno, e.col)
+    exit(-1)
 
-comments = ZeroOrMore(comment + LineEnd()).suppress()
+
+comments = Suppress(Optional(White()) + ZeroOrMore(comment + White()))
 
 opt = comments +\
        (Optional(Literal('Name:') + SkipTo(LineEnd())) +\
@@ -448,7 +459,7 @@ def parse_opt_file(txt):
   try:
     return opt_file.parseString(txt)
   except ParseException, e:
-    print exception2str(e.msg, e.line, e.lineno, e.col)
+    print exception2str(e.msg, e.line, e.lineno, e.col, 0)
     exit(-1)
   except ParseError, e:
     print e

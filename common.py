@@ -115,8 +115,10 @@ class ParseError():
     return exception2str("\n".join(self.msgs), line, lineno, col)
 
 gbl_line_offset = 0
-def exception2str(msg, line, lineno, col):
-  s  = "ERROR: %s (line: %d)\n" % (msg, gbl_line_offset + lineno)
+def exception2str(msg, line, lineno, col, line_offset = None):
+  if line_offset is None:
+    line_offset = gbl_line_offset
+  s  = "ERROR: %s (line: %d)\n" % (msg, line_offset + lineno)
   s += line + '\n'
   s += ' ' * col + '^'
   return s
