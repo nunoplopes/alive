@@ -143,8 +143,8 @@ class LLVMBoolPred(BoolPred):
 
   def __init__(self, op, args):
     assert 0 <= op < self.Last
-    for a in args:
-      assert isinstance(a, (Constant, Input))
+    for i in range(len(args)):
+      assert self.argAccepts(op, i+1, args[i])[0]
     self.op = op
     self.args = args
     if self.num_args[op] != len(args):
@@ -165,13 +165,32 @@ class LLVMBoolPred(BoolPred):
     except:
       raise ParseError('Unknown boolean predicate')
 
+  arg_types = {
+    isSignBit: 'const',
+    NSWAdd:    'input',
+  }
+
+  @staticmethod
+  def argAccepts(op, arg, val):
+    kind = LLVMBoolPred.arg_types[op]
+    if kind == 'input':
+      return (isinstance(val, (Input, Constant)), 'constant or input var')
+    if kind == 'const':
+      if isinstance(val, Input):
+        ok = val.getName()[0] == 'C'
+      else:
+        ok = isinstance(val, Constant)
+      return (ok, 'constant')
+    assert False
+
   argConstraints = {
-    isSignBit: lambda a: [a.type.typevar == Type.Int]
+    isSignBit: lambda a: [a.type.typevar == Type.Int],
+    NSWAdd:    lambda a,b: [a.type.typevar == Type.Int,
+                            b.type.typevar == Type.Int],
   }
 
   def getTypeConstraints(self):
-    c = self.argConstraints[self.op](*self.args) \
-          if self.op in self.argConstraints else []
+    c = self.argConstraints[self.op](*self.args)
     return mk_and(c + [v.getTypeConstraints() for v in self.args])
 
   def toSMT(self, state):

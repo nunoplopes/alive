@@ -210,7 +210,8 @@ def check_not_src():
 def parseCnstFunction(toks):
   check_not_src()
   op = CnstFunction.getOpId(toks[0])
-  return CnstFunction(op, toks[1:], IntType())
+  args = [parseOperand(toks[i], UnknownType()) for i in range(1, len(toks))]
+  return CnstFunction(op, args, IntType())
 
 def parseRecursive(toks, l):
   toks = toks[0]
@@ -241,9 +242,7 @@ cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
                   Regex(r"C\d*|(?:-\s*)?\d+|%[a-zA-Z0-9_.]+")
 cnst_expr_atoms = locatedExpr(cnst_expr_atoms)
 
-pred_arg = cnst_expr_atoms.copy().\
-             setParseAction(lambda toks: parseOperand(toks[0], UnknownType()))
-pred_args <<= (pred_arg + ZeroOrMore(comma + pred_arg)) | Empty()
+pred_args <<= (cnst_expr_atoms + ZeroOrMore(comma + cnst_expr_atoms)) | Empty()
 
 cnst_expr = infixNotation(cnst_expr_atoms,
                           [(Regex(r"~|-(?!\s*\d)"), 1, opAssoc.RIGHT, parseUnaryPred),
@@ -347,7 +346,14 @@ def parse_llvm(txt):
 ##########################
 def parseBoolPredicate(toks):
   op = LLVMBoolPred.getOpId(toks[0])
-  return LLVMBoolPred(op, toks[1:])
+  args = []
+  for i in range(1, len(toks)):
+    a = parseOperand(toks[i], UnknownType())
+    args += [a]
+    (ok, ex) = LLVMBoolPred.argAccepts(op, i, a)
+    if not ok:
+      raise ParseError('Operand not allowed. Expected ' + ex)
+  return LLVMBoolPred(op, args)
 
 def parseBoolPred(toks):
   op = BinaryBoolPred.getOpId(toks[1])

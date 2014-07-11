@@ -524,7 +524,7 @@ class Alloca(Instr):
 ################################
 class GEP(Instr):
   def __init__(self, type, ptr, idxs, inbounds):
-    assert isinstance(type, Type)
+    assert isinstance(type, PtrType)
     assert isinstance(ptr, Value)
     assert isinstance(idxs, list)
     assert isinstance(inbounds, bool)
