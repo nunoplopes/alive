@@ -74,6 +74,9 @@ def parseOperand(v, type):
     if parsing_phase == Target:
       raise ParseError('Cannot declare new input variables or constants in '
                        'Target')
+    if parsing_phase == Pre:
+      raise ParseError('Cannot declare new input variables or constants in '
+                       'the precondition')
     if v[0] == 'C':
       type = type.ensureIntType()
     identifiers[v] = var = Input(v, type)
