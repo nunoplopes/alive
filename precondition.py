@@ -191,7 +191,12 @@ class LLVMBoolPred(BoolPred):
 
   def getTypeConstraints(self):
     c = self.argConstraints[self.op](*self.args)
-    return mk_and(c + [v.getTypeConstraints() for v in self.args])
+    c += [v.getTypeConstraints() for v in self.args]
+
+    # For now, assume all operands must have the same type
+    for i in range(1, len(self.args)):
+      c += [self.args[0].type == self.args[i].type]
+    return mk_and(c)
 
   def toSMT(self, state):
     args = [v.toSMT([], state, []) for v in self.args]
