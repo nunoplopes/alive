@@ -219,11 +219,11 @@ def parseRecursive(toks, l):
   return parseRecursive([[l(toks[0], toks[1], toks[2])] + toks[3:]], l)
 
 def parseBinaryPred(toks):
-  check_not_src()
-  return parseRecursive(toks, lambda a,op,b:
-                                CnstBinaryOp(CnstBinaryOp.getOpId(op),
-                                             parseCnstVar(a),
-                                             parseCnstVar(b)))
+  def z(a,op,b):
+    a = parseCnstVar(a)
+    check_not_src()
+    return CnstBinaryOp(CnstBinaryOp.getOpId(op), a, parseCnstVar(b))
+  return parseRecursive(toks, z)
 
 def parseUnaryPred(toks):
   check_not_src()
