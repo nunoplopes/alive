@@ -245,8 +245,6 @@ cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
                   Regex(r"C\d*|(?:-\s*)?\d+|%[a-zA-Z0-9_.]+")
 cnst_expr_atoms = locatedExpr(cnst_expr_atoms)
 
-pred_args <<= (cnst_expr_atoms + ZeroOrMore(comma + cnst_expr_atoms)) | Empty()
-
 cnst_expr = infixNotation(cnst_expr_atoms,
                           [(Regex(r"~|-(?!\s*\d)"), 1, opAssoc.RIGHT, parseUnaryPred),
                            (oneOf('* /'), 2, opAssoc.LEFT, parseBinaryPred),
@@ -256,6 +254,8 @@ cnst_expr = infixNotation(cnst_expr_atoms,
                            (Literal('&'), 2, opAssoc.LEFT, parseBinaryPred),
                            (Literal('|'), 2, opAssoc.LEFT, parseBinaryPred),
                           ])
+
+pred_args <<= (cnst_expr + ZeroOrMore(comma + cnst_expr)) | Empty()
 
 
 ################################
