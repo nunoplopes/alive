@@ -128,17 +128,19 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  isSignBit, NSWAdd, Last = range(3)
+  isSignBit, NSWAdd, maskZero, Last = range(4)
 
   opnames = {
     isSignBit: 'isSignBit',
     NSWAdd:    'WillNotOverflowSignedAdd',
+    maskZero:  'MaskedValueIsZero',
   }
   opids = {v:k for k, v in opnames.items()}
 
   num_args = {
     isSignBit: 1,
     NSWAdd:    2,
+    maskZero:  2,
   }
 
   def __init__(self, op, args):
@@ -168,6 +170,7 @@ class LLVMBoolPred(BoolPred):
   arg_types = {
     isSignBit: 'const',
     NSWAdd:    'input',
+    maskZero:  'input',  # FIXME: first is input, second is const
   }
 
   @staticmethod
@@ -187,6 +190,7 @@ class LLVMBoolPred(BoolPred):
     isSignBit: lambda a: [a.type.typevar == Type.Int],
     NSWAdd:    lambda a,b: [a.type.typevar == Type.Int,
                             b.type.typevar == Type.Int],
+    maskZero:  lambda a,b: []
   }
 
   def getTypeConstraints(self):
@@ -202,5 +206,6 @@ class LLVMBoolPred(BoolPred):
     args = [v.toSMT([], state, []) for v in self.args]
     return {
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b)
+      self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
+      self.maskZero:  lambda a,b: a & b == 0,
     }[self.op](*args)
