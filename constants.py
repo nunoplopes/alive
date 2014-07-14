@@ -166,15 +166,17 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  width, Last = range(2)
+  width, trunc, Last = range(3)
 
   opnames = {
     width: 'width',
+    trunc: 'trunc',
   }
   opids = {v:k for k,v in opnames.items()}
 
   num_args = {
     width: 1,
+    trunc: 1,
   }
 
   def __init__(self, op, args, type):
@@ -205,11 +207,17 @@ class CnstFunction(Constant):
     raise ParseError('Unknown function:')
 
   def getTypeConstraints(self):
+    c = {
+      self.width: lambda a: [],
+      self.trunc: lambda a: [self.type < a.type],
+    }[self.op](*self.args)
+
     return mk_and([v.getTypeConstraints() for v in self.args] +\
-                  [self.type.getTypeConstraints()])
+                  [self.type.getTypeConstraints()] + c)
 
   def toSMT(self, defined, state, qvars):
     args = [v.toSMT(defined, state, qvars) for v in self.args]
     return {
-      self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize())
+      self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize()),
+      self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
     }[self.op](*args)
