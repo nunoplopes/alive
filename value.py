@@ -161,10 +161,12 @@ class NamedType(UnknownType):
     if size != None:
       self.types[self.Int] = IntType(size)
     self.type = self.type.ensureIntType(size)
+    return self
 
   def ensurePtrType(self):
     self.myType = self.Ptr
     self.type = self.type.ensurePtrType()
+    return self
 
   def setName(self, name):
     UnknownType.setName(self, self.name)

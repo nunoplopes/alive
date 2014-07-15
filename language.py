@@ -123,7 +123,7 @@ class BinOp(Instr):
 
 
   def __init__(self, op, type, v1, v2, flags = []):
-    assert isinstance(type, IntType)
+    assert isinstance(type, Type)
     assert isinstance(v1, Value)
     assert isinstance(v2, Value)
     assert 0 <= op < self.Last
