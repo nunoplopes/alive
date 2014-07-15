@@ -1,0 +1,512 @@
+; visitAnd
+
+Name: AndOrXor:1114,1118,1123,1129
+Pre: MaskedValueIsZero(%op0LHS, ~C)
+	; HasOneUse(%op0)
+%op0 = xor %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newRHS = and %op0RHS, C
+%r = xor %op0LHS, %newRHS
+
+
+Name: AndOrXor:1114,1118,1124,1129
+Pre: MaskedValueIsZero(%op0LHS, ~C)
+	; HasOneUse(%op0)
+	; same as above, but with or
+%op0 = or %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newRHS = and %op0RHS, C
+%r = or %op0LHS, %newRHS
+
+
+Name: AndOrXor:1114,1118,1123,1135
+Pre: MaskedValueIsZero(%op0RHS, ~C)
+	; HasOneUse(%op0) && !constant(%op0RHS)
+
+%op0 = xor %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newLHS = and %op0LHS, C
+%r = xor %newLHS, %op0RHS
+
+Name: AndOrXor:1114,1118,1124,1135
+Pre: MaskedValueIsZero(%op0RHS, ~C)
+	; HasOneUse(%op0) && !constant(%op0RHS)
+	; same as above, but with or
+%op0 = or %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newLHS = and %op0LHS, C
+%r = or %newLHS, %op0RHS
+
+
+; @@deferring 1114,1118,1145. FoldLogicalPlusAnd
+; @@deferring 1114,1118,1155,1159. FoldLogicalPlusAnd
+; @@deferring 1114,1118,1155,1164. countLeadingZeros
+
+
+Name: AndOrXor:1114,1118,1176
+
+%op0 = shl 1, %op0RHS
+%r = and %op0, 1
+  =>
+%newICMP = icmp eq %op0RHS, 0
+%r = zext %newICMP
+
+
+Name: AndOrXor:1114,1118,1177
+	; same as above, but with lshr
+%op0 = lshr 1, %op0RHS
+%r = and %op0, 1
+  =>
+%newICMP = icmp eq %op0RHS, 0
+%r = zext %newICMP
+
+; @@deferring 1114,1118,1188. OptAndOp
+
+Name: AndOrXor:1114,1197
+
+%a = and %x, C1
+%op0 = trunc %a
+%r = and %op0, C2
+  =>
+%newcast = trunc %x
+%r = and %newcast, trunc(C1) & C2
+
+; @@deferring 1114,1210. FoldOpIntoSelect
+; @@deferring 1114,1213. FoldOpIntoPhi
+
+Name: AndOrXor:1220  ~A & ~B -> ~(A | B)
+	; HasOneUse(Op0) && HasOneUse(Op1)
+
+%op0 = xor %notOp0, -1
+%op1 = xor %notOp1, -1
+%r = and %op0, %op1
+  =>
+%or = or %notOp0, %notOp1
+%r = xor %or, -1
+
+
+Name: AndOrXor:1231 (A|B) & ~(A&B) => A^B
+	; commute %op0 and %notOp1
+
+%op0 = or %A, %B
+%notOp1 = and %A, %B
+%op1 = xor %notOp1, -1
+%r = and %op0, %op1
+  =>
+%r = xor %A, %B
+
+
+Name: AndOrXor:1237 ~(A&B) & (A|B) => A^B
+	; commute %notOp0 and %op1
+
+%notOp0 = and %A, %B
+%op0 = xor %notOp0, -1
+%op1 = or %A, %B
+%r = and %op0, %op1
+  =>
+%r = xor %A, %B
+
+
+Name: AndOrXor:1243 A & (A^B) -> A & ~B
+	; HasOneUse(%op0)
+	; commute %r, %op1
+	; !constant(%A) ; avoid infinite loop when A == -1
+
+%op0 = xor %A, %B
+%r = and %op0, %A
+  =>
+%notB = xor %B, -1
+%r = and %A, %notB
+
+
+Name: AndOrXor:1270 (~A|B)&A -> A&B
+	; commute %op0
+
+%nA = xor %A, -1
+%op0 = or %nA, %B
+%r = and %op0, %A
+  =>
+%r = and %A, %B
+
+
+Name: AndOrXor:1273 A&(~A|B) -> A&B
+	; commute %op0
+	; see AndOrXor:1270
+
+%nA = xor %A, -1
+%op1 = or %nA, %B
+%r = and %A, %op1
+  =>
+%r = and %A, %B
+
+
+; @@deferring 1278. FoldAndOfICmps
+; @@deferring 1284. FoldAnsOfFCmps
+
+
+Name: AndOrXor:1290
+	; ShouldOptimizeCast
+%op0 = sext %x
+%op1 = sext %y
+%r = and %op0, %op1
+  =>
+%0 = and %x, %y
+%r = sext %0
+
+
+Name: AndOrXor:1290
+	; ShouldOptimizeCast
+%op0 = zext %x
+%op1 = zext %y
+%r = and %op0, %op1
+  =>
+%0 = and %x, %y
+%r = zext %0
+
+
+Name: AndOrXor:1290
+	; ShouldOptimizeCast
+%op0 = trunc %x
+%op1 = trunc %y
+%r = and %op0, %op1
+  =>
+%0 = and %x, %y
+%r = trunc %0
+
+; @@deferring 1308. FoldAndOfICmps
+; @@deferring 1315. FoldAndOfFCmps
+
+
+Name: AndOrXor:1323
+	; HasOneUse(%op0) && HasOneUse(%op1)
+	; generic over shifts (flags?)
+	; Slow
+
+%op0 = shl %x, %z
+%op1 = shl %y, %z
+%r = and %op0, %op1
+  =>
+%0 = and %x, %y
+%r = shl %0, %z
+
+
+Name: AndOrXor:1347
+	; commute %r
+
+%op0 = sext i1 %a
+%r = and %op0, %b
+  =>
+%r = select %a, %b, 0
+
+
+Name: AndOrXor:1354
+	; commute %r
+
+%nop0 = sext i1 %a
+%op0 = xor %nop0, -1
+%r = and %op0, %b
+  =>
+%r = select %a, 0, %b
+
+
+; visitOr
+
+; @@deferring 1917. SimplifyAssociativeOrCommutative
+; @@deferring 1920. SimplifyOrInst
+; @@deferring 1924. SimplifyUsingDistributiveLaws
+; @@deferring 1929. SimplifyDemandedInstructionBits
+
+Name: AndOrXor:1932,1936  (X & C1) | C2 --> (X | C2) & (C1|C2)
+Pre: C & C1 != 0 ; @@ why? it's just as correct without
+	; HasOneUse(%op0)
+	
+
+%op0 = and %x, C1
+%r = or %op0, C
+  =>
+%or = or %x, C
+%r = and %or, (C | C1)
+
+
+Name: AndOrXor:1932,1946  (X ^ C1) | C2 --> (X | C2) ^ (C1 & ~C2)
+	; HasOneUse(%op0)
+%op0 = xor %x, C1
+%r = or %op0, C
+  =>
+%or = or %x, C
+%r = xor %or, (C1 & ~C)
+
+
+; @@deferring 1932,1955. FoldOpIntoSelect
+; @@deferring 1932,1959. FoldOpIntoPhi
+
+; @@deferring 1969. BSwap
+
+Name: AndOrXor:1978   (X^C)|Y -> (X|Y)^C iff Y&C == 0
+Pre: MaskedValueIsZero(%op1, C1)
+	; HasOneUse(%op0)
+%op0 = xor %A, C1
+%r = or %op0, %op1
+  =>
+%or = or %A, %op1
+%r = xor %or, C1
+
+
+Name: AndOrXor:1987  Y|(X^C) -> (X|Y)^C iff Y&C == 0
+Pre: MaskedValueIsZero(%op0, C1)
+	; HasOneUse(%op1)
+%op1 = xor %A, C1
+%r = or %op0, %op1
+  =>
+%or = or %A, %op0
+%r = xor %or, C1
+
+
+
+Name: AndOrXor:1997,2002,2006,2007
+Pre: C1 == ~C2 && C2 & (C2+1) == 0 && MaskedValueIsZero(%V2, C2)
+	; commute %A, %r
+
+%A = add %B, %V2
+%op0 = and %A, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%A = add %B, %V2
+%r = %A
+
+
+Name: AndOrXor:1997,2002,2026,2029
+Pre: C1 & C2 == 0 && MaskedValueIsZero(%V2, ~C1)
+	; commute %A, %r
+
+%A = or %B, %V2
+%op0 = and %A, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%A = or %B, %V2
+%r = and %A, (C1 | C2)
+
+
+Name: AndOrXor:1997,2002,2026,2043
+Pre: C3 & ~C1 == 0 && C4 & ~C2 == 0
+
+%A = or %V1, C3
+%B = or %V1, C4
+%op0 = and %A, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%V2 = or %V1, (C3 | C4)
+%r = and %V2, (C1 | C2)
+
+
+; @@deferring 1997,2058. MatchSelectFromAndOr
+
+
+Name: AndOrXor:1997,2070
+
+%C = xor %D, -1
+%B = xor %A, -1
+%op0 = and %A, %C
+%op1 = and %B, %D
+%r = or %op0, %op1
+  =>
+%r = xor %A, %D
+
+
+Name: AndOrXor:1997,2074
+
+%A = xor %D, -1
+%B = xor %C, -1
+%op0 = and %A, %C
+%op1 = and %B, %D
+%r = or %op0, %op1
+  =>
+%r = xor %C, %D
+
+
+Name: AndOrXor:1997,2078
+
+%C = xor %B, -1
+%D = xor %A, -1
+%op0 = and %A, %C
+%op1 = and %B, %D
+%r = or %op0, %op1
+  =>
+%r = xor %A, %B
+
+
+Name: AndOrXor:1997,2082
+
+%A = xor %B, -1
+%D = xor %C, -1
+%op0 = and %A, %C
+%op1 = and %B, %D
+%r = or %op0, %op1
+  =>
+%r = xor %C, %B
+
+
+; @@deferring 1997,2087. FoldOrWithConstants
+; @@deferring 1997,2087. FoldOrWithConstants
+
+
+Name: AndOrXor:2101
+	; HasOneUse(%op0) && HasOneUse(%op1)
+	; generic on shifts
+	; Slow
+
+%op0 = shl %x, %z
+%op1 = shl %y, %z
+%r = or %op0, %op1
+  =>
+%0 = or %x, %y
+%r = shl %0, %z
+
+
+Name: AndOrXor:2114
+	; HasOneUse(%op0) && HasOneUse(%op1)
+
+%op0 = xor %nop0, -1
+%op1 = xor %nop1, -1
+%r = or %op0, %op1
+  =>
+%and = and %nop0, %nop1
+%r = xor %and, -1
+
+
+Name: AndOrXor:2124,2132,2133
+	; commute %r, %op1
+
+%op1 = xor %op0, %B
+%r = or %op0, %op1
+  =>
+%r = or %op0, %B
+
+
+Name: AndOrXor:2124,2132,2136
+	; commute %r
+
+%op0 = and %A, %B
+%op1 = xor %A, %B
+%r = or %op0, %op1
+  =>
+%r = or %A, %B
+
+
+Name: AndOrXor:2124,2132,2140
+	; HasOneUse(%op1)
+	; commute %r
+
+%A = xor %op0, -1
+%op1 = xor %A, %B
+%r = or %op0, %op1
+  =>
+%not = xor %B, -1
+%r = or %not, %op0
+
+
+Name: AndOrXor:2124,2132,2144
+	; HasOneUse(%op1)
+	; commute %r
+	; see above
+
+%B = xor %op0, -1
+%op1 = xor %A, %B
+%r = or %op0, %op1
+  =>
+%not = xor %A, -1
+%r = or %not, %op0
+
+
+
+Name: AndOrXor:2124,2152
+	; HasOneUse(%op1)
+	; commute %r, %A
+
+%A = or %op0, %x
+%op1 = xor %A, -1
+%r = or %op0, %op1
+  =>
+%not = xor %x, -1
+%r = or %not, %op0
+
+
+Name: AndOrXor:2124,2152
+	; HasOneUse(%op1)
+	; commute %r, %A
+	; see above
+
+%A = xor %op0, %x
+%op1 = xor %A, -1
+%r = or %op0, %op1
+  =>
+%not = xor %x, -1
+%r = or %not, %op0
+
+; @@deferring 2166. FoldOrOfICmps
+; @@deferring 2172. FOldOrOfFCmps
+
+
+Name: AndOrXor:2178,2186
+	; @@ generic over casts
+	; @@ %A not a cast || %B not a cast
+	; @@ ShouldOptimizeCast
+	
+%op0 = zext %A
+%op1 = zext %B
+%r = or %op0, %op1
+  =>
+%or = or %A, %B
+%r = zext %or
+
+
+; @@deferring 2178,2197. FoldOrOfICmps
+; @@deferring 2178,2204. FoldOrOfFCmps
+
+
+Name: AndOrXor:2214
+
+%op0 = sext i1 %A
+%r = or %op0, %op1
+  =>
+%r = select %A, -1, %op1
+
+
+Name: AndOrXor:2216
+
+%op1 = sext i1 %A
+%r = or %op0, %op1
+  =>
+%r = select %A, -1, %op0
+
+
+Name: AndOrXor:2224
+	; HasOneUse(%op0)
+
+%op0 = or %A, C1
+%r = or %op0, %op1
+  =>
+%i = or %A, %op1
+%r = or %i, C1
+
+
+Name: AndOrXor:2236
+	; HasOneUse(%op0) && HasOneUse(%op1)
+
+%op0 = select %x, %A, %B
+%op1 = select %x, %C, %D
+%r = or %op0, %op1
+  =>
+%t = or %A, %C
+%f = or %B, %D
+%r = select %x, %t, %f
+
+
+; visitXor
