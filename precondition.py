@@ -90,9 +90,9 @@ class PredOr(BoolPred):
 
 ################################
 class BinaryBoolPred(BoolPred):
-  EQ, NE, Last = range(3)
+  EQ, NE, SLT, SLE, SGT, SGE, Last = range(7)
 
-  opnames = ['==', '!=']
+  opnames = ['==', '!=', '<', '<=', '>', '>=']
 
   def __init__(self, op, v1, v2):
     assert 0 <= op < self.Last
@@ -123,6 +123,10 @@ class BinaryBoolPred(BoolPred):
     return {
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
+      self.SLT: lambda a,b: a < b,
+      self.SLE: lambda a,b: a <= b,
+      self.SGT: lambda a,b: a > b,
+      self.SGE: lambda a,b: a >= b,
     }[self.op](v1, v2)
 
 

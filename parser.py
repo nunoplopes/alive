@@ -373,7 +373,7 @@ def parsePreOr(toks):
 
 
 ParserElement.DEFAULT_WHITE_CHARS = " \n\t\r"
-pre_bool_expr = (cnst_expr + oneOf('== !=') + cnst_expr).\
+pre_bool_expr = (cnst_expr + oneOf('== != < <= > >=') + cnst_expr).\
                   setParseAction(pa(parseBoolPred))
 
 predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
