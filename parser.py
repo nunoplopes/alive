@@ -370,7 +370,8 @@ def parseBoolPred(toks):
     cmps.append(BinaryBoolPred(op, lhs, rhs))
     lhs = rhs
 
-  return reduce(PredAnd, cmps)
+  if len(cmps) > 1: return PredAnd(*cmps)
+  return cmps[0]
 
 def parsePreNot(toks):
   return PredNot(toks[0][0])

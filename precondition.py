@@ -20,6 +20,9 @@ class BoolPred:
       a = getattr(self, attr)
       if isinstance(a, (Type, Value, BoolPred)):
         a.fixupTypes(types)
+      if isinstance(a, tuple) and all(isinstance(v, (Type,Value,BoolPred)) for v in a):
+        for v in a:
+          v.fixupTypes(types)
 
 
 ################################
@@ -52,40 +55,34 @@ class PredNot(BoolPred):
 
 ################################
 class PredAnd(BoolPred):
-  def __init__(self, v1, v2):
-    assert isinstance(v1, BoolPred)
-    assert isinstance(v2, BoolPred)
-    self.v1 = v1
-    self.v2 = v2
+  def __init__(self, *args):
+    assert all(isinstance(v, BoolPred) for v in args)
+    self.args = args
 
   def __repr__(self):
-    return '(%s && %s)' % (self.v1, self.v2)
+   return '(' + ' && '.join(repr(v) for v in self.args) + ')'
 
   def getTypeConstraints(self):
-    return mk_and([self.v1.getTypeConstraints(),
-                   self.v2.getTypeConstraints()])
+    return mk_and(v.getTypeConstraints() for v in self.args)
 
   def toSMT(self, state):
-    return And(self.v1.toSMT(state), self.v2.toSMT(state))
+    return And([v.toSMT(state) for v in self.args])
 
 
 ################################
 class PredOr(BoolPred):
-  def __init__(self, v1, v2):
-    assert isinstance(v1, BoolPred)
-    assert isinstance(v2, BoolPred)
-    self.v1 = v1
-    self.v2 = v2
+  def __init__(self, *args):
+    assert all(isinstance(v, BoolPred) for v in args)
+    self.args = args
 
   def __repr__(self):
-    return '(%s || %s)' % (self.v1, self.v2)
+    return '(' + ' || '.join(repr(v) for v in self.args) + ')'
 
   def getTypeConstraints(self):
-    return mk_and([self.v1.getTypeConstraints(),
-                   self.v2.getTypeConstraints()])
+    return mk_and(v.getTypeConstraints() for v in self.args)
 
   def toSMT(self, state):
-    return Or(self.v1.toSMT(state), self.v2.toSMT(state))
+    return Or([v.toSMT(state) for v in self.args])
 
 
 ################################
