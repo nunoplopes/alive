@@ -359,8 +359,18 @@ def parseBoolPredicate(toks):
   return LLVMBoolPred(op, args)
 
 def parseBoolPred(toks):
-  op = BinaryBoolPred.getOpId(toks[1])
-  return BinaryBoolPred(op, parseCnstVar(toks[0]), parseCnstVar(toks[2]))
+  from itertools import izip
+  lhs = parseCnstVar(toks[0])
+  rest = iter(toks[1:])
+  cmps = []
+
+  for optok, rhstok in izip(rest,rest):
+    op = BinaryBoolPred.getOpId(optok)
+    rhs = parseCnstVar(rhstok)
+    cmps.append(BinaryBoolPred(op, lhs, rhs))
+    lhs = rhs
+
+  return reduce(PredAnd, cmps)
 
 def parsePreNot(toks):
   return PredNot(toks[0][0])
@@ -373,7 +383,7 @@ def parsePreOr(toks):
 
 
 ParserElement.DEFAULT_WHITE_CHARS = " \n\t\r"
-pre_bool_expr = (cnst_expr + oneOf('== != < <= > >=') + cnst_expr).\
+pre_bool_expr = (cnst_expr + OneOrMore(oneOf('== != < <= > >=') + cnst_expr)).\
                   setParseAction(pa(parseBoolPred))
 
 predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
