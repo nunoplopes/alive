@@ -377,10 +377,10 @@ def parsePreNot(toks):
   return PredNot(toks[0][0])
 
 def parsePreAnd(toks):
-  return parseRecursive(toks, lambda a,op,b: PredAnd(a, b))
+  return PredAnd(*toks[0])
 
 def parsePreOr(toks):
-  return parseRecursive(toks, lambda a,op,b: PredOr(a, b))
+  return PredOr(*toks[0])
 
 
 ParserElement.DEFAULT_WHITE_CHARS = " \n\t\r"
@@ -394,8 +394,8 @@ predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
 
 pre_expr = infixNotation(predicate,
                          [(Suppress('!'), 1, opAssoc.RIGHT, parsePreNot),
-                          (Literal('&&'), 2, opAssoc.LEFT, parsePreAnd),
-                          (Literal('||'), 2, opAssoc.LEFT, parsePreOr),
+                          (Suppress('&&'), 2, opAssoc.LEFT, parsePreAnd),
+                          (Suppress('||'), 2, opAssoc.LEFT, parsePreOr),
                          ])
 
 pre = pre_expr + Optional(comment) + StringEnd() |\
