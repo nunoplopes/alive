@@ -148,8 +148,9 @@ Name: AndOrXor:1273 A&(~A|B) -> A&B
 ; @@deferring 1284. FoldAnsOfFCmps
 
 
-Name: AndOrXor:1290
+Name: AndOrXor:1290 (sext)
 	; ShouldOptimizeCast
+	; type(%x) == type(%y)
 %op0 = sext %x
 %op1 = sext %y
 %r = and %op0, %op1
@@ -158,8 +159,9 @@ Name: AndOrXor:1290
 %r = sext %0
 
 
-Name: AndOrXor:1290
+Name: AndOrXor:1290 (zext)
 	; ShouldOptimizeCast
+	; type(%x) == type(%y)
 %op0 = zext %x
 %op1 = zext %y
 %r = and %op0, %op1
@@ -168,8 +170,9 @@ Name: AndOrXor:1290
 %r = zext %0
 
 
-Name: AndOrXor:1290
+Name: AndOrXor:1290 (trunc)
 	; ShouldOptimizeCast
+	; type(%x) == type(%y)
 %op0 = trunc %x
 %op1 = trunc %y
 %r = and %op0, %op1
@@ -458,6 +461,7 @@ Name: AndOrXor:2178,2186
 	; @@ generic over casts
 	; @@ %A not a cast || %B not a cast
 	; @@ ShouldOptimizeCast
+	; @@ type(%A) == type(%B)
 	
 %op0 = zext %A
 %op1 = zext %B
@@ -510,3 +514,42 @@ Name: AndOrXor:2236
 
 
 ; visitXor
+
+; @@deferring 2249. SimplifyAssociativeOrCommutative
+; @@deferring 2252. SimplifyXorInst
+; @@deferring 2256. SimplifyUsingDistributiveLaws
+; @@deferring 2261. SimplifyDemandedInstructionBits
+
+Name: AndOrXor:2265,2267,2273
+	; commute %op0
+
+%x = xor %nx, -1
+%op0 = and %x, %y
+%r = xor %op0, -1
+  =>
+%ny = xor %y, -1
+%r = or %nx, %ny
+
+
+Name: AndOrXor:2265,2267,2273
+	; commute %op0
+	; combined with previous
+
+%x = xor %nx, -1
+%op0 = or %x, %y
+%r = xor %op0, -1
+  =>
+%ny = xor %y, -1
+%r = and %nx, %ny
+
+; @@deferring 2265,2267,2284. isFreeToInvert
+
+Name: AndOrXor:2265,2295
+	
+%nx = xor %x, -1
+%op0 = ashr %nx, %y
+%r = xor %op0, -1
+  =>
+%r = ashr %x, %y
+
+
