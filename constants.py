@@ -208,7 +208,7 @@ class CnstFunction(Constant):
 
   def getTypeConstraints(self):
     c = {
-      self.width: lambda a: [],
+      self.width: lambda a: [self.type == a.type],
       self.trunc: lambda a: [self.type < a.type],
     }[self.op](*self.args)
 
