@@ -553,3 +553,174 @@ Name: AndOrXor:2265,2295
 %r = ashr %x, %y
 
 
+Name: AndOrXor:2304,2305
+	; HasOneUse(%op0)
+	; generic over comparison operators, with inverse
+
+%op0 = icmp slt %x, %y
+%r = xor %op0, -1
+  =>
+%r = icmp sge %x, %y
+
+
+
+Name: AndOrXor:2304,2313 (zext)
+	; HasOneUse(%op0) && HasOneUse(%cmp)
+	; generic over comparison operations, with inverse
+	; generic over sext/zext
+
+%cmp = icmp slt %x, %y
+%op0 = zext %cmp
+%r = xor %op0, 1
+  =>
+%ncmp = icmp sge %x, %y
+%r = zext %ncmp
+
+Name: AndOrXor:2304,2313 (sext)
+	; HasOneUse(%op0) && HasOneUse(%cmp)
+	; generic over comparison operations, with inverse
+	; generic over sext/zext
+
+%cmp = icmp slt %x, %y
+%op0 = sext %cmp
+%r = xor %op0, -1
+  =>
+%ncmp = icmp sge %x, %y
+%r = sext %ncmp
+
+
+
+Name: AndOrXor:2304,2327,2329
+
+%op0 = sub C, %x
+%r = xor %op0, -1
+  =>
+%r = add %x, -1-C  ; LLVM has -C-1, which prevents testing i1
+
+
+Name: AndOrXor:2304,2327,2337,2338,2340
+
+%op0 = add %x, C
+%r = xor %op0, -1
+  =>
+%r = sub -1-C, %x
+
+
+Name: AndOrXor:2304,2327,2337,2338,2346
+Pre: isSignBit(C1)
+
+%op0 = add %x, C
+%r = xor %op0, C1
+  =>
+%r = add %x, C + C1
+
+
+Name: AndOrXor:2304,2327,2337,2352
+Pre: MaskedValueIsZero(%x,C1)
+
+%op0 = or %x, C1
+%r = xor %op0, C2
+  =>
+%r = xor %x, C1^C2
+;%r = xor %x, (C1|C2) & ~(C1&C2) ; @@ the source uses this instead of xor
+
+
+Name: AndOrXor:2304,2327,2337,2366   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3)
+	; HasOneUse(%op0)
+
+%e1  = xor %x, C1
+%op0 = lshr %e1, C2
+%r   = xor %op0, C3
+  =>
+%0 = lshr %x, C2
+%r = xor %0, lshr(C1,C2)^C3
+
+
+; @@ not in instcombine; defined by analogy to above
+Name: AndOrXor:2304,2327,2337,2366 (ashr variant)
+	; HasOneUse(%op0)
+
+%e1  = xor %x, C1
+%op0 = ashr %e1, C2
+%r   = xor %op0, C3
+  =>
+%0 = ashr %x, C2
+%r = xor %0, (C1 >> C2)^C3
+
+
+; @@deferring 2304,2392. FoldOpIntoSelect
+; @@deferring 2304,2395. FoldOpIntoPhi
+
+; @@skipping 2401. Commutes args for later matches
+
+Name: AndOrXor:2426,2428  (B|A)^B -> A & ~B
+	; HasOneUse(%op0)
+	; @@commute %op0, %r
+
+%op0 = or %a, %op1
+%r = xor %op0, %op1
+  =>
+%nop1 = xor %op1, -1
+%r = and %a, %nop1
+
+Name: AndOrXor:2426,2434  (B&A)^A -> ~B & A
+	; HasOneUse(%op0)
+	; @@commute %op0, %r
+
+%op0 = and %a, %op1
+%r = xor %op0, %op1
+  =>
+%na = xor %a, -1
+%r = and %na, %op1
+
+Name: AndOrXor:2446 (shl)
+	; @@ generic over shifts?
+
+%op0 = shl %x, %z
+%op1 = shl %y, %z
+%r = xor %op0, %op1
+  =>
+%xy = xor %x, %y
+%r = shl %xy, %z
+
+Name: AndOrXor:2446 (ashr)
+
+%op0 = ashr %x, %z
+%op1 = ashr %y, %z
+%r = xor %op0, %op1
+  =>
+%xy = xor %x, %y
+%r = ashr %xy, %z
+
+Name: AndOrXor:2446 (lshr)
+
+%op0 = lshr %x, %z
+%op1 = lshr %y, %z
+%r = xor %op0, %op1
+  =>
+%xy = xor %x, %y
+%r = lshr %xy, %z
+
+
+Name: AndOrXor:2457
+	; @@commute %op0, %op1
+
+%op0 = and %a, %b
+%op1 = or %a, %b
+%r = xor %op0, %op1
+  =>
+%r = xor %a, %b
+
+
+; @deferring 2473. PredicatesFoldable
+
+Name: AndOrXor:2492 (zext)
+	; ShouldOptimizeCast
+	; @@ generic over casts
+
+%op0 = zext %a
+%op1 = zext %b
+%r = xor %op0, %op1
+  =>
+%0 = xor %a, %b
+%r = zext %0
