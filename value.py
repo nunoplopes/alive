@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
+import copy, operator
 from common import *
 
 
@@ -134,6 +134,27 @@ class UnknownType(Type):
                   type == other.types[i])]
     return mk_or(c)
 
+  def _intcmp(self, revop, other):
+    c = []
+    if self.myType == self.Unknown:
+      self.myType = self.Int
+      c += [self.typevar == self.Int]
+
+    if self.myType != self.Int or not self.types.has_key(self.Int):
+      return BoolVal(False)
+
+    c += [revop(other, self.types[self.Int])]
+    return mk_and(c)
+
+  def __lt__(self, other):
+    return self._intcmp(operator.ge, other)
+
+  def __gt__(self, other):
+    return self._intcmp(operator.le, other)
+
+  def __ge__(self, other):
+    return self._intcmp(operator.lt, other)
+
   def ensureTypeDepth(self, depth):
     c = []
     for i in range(len(self.types)):
@@ -229,26 +250,24 @@ class IntType(Type):
       return other == self
     return BoolVal(False)
 
-  def __lt__(self, other):
+  def _cmp(self, op, other):
     if isinstance(other, IntType):
-      return self.bitsvar < other.bitsvar
+      return op(self.bitsvar, other.bitsvar)
     if isinstance(other, int):
-      return self.bitsvar < other
+      return op(self.bitsvar, other)
     assert False
+
+  def __lt__(self, other):
+    return self._cmp(operator.lt, other)
+
+  def __le__(self, other):
+    return self._cmp(operator.le, other)
 
   def __gt__(self, other):
-    if isinstance(other, IntType):
-      return self.bitsvar > other.bitsvar
-    if isinstance(other, int):
-      return self.bitsvar > other
-    assert False
+    return self._cmp(operator.gt, other)
 
   def __ge__(self, other):
-    if isinstance(other, IntType):
-      return self.bitsvar >= other.bitsvar
-    if isinstance(other, int):
-      return self.bitsvar >= other
-    assert False
+    return self._cmp(operator.ge, other)
 
   def ensureTypeDepth(self, depth):
     return BoolVal(depth == 0)

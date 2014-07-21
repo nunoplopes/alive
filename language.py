@@ -271,19 +271,8 @@ class ConversionOp(Instr):
   opids = {v:k for k, v in opnames.items()}
 
   def __init__(self, op, stype, v, type):
-    if self.enforceIntSrc(op):
-      assert isinstance(stype, IntType)
-    elif self.enforcePtrSrc(op):
-      assert isinstance(stype, PtrType)
-    else:
-      assert isinstance(stype, Type)
-
-    if self.enforceIntTgt(op):
-      assert isinstance(type, IntType)
-    elif self.enforcePtrTgt(op):
-      assert isinstance(type, PtrType)
-    else:
-      assert isinstance(type, Type)
+    assert isinstance(stype, Type)
+    assert isinstance(type, Type)
     assert isinstance(v, Value)
     assert 0 <= op < self.Last
     self.op = op
