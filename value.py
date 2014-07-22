@@ -102,6 +102,15 @@ class UnknownType(Type):
       return self.types[self.myType].getSize()
     return self._getSizeUnknown(0)
 
+  def getIntType(self, c):
+    if self.myType == self.Unknown and self.types.has_key(self.Int):
+      self.myType = self.Int
+      c += [self.typevar == self.Int]
+
+    if self.myType == self.Int:
+      return self.types[self.Int]
+    return None
+
   def getPointeeType(self):
     assert self.myType == self.Unknown or self.myType == self.Ptr
     self.myType = self.Ptr
@@ -134,26 +143,21 @@ class UnknownType(Type):
                   type == other.types[i])]
     return mk_or(c)
 
-  def _intcmp(self, revop, other):
+  def _intcmp(self, op, other):
     c = []
-    if self.myType == self.Unknown:
-      self.myType = self.Int
-      c += [self.typevar == self.Int]
-
-    if self.myType != self.Int or not self.types.has_key(self.Int):
+    op1 = self.getIntType(c)
+    if op1 is None:
       return BoolVal(False)
-
-    c += [revop(other, self.types[self.Int])]
-    return mk_and(c)
+    return mk_and(c + [op(op1, other)])
 
   def __lt__(self, other):
-    return self._intcmp(operator.ge, other)
+    return self._intcmp(operator.lt, other)
 
   def __gt__(self, other):
-    return self._intcmp(operator.le, other)
+    return self._intcmp(operator.gt, other)
 
   def __ge__(self, other):
-    return self._intcmp(operator.lt, other)
+    return self._intcmp(operator.ge, other)
 
   def ensureTypeDepth(self, depth):
     c = []
@@ -255,13 +259,14 @@ class IntType(Type):
       return op(self.bitsvar, other.bitsvar)
     if isinstance(other, int):
       return op(self.bitsvar, other)
+    if isinstance(other, UnknownType):
+      c = []
+      op2 = other.getIntType(c)
+      return mk_and(c + [op(self.bitsvar, op2.bitsvar)])
     assert False
 
   def __lt__(self, other):
     return self._cmp(operator.lt, other)
-
-  def __le__(self, other):
-    return self._cmp(operator.le, other)
 
   def __gt__(self, other):
     return self._cmp(operator.gt, other)
