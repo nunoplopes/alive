@@ -42,7 +42,7 @@ class ALIVeTest(FileBasedTest):
 
   def execute(self, test, litConfig):
     test = test.getSourcePath()
-    cmd = ['python', 'main.py']
+    cmd = ['python', 'alive.py']
     input = readFile(test)
     out, err, exitCode = executeCommand(cmd, input)
 
