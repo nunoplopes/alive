@@ -1,0 +1,4 @@
+%1 = shl %x, C 
+%2 = lshr %1, C 
+  => 
+%2 = and %x, (1<<(width(C)-C))-1
