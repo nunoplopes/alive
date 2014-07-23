@@ -194,7 +194,8 @@ class LLVMBoolPred(BoolPred):
     isSignBit: lambda a: [a.type.typevar == Type.Int],
     NSWAdd:    lambda a,b: [a.type.typevar == Type.Int,
                             b.type.typevar == Type.Int],
-    maskZero:  lambda a,b: [],
+    maskZero:  lambda a,b: [a.type.typevar == Type.Int,
+                            b.type.typevar == Type.Int],
     isPower2:  lambda a: [a.type.typevar == Type.Int],
   }
 
@@ -213,5 +214,5 @@ class LLVMBoolPred(BoolPred):
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
       self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
       self.maskZero:  lambda a,b: a & b == 0,
-      self.isPower2:  lambda a: a & (a-1) == 0,
+      self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
     }[self.op](*args)
