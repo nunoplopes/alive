@@ -1,5 +1,5 @@
 Pre: ((C != 1) && !isSignBit(C))  
-%a = sdiv %X, C  
+%a = sdiv i11 %X, C
 %r = sub 0, %a  
   => 
 %r = sdiv %X, -C
