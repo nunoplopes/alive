@@ -1,3 +1,4 @@
+; ERROR: Domain of definedness of Target is smaller than Source
 %a = sdiv %X, C  
 %r = sub 0, %a  
   => 
