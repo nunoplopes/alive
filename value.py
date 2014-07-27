@@ -16,6 +16,14 @@ import copy, operator
 from common import *
 
 
+def allTyEqual(vars, Ty):
+  c = [vars[0].type.typevar == Ty]
+  for i in range(1, len(vars)):
+    c += [vars[0].type == vars[i].type]
+  return c
+
+
+
 class Type:
   Int, Ptr, Array, Unknown = range(4)
 

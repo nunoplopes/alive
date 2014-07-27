@@ -129,21 +129,21 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  isSignBit, NSWAdd, maskZero, isPower2, Last = range(5)
+  isPower2, isSignBit, maskZero, NSWAdd, Last = range(5)
 
   opnames = {
-    isSignBit: 'isSignBit',
-    NSWAdd:    'WillNotOverflowSignedAdd',
-    maskZero:  'MaskedValueIsZero',
     isPower2:  'isPowerOf2',
+    isSignBit: 'isSignBit',
+    maskZero:  'MaskedValueIsZero',
+    NSWAdd:    'WillNotOverflowSignedAdd',
   }
   opids = {v:k for k, v in opnames.items()}
 
   num_args = {
-    isSignBit: 1,
-    NSWAdd:    2,
-    maskZero:  2,
     isPower2:  1,
+    isSignBit: 1,
+    maskZero:  2,
+    NSWAdd:    2,
   }
 
   def __init__(self, op, args):
@@ -171,15 +171,15 @@ class LLVMBoolPred(BoolPred):
       raise ParseError('Unknown boolean predicate')
 
   arg_types = {
-    isSignBit: 'const',
-    NSWAdd:    'input',
-    maskZero:  'input',  # FIXME: first is input, second is const
-    isPower2:  'const',
+    isPower2:  ['const'],
+    isSignBit: ['const'],
+    maskZero:  ['input', 'const'],
+    NSWAdd:    ['input', 'input'],
   }
 
   @staticmethod
   def argAccepts(op, arg, val):
-    kind = LLVMBoolPred.arg_types[op]
+    kind = LLVMBoolPred.arg_types[op][arg-1]
     if kind == 'input':
       return (isinstance(val, (Input, Constant)), 'constant or input var')
     if kind == 'const':
@@ -191,28 +191,22 @@ class LLVMBoolPred(BoolPred):
     assert False
 
   argConstraints = {
-    isSignBit: lambda a: [a.type.typevar == Type.Int],
-    NSWAdd:    lambda a,b: [a.type.typevar == Type.Int,
-                            b.type.typevar == Type.Int],
-    maskZero:  lambda a,b: [a.type.typevar == Type.Int,
-                            b.type.typevar == Type.Int],
-    isPower2:  lambda a: [a.type.typevar == Type.Int],
+    isPower2:  lambda a: allTyEqual([a], Type.Int),
+    isSignBit: lambda a: allTyEqual([a], Type.Int),
+    maskZero:  lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWAdd:    lambda a,b: allTyEqual([a,b], Type.Int),
   }
 
   def getTypeConstraints(self):
     c = self.argConstraints[self.op](*self.args)
     c += [v.getTypeConstraints() for v in self.args]
-
-    # For now, assume all operands must have the same type
-    for i in range(1, len(self.args)):
-      c += [self.args[0].type == self.args[i].type]
     return mk_and(c)
 
   def toSMT(self, state):
     args = [v.toSMT([], state, []) for v in self.args]
     return {
-      self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
-      self.maskZero:  lambda a,b: a & b == 0,
       self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
+      self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
+      self.maskZero:  lambda a,b: a & b == 0,
+      self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
     }[self.op](*args)
