@@ -117,9 +117,9 @@ class CnstUnaryOp(Constant):
 
 ################################
 class CnstBinaryOp(Constant):
-  And, Or, Add, Sub, Mul, Div, Rem, Shr, Shl, Last = range(10)
+  And, Or, Xor, Add, Sub, Mul, Div, Rem, Shr, Shl, Last = range(11)
 
-  opnames = ['&', '|', '+', '-', '*', '/', '%', '>>', '<<']
+  opnames = ['&', '|', '^', '+', '-', '*', '/', '%', '>>', '<<']
 
   def __init__(self, op, v1, v2):
     assert 0 <= op < self.Last
@@ -154,6 +154,7 @@ class CnstBinaryOp(Constant):
     return {
       self.And: lambda a,b: a & b,
       self.Or:  lambda a,b: a | b,
+      self.Xor: lambda a,b: a ^ b,
       self.Add: lambda a,b: a + b,
       self.Sub: lambda a,b: a - b,
       self.Mul: lambda a,b: a * b,

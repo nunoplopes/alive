@@ -251,6 +251,7 @@ cnst_expr = infixNotation(cnst_expr_atoms,
                            (oneOf('+ -'), 2, opAssoc.LEFT, parseBinaryPred),
                            (oneOf('<< >>'), 2, opAssoc.LEFT, parseBinaryPred),
                            (Literal('&'), 2, opAssoc.LEFT, parseBinaryPred),
+                           (Literal('^'), 2, opAssoc.LEFT, parseBinaryPred),
                            (Literal('|'), 2, opAssoc.LEFT, parseBinaryPred),
                           ])
 
