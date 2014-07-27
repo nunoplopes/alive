@@ -1,0 +1,11 @@
+; ERROR: Mismatch in values
+Pre: isPowerOf2(C1 ^ C2)
+%x = add %A, C1
+%i = icmp ult %x, C3
+%y = add %A, C2
+%j = icmp ult %y, C3
+%r = or %i, %j
+  =>
+%and = and %A, ~(C1^C2)
+%lhs = add %and, umax(C1,C2)
+%r = icmp ult %lhs, C3
