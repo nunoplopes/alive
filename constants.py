@@ -167,9 +167,10 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  trunc, umax, width, Last = range(4)
+  lshr, trunc, umax, width, Last = range(5)
 
   opnames = {
+    lshr:  'lshr',
     trunc: 'trunc',
     umax:  'umax',
     width: 'width',
@@ -177,6 +178,7 @@ class CnstFunction(Constant):
   opids = {v:k for k,v in opnames.items()}
 
   num_args = {
+    lshr:  2,
     trunc: 1,
     umax:  2,
     width: 1,
@@ -211,6 +213,7 @@ class CnstFunction(Constant):
 
   def getTypeConstraints(self):
     c = {
+      self.lshr:  lambda a,b: allTyEqual([a,b], Type.Int),
       self.trunc: lambda a: [self.type < a.type],
       self.umax:  lambda a,b: allTyEqual([a,b], Type.Int),
       self.width: lambda a: [],
@@ -222,6 +225,7 @@ class CnstFunction(Constant):
   def toSMT(self, defined, state, qvars):
     args = [v.toSMT(defined, state, qvars) for v in self.args]
     return {
+      self.lshr:  lambda a,b: LShR(a,b),
       self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
       self.umax:  lambda a,b: If(UGT(a,b), a, b),
       self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize()),
