@@ -253,14 +253,32 @@ def check_opt(opt):
 
 
 def main():
-  file = sys.stdin.read()
-  opts = parse_opt_file(file)
-  for opt in opts:
-    check_opt(opt)
+  parser = argparse.ArgumentParser()
+  parser.add_argument('-m', '--match', action='append', metavar='name',
+    help='run tests containing this text')
+  parser.add_argument('-V', '--verify', action='store_true', default=True,
+    help='check correctness of optimizations (default: True)')
+  parser.add_argument('--no-verify', action='store_false', dest='verify')
+  parser.add_argument('file', type=file, nargs='*', default=[sys.stdin],
+    help='optimization file (read from stdin if none given)',)
+
+  args = parser.parse_args()
+  for f in args.file:
+    opts = parse_opt_file(f.read())
+
+    for opt in opts:
+      if not args.match or any(pat in opt[0] for pat in args.match):
+        if args.verify:
+          check_opt(opt)
+        else:
+          print opt[0]
 
 
 if __name__ == "__main__":
   try:
     main()
+  except IOError, e:
+    print >> sys.stderr, 'ERROR:', e
+    exit(-1)
   except KeyboardInterrupt:
     print '\nCaught Ctrl-C. Exiting..'
