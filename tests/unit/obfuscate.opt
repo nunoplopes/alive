@@ -1,0 +1,32 @@
+; inspired by obfuscations found here:
+; http://tigress.cs.arizona.edu/
+
+Name: add1
+  %neg = xor %y, -1
+  %sub = sub %x, %neg
+  %add = sub %sub, 1
+=>
+  %add = add %x, %y
+
+Name: add2
+  %xor = xor %y, %x
+  %and = and %y, %x
+  %shl = shl %and, 1
+  %add = add %shl, %xor
+=>
+  %add = add %x, %y
+
+Name: add3
+  %or  = or  %y, %x
+  %and = and %y, %x
+  %add = add %or, %and
+=>
+  %add = add %x, %y
+
+Name: add4
+  %or  = or  %y, %x
+  %shl = shl %or, 1
+  %xor = xor %y, %x
+  %add = sub %shl, %xor
+=>
+  %add = add %x, %y
