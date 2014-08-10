@@ -415,6 +415,25 @@ class Value:
   def getUniqueName(self):
     return self.name
 
+  @staticmethod
+  def _mungeCName(name):
+    '''Translate an Alive variable name into a legal C equivalent.
+    
+    '.' and '_' become 'p_' and 'u_'. Temporaries starting with digits, 'C', or 'V'
+    gain a 'V' prefix.
+    '''
+    s = name.replace('_', 'u_').replace('.', 'p_')
+    
+    if s[0] == '%':
+      s = s[1:]
+      if s[0] in '0123456789CV':
+        s = 'V' + s
+
+    return s
+
+  def getCName(self):
+    return self._mungeCName(self.getName())
+
   def isConst(self):
     return False
 

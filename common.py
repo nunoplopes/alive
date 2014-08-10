@@ -100,6 +100,9 @@ def truncateOrPad(src, tgt):
 ##########################
 # Error handling
 
+class AliveError(Exception):
+	pass
+
 class ParseError():
   def __init__(self, msgs, token = None):
     if isinstance(msgs, list):

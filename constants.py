@@ -23,6 +23,9 @@ class Constant(Value):
 
   def getUniqueName(self):
     return self.getName() + '_' + self.id
+  
+  def getCName(self):
+    raise AliveError('Called getCName on constant {}'.format(self.getUniqueName()))
 
 
 ################################
