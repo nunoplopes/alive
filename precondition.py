@@ -129,11 +129,12 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  isPower2, isSignBit, maskZero, NSWAdd, Last = range(5)
+  isPower2, isSignBit, known, maskZero, NSWAdd, Last = range(6)
 
   opnames = {
     isPower2:  'isPowerOf2',
     isSignBit: 'isSignBit',
+    known:     'Known',
     maskZero:  'MaskedValueIsZero',
     NSWAdd:    'WillNotOverflowSignedAdd',
   }
@@ -142,6 +143,7 @@ class LLVMBoolPred(BoolPred):
   num_args = {
     isPower2:  1,
     isSignBit: 1,
+    known:     2,
     maskZero:  2,
     NSWAdd:    2,
   }
@@ -173,6 +175,7 @@ class LLVMBoolPred(BoolPred):
   arg_types = {
     isPower2:  ['const'],
     isSignBit: ['const'],
+    known:     ['any', 'const'],
     maskZero:  ['input', 'const'],
     NSWAdd:    ['input', 'input'],
   }
@@ -180,6 +183,8 @@ class LLVMBoolPred(BoolPred):
   @staticmethod
   def argAccepts(op, arg, val):
     kind = LLVMBoolPred.arg_types[op][arg-1]
+    if kind == 'any':
+      return (True, 'any value')
     if kind == 'input':
       return (isinstance(val, (Input, Constant)), 'constant or input var')
     if kind == 'const':
@@ -193,6 +198,7 @@ class LLVMBoolPred(BoolPred):
   argConstraints = {
     isPower2:  lambda a: allTyEqual([a], Type.Int),
     isSignBit: lambda a: allTyEqual([a], Type.Int),
+    known:     lambda a,b: allTyEqual([a,b], Type.Int),
     maskZero:  lambda a,b: allTyEqual([a,b], Type.Int),
     NSWAdd:    lambda a,b: allTyEqual([a,b], Type.Int),
   }
@@ -207,6 +213,7 @@ class LLVMBoolPred(BoolPred):
     return {
       self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
+      self.known:     lambda a,b: a == b,
       self.maskZero:  lambda a,b: a & b == 0,
       self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
     }[self.op](*args)
