@@ -242,7 +242,8 @@ pred_args = Forward()
 
 cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
                     setParseAction(pa(parseCnstFunction)) |\
-                  Regex(r"C\d*|(?:-\s*)?\d+|%[a-zA-Z0-9_.]+")
+                  Regex(r"C\d*|(?:-\s*)?\d+|%[a-zA-Z0-9_.]+") |\
+                  oneOf('false true undef null')
 cnst_expr_atoms = locatedExpr(cnst_expr_atoms)
 
 cnst_expr = infixNotation(cnst_expr_atoms,
@@ -279,9 +280,7 @@ opttype = Optional(type).setParseAction(pa(parseOptType))
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(pa(lambda toks : [toks]))
-operand = cnst_expr |\
-          (locatedExpr(Literal('false') | Literal('true') | Literal('undef') |\
-                       Literal('null')))
+operand = cnst_expr 
 
 typeoperand = (opttype + operand).setParseAction(pa(parseTypeOperand))
 intoperand  = (opttype + operand).setParseAction(pa(parseIntOperand))
