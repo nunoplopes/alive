@@ -254,6 +254,29 @@ class BinOp(Instr):
     return And(self.type == self.v1.type,
                self.type == self.v2.type,
                self.type.getTypeConstraints())
+  
+  def getPatternMatch(self, context, name = None):
+    if name == None: name = self.getCName()
+    
+    matcher = {
+      self.Add:  'm_Add',
+      self.Sub:  'm_Sub',
+      self.Mul:  'm_Mul',
+      self.UDiv: 'm_UDiv',
+      self.SDiv: 'm_SDiv',
+      self.URem: 'm_URem',
+      self.SRem: 'm_SRem',
+      self.Shl:  'm_Shl',
+      self.AShr: 'm_AShr',
+      self.LShr: 'm_LShr',
+      self.And:  'm_And',
+      self.Or:   'm_Or',
+      self.Xor:  'm_Xor',
+    }[self.op]
+    v1 = context.ref(self.v1)
+    v2 = context.ref(self.v2)
+    
+    return 'match({0}, {1}({2},{3}))'.format(name, matcher, v1, v2)
 
 
 ################################
@@ -348,6 +371,23 @@ class ConversionOp(Instr):
                self.stype.getTypeConstraints(),
                cnstr)
 
+  def getPatternMatch(self, context, name = None):
+    if name == None: name = self.getCName();
+    
+    if self.op == self.Int2Ptr:
+      raise AliveError('inttoptr not supported?')
+    
+    matcher = {
+      self.Trunc:   'm_Trunc',
+      self.ZExt:    'm_ZExt',
+      self.SExt:    'm_SExt',
+      self.Ptr2Int: 'm_PtrToInt',
+#       self.Int2Ptr: '   # no m_IntToPtr?
+      self.Bitcast: 'm_BitCast',
+    }[self.op]
+    
+    return 'match({0}, {1}({2}))'.format(name, matcher, context.ref(self.v))
+
 
 ################################
 class Icmp(Instr):
@@ -434,6 +474,37 @@ class Icmp(Instr):
                self.type.getTypeConstraints(),
                self.stype.getTypeConstraints())
 
+  def getPatternMatch(self, context, name = None):
+    if name == None: name = self.getCName()
+    
+    if self.op == Icmp.Var:
+      opname = 'P_' + self._mungeCName(self.opname)
+      extra = ''
+    else:
+      opname = 'P_' + name
+      optype = {
+        self.EQ:  'IcmpInst::ICMP_EQ',
+        self.NE:  'IcmpInst::ICMP_NE',
+        self.UGT: 'IcmpInst::ICMP_UGT',
+        self.UGE: 'IcmpInst::ICMP_UGE',
+        self.ULT: 'IcmpInst::ICMP_ULT',
+        self.ULE: 'IcmpInst::ICMP_ULE',
+        self.SGT: 'IcmpInst::ICMP_SGT',
+        self.SGE: 'IcmpInst::ICMP_SGE',
+        self.SLT: 'IcmpInst::ICMP_SLT',
+        self.SLE: 'IcmpInst::ICMP_SLE',        
+      }[self.op]
+      extra = ' && {0} == {1}'.format(opname, optype)
+    
+    context.addVar(opname, 'ICmpInstr::PredicateType')
+    return 'match({name}, m_ICmp({pred}, {l}, {r})){extra}'.format(
+      name = name,
+      pred = opname,
+      l = context.ref(self.v1),
+      r = context.ref(self.v2),
+      extra = extra
+    )
+      
 
 ################################
 class Select(Instr):
@@ -466,6 +537,15 @@ class Select(Instr):
                self.c.type == 1,
                self.type.getTypeConstraints())
 
+  def getPatternMatch(self, context, name = None):
+    if name == None: name = self.getCName()
+    
+    return 'match({0}, m_Select({1}, {2}, {3}))'.format(
+      name,
+      context.ref(self.c),
+      context.ref(self.v1),
+      context.ref(self.v2)
+    )
 
 ################################
 class Alloca(Instr):
