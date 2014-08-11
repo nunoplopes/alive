@@ -200,7 +200,7 @@ def check_typed_opt(pre, src, tgt, types):
 
 
 def check_opt(opt):
-  name, pre, src, tgt = opt
+  name, pre, src, tgt, used = opt
 
   print '----------------------------------------'
   print 'Optimization: ' + name
@@ -229,6 +229,12 @@ def check_opt(opt):
 
   sneg = SimpleSolver()
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
+
+  for v in tgt.iterkeys():
+    if v[0] == '%' and v not in used and v not in src:
+      print 'ERROR: Temporary register %s unused and does not overwrite any'\
+            ' Source register' % v
+      exit(-1)
 
   # now check for correctness
   proofs = 0

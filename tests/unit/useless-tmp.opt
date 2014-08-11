@@ -1,0 +1,7 @@
+; ERROR: Temporary register %cmp unused
+%cmp1 = icmp CC %V1, C
+%cmp2 = icmp CC %V2, C
+%and  = and %cmp1, %cmp2
+  =>
+%or  = or %V1, %V2
+%cmp = icmp CC %or, C

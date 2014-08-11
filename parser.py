@@ -54,7 +54,7 @@ def parseOptType(toks):
   return UnknownType()
 
 def parseOperand(v, type):
-  global identifiers
+  global identifiers, used_identifiers
 
   if isinstance(v, (ParseResults, list)):
     (loc, v, loc_end) = v
@@ -70,6 +70,7 @@ def parseOperand(v, type):
   # %var
   if v[0] == '%' or v[0] == 'C':
     if identifiers.has_key(v):
+      used_identifiers[v] = True
       return identifiers[v]
     if parsing_phase == Target:
       raise ParseError('Cannot declare new input variables or constants in '
@@ -184,6 +185,8 @@ def parseInstr(toks):
 # Constant expr language
 
 def parseCnstVar(v):
+  global used_identifiers
+
   if isinstance(v, Value):
     return v
 
@@ -199,6 +202,7 @@ def parseCnstVar(v):
     raise ParseError('Only constants allowed in expressions')
 
   if identifiers.has_key(id):
+    used_identifiers[id] = True
     return identifiers[id]
 
   if parsing_phase == Pre:
@@ -333,7 +337,8 @@ prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\
 
 
 def parse_llvm(txt):
-  global identifiers
+  global identifiers, used_identifiers
+  used_identifiers = {}
   if parsing_phase == Target:
     old_ids = identifiers
     identifiers = collections.OrderedDict()
@@ -343,7 +348,7 @@ def parse_llvm(txt):
   else:
     identifiers = collections.OrderedDict()
   prog.parseString(txt)
-  return identifiers
+  return identifiers, used_identifiers
 
 
 ##########################
@@ -443,16 +448,16 @@ def _parseOpt(s, loc, toks):
 
   parsing_phase = Source
   save_parse_str(src, src_line)
-  src = parse_llvm(src)
+  src, used = parse_llvm(src)
 
   parsing_phase = Target
   save_parse_str(tgt, tgt_line)
-  tgt = parse_llvm(tgt)
+  tgt, used = parse_llvm(tgt)
 
   parsing_phase = Pre
   save_parse_str(pre, pre_line)
   pre = parse_pre(pre, src)
-  return name, pre, src, tgt
+  return name, pre, src, tgt, used
 
 def parseOpt(s, loc, toks):
   try:
