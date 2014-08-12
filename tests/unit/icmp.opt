@@ -1,3 +1,4 @@
+Name: icmp + zext
 %1 = icmp %n, %a
 %2 = zext %1 to i32
 %3 = icmp %n, %b
@@ -9,3 +10,16 @@
 %3 = icmp %n, %b
 %. = or %1, %3
 %6 = icmp eq %., 0
+
+
+Name: 2x icmp
+Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C1 ^ -C2) && (-C1 ^ -C2) == ((C3-C1) ^ (C3-C2)) && C3 u< abs(C1-C2)
+%x = add i37 %A, C1
+%i = icmp ult %x, C3
+%y = add %A, C2
+%j = icmp ult %y, C3
+%r = or %i, %j
+  =>
+%and = and %A, ~(C1^C2)
+%lhs = add %and, umax(C1,C2)
+%r = icmp ult %lhs, C3
