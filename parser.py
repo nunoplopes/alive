@@ -393,8 +393,9 @@ pre_bool_expr = (cnst_expr +\
                     cnst_expr)).\
                   setParseAction(pa(parseBoolPred))
 
-predicate = (identifier + Suppress('(') + pred_args + Suppress(')')).\
-              setParseAction(pa(parseBoolPredicate)) |\
+predicate = (identifier + Suppress('(') + pred_args + Suppress(')') +\
+              FollowedBy(oneOf('&& || )') | LineEnd())).\
+                setParseAction(pa(parseBoolPredicate)) |\
             Literal('true').setParseAction(pa(lambda toks: TruePred())) |\
             pre_bool_expr
 
