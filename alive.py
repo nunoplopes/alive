@@ -215,7 +215,7 @@ def check_opt(opt):
   type_tgt = getTypeConstraints(tgt)
   type_pre = pre.getTypeConstraints()
 
-  s = SimpleSolver()
+  s = SolverFor('QF_LIA')
   s.add(type_pre)
   s.add(type_src)
   if s.check() != sat:
@@ -227,7 +227,7 @@ def check_opt(opt):
     print 'Source and Target programs do not type check'
     exit(-1)
 
-  sneg = SimpleSolver()
+  sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
   for v in tgt.iterkeys():
