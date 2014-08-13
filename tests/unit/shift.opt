@@ -36,7 +36,6 @@ Name: big shift
 %tmp52 = and %tmp51, -128
 %tmp53 = lshr %tmp52, 7
 %tmp54 = mul %tmp53, 16
-%tmp55 = xor %tmp54, %tmp51
   =>
 %tmp4 = trunc %a0 to i8
 %tmp5 = shl %tmp4, 5
