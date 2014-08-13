@@ -1,0 +1,5 @@
+; ERROR: Temporary register %x unused
+%x = add 3, 4
+%y = add 0, 3
+  =>
+%y = add 1, 2

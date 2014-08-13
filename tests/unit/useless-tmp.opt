@@ -4,4 +4,5 @@
 %and  = and %cmp1, %cmp2
   =>
 %or  = or %V1, %V2
-%cmp = icmp CC %or, C
+%and = icmp CC %or, C
+%cmp = and %and, %or

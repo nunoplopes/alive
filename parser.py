@@ -450,16 +450,16 @@ def _parseOpt(s, loc, toks):
 
   parsing_phase = Source
   save_parse_str(src, src_line)
-  src, used = parse_llvm(src)
+  src, used_src = parse_llvm(src)
 
   parsing_phase = Target
   save_parse_str(tgt, tgt_line)
-  tgt, used = parse_llvm(tgt)
+  tgt, used_tgt = parse_llvm(tgt)
 
   parsing_phase = Pre
   save_parse_str(pre, pre_line)
   pre = parse_pre(pre, src)
-  return name, pre, src, tgt, used
+  return name, pre, src, tgt, used_src, used_tgt
 
 def parseOpt(s, loc, toks):
   try:

@@ -200,7 +200,7 @@ def check_typed_opt(pre, src, tgt, types):
 
 
 def check_opt(opt):
-  name, pre, src, tgt, used = opt
+  name, pre, src, tgt, used_src, used_tgt = opt
 
   print '----------------------------------------'
   print 'Optimization: ' + name
@@ -230,8 +230,13 @@ def check_opt(opt):
   sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
+  for v in src.iterkeys():
+    if v[0] == '%' and v not in used_src and v not in used_tgt and v not in tgt:
+      print 'ERROR: Temporary register %s unused and not overwritten' % v
+      exit(-1)
+
   for v in tgt.iterkeys():
-    if v[0] == '%' and v not in used and v not in src:
+    if v[0] == '%' and v not in used_tgt and v not in src:
       print 'ERROR: Temporary register %s unused and does not overwrite any'\
             ' Source register' % v
       exit(-1)
