@@ -1,0 +1,41 @@
+; N.B. these are slow
+; TODO: these should also work for sub
+
+Name: add-nuw-nsw-zext
+Pre: (width(%r) > (width(%a)+1)) && (width(%r) > (width(%b)+1)) 
+%1 = zext %a 
+%2 = zext %b 
+%r = add %1, %2
+  =>
+%1 = zext %a 
+%2 = zext %b 
+%r = add nsw nuw %1, %2
+
+Name: add-nuw-nsw-sext
+Pre: (width(%r) > (width(%a)+1)) && (width(%r) > (width(%b)+1)) 
+%1 = sext %a 
+%2 = sext %b 
+%r = add %1, %2
+  =>
+%1 = sext %a 
+%2 = sext %b 
+%r = add nsw nuw %1, %2
+
+Name: add-nuw-zext
+%1 = zext %a 
+%2 = zext %b 
+%r = add %1, %2
+  =>
+%1 = zext %a 
+%2 = zext %b 
+%r = add nuw %1, %2
+
+Name: add-nsw-sext
+%1 = sext %a 
+%2 = sext %b 
+%r = add %1, %2
+  =>
+%1 = sext %a 
+%2 = sext %b 
+%r = add nsw %1, %2
+
