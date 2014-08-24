@@ -14,6 +14,7 @@
 
 import copy, operator
 from common import *
+from codegen import CVariable, CFieldAccess
 
 
 def allTyEqual(vars, Ty):
@@ -426,8 +427,8 @@ class Value:
     
     if s[0] == '%':
       s = s[1:]
-      if s[0] in '0123456789CV':
-        s = 'V' + s
+      if s[0] in '0123456789C':
+        s = 'V_' + s
 
     return s
 
@@ -561,3 +562,12 @@ class Input(Value):
     mem = BitVec('mem_' + self.name, block_size * num_elems)
     state.addAlloca(ptr, mem, (block_size, num_elems, 1))
     return ptr
+
+  def toAPInt(self):
+    name = self.getName()
+    if name[0] != 'C':
+      raise AliveError('Input {0} used in an expression'.format(name))
+    
+    #return CVariable('{0}->getValue()'.format(self.getCName()))
+    return CFieldAccess(CVariable(self.getCName()), 'getValue', [], direct=False)
+      # FIXME: better syntax here

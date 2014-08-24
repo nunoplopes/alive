@@ -14,6 +14,7 @@
 
 import collections
 from constants import *
+from codegen import *
 
 
 def getAllocSize(type):
@@ -276,7 +277,8 @@ class BinOp(Instr):
     v1 = context.ref(self.v1)
     v2 = context.ref(self.v2)
     
-    return 'match({0}, {1}({2},{3}))'.format(name, matcher, v1, v2)
+    return CFunctionCall('match', CVariable(name), 
+              CFunctionCall(matcher, v1, v2))
 
 
 ################################
@@ -386,7 +388,9 @@ class ConversionOp(Instr):
       self.Bitcast: 'm_BitCast',
     }[self.op]
     
-    return 'match({0}, {1}({2}))'.format(name, matcher, context.ref(self.v))
+#     return 'match({0}, {1}({2}))'.format(name, matcher, context.ref(self.v))
+    return CFunctionCall('match', CVariable(name),
+              CFunctionCall(matcher, context.ref(self.v)))
 
 
 ################################
@@ -479,31 +483,45 @@ class Icmp(Instr):
     
     if self.op == Icmp.Var:
       opname = 'P_' + self._mungeCName(self.opname)
-      extra = ''
     else:
       opname = 'P_' + name
-      optype = {
-        self.EQ:  'IcmpInst::ICMP_EQ',
-        self.NE:  'IcmpInst::ICMP_NE',
-        self.UGT: 'IcmpInst::ICMP_UGT',
-        self.UGE: 'IcmpInst::ICMP_UGE',
-        self.ULT: 'IcmpInst::ICMP_ULT',
-        self.ULE: 'IcmpInst::ICMP_ULE',
-        self.SGT: 'IcmpInst::ICMP_SGT',
-        self.SGE: 'IcmpInst::ICMP_SGE',
-        self.SLT: 'IcmpInst::ICMP_SLT',
-        self.SLE: 'IcmpInst::ICMP_SLE',        
-      }[self.op]
-      extra = ' && {0} == {1}'.format(opname, optype)
-    
+      
     context.addVar(opname, 'ICmpInstr::PredicateType')
-    return 'match({name}, m_ICmp({pred}, {l}, {r})){extra}'.format(
-      name = name,
-      pred = opname,
-      l = context.ref(self.v1),
-      r = context.ref(self.v2),
-      extra = extra
-    )
+
+    mICmp = CFunctionCall('match', CVariable(name),
+              CFunctionCall('m_ICmp', CVariable(opname),
+                context.ref(self.v1),
+                context.ref(self.v2)))
+
+    if self.op == Icmp.Var:
+      return mICmp
+
+    optype = {
+      self.EQ:  'IcmpInst::ICMP_EQ',
+      self.NE:  'IcmpInst::ICMP_NE',
+      self.UGT: 'IcmpInst::ICMP_UGT',
+      self.UGE: 'IcmpInst::ICMP_UGE',
+      self.ULT: 'IcmpInst::ICMP_ULT',
+      self.ULE: 'IcmpInst::ICMP_ULE',
+      self.SGT: 'IcmpInst::ICMP_SGT',
+      self.SGE: 'IcmpInst::ICMP_SGE',
+      self.SLT: 'IcmpInst::ICMP_SLT',
+      self.SLE: 'IcmpInst::ICMP_SLE',        
+    }[self.op]
+
+    return CBinExpr('&&', mICmp, CBinExpr('==', CVariable(opname), CVariable(optype)))
+
+#     extra = ' && {0} == {1}'.format(opname, optype)
+#     
+#     
+#     if self.op
+#     return 'match({name}, m_ICmp({pred}, {l}, {r})){extra}'.format(
+#       name = name,
+#       pred = opname,
+#       l = context.ref(self.v1),
+#       r = context.ref(self.v2),
+#       extra = extra
+#     )
       
 
 ################################
@@ -539,13 +557,18 @@ class Select(Instr):
 
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName()
-    
-    return 'match({0}, m_Select({1}, {2}, {3}))'.format(
-      name,
-      context.ref(self.c),
-      context.ref(self.v1),
-      context.ref(self.v2)
-    )
+
+    return CFunctionCall('match', CVariable(name),
+              CFunctionCall('m_Select', 
+                  context.ref(self.c),
+                  context.ref(self.v1),
+                  context.ref(self.v2)))
+#     return 'match({0}, m_Select({1}, {2}, {3}))'.format(
+#       name,
+#       context.ref(self.c),
+#       context.ref(self.v1),
+#       context.ref(self.v2)
+#     )
 
 ################################
 class Alloca(Instr):

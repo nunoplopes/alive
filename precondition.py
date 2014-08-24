@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from language import *
+from codegen import *
+from itertools import chain
 
 class BoolPred:
   def fixupTypes(self, types):
@@ -24,6 +26,9 @@ class BoolPred:
         for v in a:
           v.fixupTypes(types)
 
+  # TODO: remove this
+  def getPatternMatch(self):
+    return CTest('<Pred:{0}>'.format(self))
 
 ################################
 class TruePred(BoolPred):
@@ -36,6 +41,8 @@ class TruePred(BoolPred):
   def toSMT(self, state):
     return BoolVal(True)
 
+  def getPatternMatch(self):
+    return CVariable('TRUE') # FIXME
 
 ################################
 class PredNot(BoolPred):
@@ -51,6 +58,9 @@ class PredNot(BoolPred):
 
   def toSMT(self, state):
     return Not(self.v.toSMT(state))
+    
+  def getPatternMatch(self):
+    return CUnaryExpr('!', self.v.getPatternMatch())
 
 
 ################################
@@ -67,6 +77,9 @@ class PredAnd(BoolPred):
 
   def toSMT(self, state):
     return And([v.toSMT(state) for v in self.args])
+  
+  def getPatternMatch(self):
+    return CBinExpr.reduce('&&', (arg.getPatternMatch() for arg in self.args))
 
 
 ################################
@@ -83,6 +96,9 @@ class PredOr(BoolPred):
 
   def toSMT(self, state):
     return Or([v.toSMT(state) for v in self.args])
+  
+  def getPatternMatch(self):
+    return CBinExpr.reduce('||', (arg.getPatternMatch() for arg in self.args))
 
 
 ################################
@@ -129,6 +145,11 @@ class BinaryBoolPred(BoolPred):
       self.UGT: lambda a,b: UGT(a, b),
       self.UGE: lambda a,b: UGE(a, b),
     }[self.op](v1, v2)
+
+  def getPatternMatch(self):
+    # FIXME: this will need correction once we add unsigned comparisons
+    # FIXME: currently does comparisons of APInts. Is this correct?
+    return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPInt())
 
 
 ################################
@@ -213,11 +234,30 @@ class LLVMBoolPred(BoolPred):
     return mk_and(c)
 
   def toSMT(self, state):
-    args = [v.toSMT([], state, []) for v in self.args]
+    defargs = []
+    args = [v.toSMT(defargs, state, []) for v in self.args]
     return {
       self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.known:     lambda a,b: a == b,
+      self.known:     lambda a,b: And(mk_and(defargs), a == b),
       self.maskZero:  lambda a,b: a & b == 0,
       self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
     }[self.op](*args)
+
+  def getPatternMatch(self):
+    if self.op == self.known:
+      raise AliveError('Cannot use Known for code generation')
+    
+    args = []
+    for i in range(self.num_args[self.op]):
+      if self.arg_types[self.op][i] == 'const':
+        args.append(self.args[i].toAPInt())
+      elif self.arg_types[self.op][i] == 'input':
+        args.append(CVariable(self.args[i].getCName()))
+      else:
+        assert False
+    
+    if self.op in {self.isPower2, self.isSignBit}:
+      return CFieldAccess(args[0], self.opnames[self.op], [])
+    
+    return CFunctionCall(self.opnames[self.op], *args)

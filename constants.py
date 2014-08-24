@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from value import *
+from codegen import *
 
 
 class Constant(Value):
@@ -26,6 +27,9 @@ class Constant(Value):
   
   def getCName(self):
     raise AliveError('Called getCName on constant {}'.format(self.getUniqueName()))
+
+  def toAPInt(self):
+    return CTest('<APInt>')
 
 
 ################################
@@ -57,6 +61,11 @@ class ConstantVal(Constant):
 
   def toSMT(self, defined, state, qvars):
     return BitVecVal(self.val, self.type.getSize())
+    
+  def toAPInt(self):
+    # This assumes we can use integer literals whenever an APInt is needed
+    # FIXME: ensure value is integral
+    return CVariable(str(self.val))
 
 
 ################################
@@ -117,6 +126,8 @@ class CnstUnaryOp(Constant):
       self.Neg: lambda a: -a,
     }[self.op](self.v.toSMT(defined, state, qvars))
 
+  def toAPInt(self):
+    return CUnaryExpr(self.opnames[self.op], self.v.toAPInt())
 
 ################################
 class CnstBinaryOp(Constant):
@@ -167,6 +178,11 @@ class CnstBinaryOp(Constant):
       self.Shl: lambda a,b: a << b,
     }[self.op](v1, v2)
 
+  def toAPInt(self):
+    if self.op == self.Shr:
+      return CFieldAccess(self.v1.toAPInt(), 'ashr', [self.v2.toAPInt()])
+
+    return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPInt())
 
 ################################
 class CnstFunction(Constant):
@@ -237,3 +253,18 @@ class CnstFunction(Constant):
       self.umax:  lambda a,b: If(UGT(a,b), a, b),
       self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize()),
     }[self.op](*args)
+
+  def toAPInt(self):
+    if self.op == self.abs:
+      pass
+
+    if self.op == self.lshr:
+      return CFieldAccess(self.args[0].toAPInt(), 'lshr', [self.args[1].toAPInt()])
+    
+    if self.op == self.umax:
+      return CFunctionCall('APIntOps::umax', *(arg.toAPInt() for arg in self.args))
+    
+    if self.op == self.width:
+      return CTest('<width' + str(self.args[0]) + '>')
+    
+    raise AliveError(self.opnames[self.op] + ' not implemented')
