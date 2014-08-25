@@ -255,31 +255,44 @@ class BinOp(Instr):
     return And(self.type == self.v1.type,
                self.type == self.v2.type,
                self.type.getTypeConstraints())
-  
+
+  matcher = {
+    Add:  'm_Add',
+    Sub:  'm_Sub',
+    Mul:  'm_Mul',
+    UDiv: 'm_UDiv',
+    SDiv: 'm_SDiv',
+    URem: 'm_URem',
+    SRem: 'm_SRem',
+    Shl:  'm_Shl',
+    AShr: 'm_AShr',
+    LShr: 'm_LShr',
+    And:  'm_And',
+    Or:   'm_Or',
+    Xor:  'm_Xor',
+  }
+
+  flag_method = {
+    'nsw':   'hasNoSignedWrap',
+    'nuw':   'hasNoUnsignedWrap',
+    'exact': 'isExact',
+  }
+
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName()
-    
-    matcher = {
-      self.Add:  'm_Add',
-      self.Sub:  'm_Sub',
-      self.Mul:  'm_Mul',
-      self.UDiv: 'm_UDiv',
-      self.SDiv: 'm_SDiv',
-      self.URem: 'm_URem',
-      self.SRem: 'm_SRem',
-      self.Shl:  'm_Shl',
-      self.AShr: 'm_AShr',
-      self.LShr: 'm_LShr',
-      self.And:  'm_And',
-      self.Or:   'm_Or',
-      self.Xor:  'm_Xor',
-    }[self.op]
+
+    matcher = self.matcher[self.op]
     v1 = context.ref(self.v1)
     v2 = context.ref(self.v2)
-    
-    return CFunctionCall('match', CVariable(name), 
+
+    match = CFunctionCall('match', CVariable(name),
               CFunctionCall(matcher, v1, v2))
 
+    for flag in self.flags:
+      match = CBinExpr('&&', match,
+        CFieldAccess(CVariable(name), self.flag_method[flag], [], direct=False))
+
+    return match
 
 ################################
 class ConversionOp(Instr):
@@ -373,22 +386,22 @@ class ConversionOp(Instr):
                self.stype.getTypeConstraints(),
                cnstr)
 
+  matcher = {
+    Trunc:   'm_Trunc',
+    ZExt:    'm_ZExt',
+    SExt:    'm_SExt',
+    Ptr2Int: 'm_PtrToInt',
+    Bitcast: 'm_BitCast',
+  }
+
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName();
-    
+
     if self.op == self.Int2Ptr:
       raise AliveError('inttoptr not supported?')
-    
-    matcher = {
-      self.Trunc:   'm_Trunc',
-      self.ZExt:    'm_ZExt',
-      self.SExt:    'm_SExt',
-      self.Ptr2Int: 'm_PtrToInt',
-#       self.Int2Ptr: '   # no m_IntToPtr?
-      self.Bitcast: 'm_BitCast',
-    }[self.op]
-    
-#     return 'match({0}, {1}({2}))'.format(name, matcher, context.ref(self.v))
+
+    matcher = self.matcher[self.op]
+
     return CFunctionCall('match', CVariable(name),
               CFunctionCall(matcher, context.ref(self.v)))
 

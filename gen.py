@@ -20,12 +20,11 @@ class GenContext(object):
     'Returns an expression matching the given value.'
     
     if isinstance(value, ConstantVal):
-      #return 'm_ConstantInt({})'.format(value.val) #TODO specialize m_Zero, m_Ones, etc?
+      #TODO specialize m_Zero, m_Ones, etc?
       return CFunctionCall('m_ConstantInt', CVariable(value.val))
     
     name = value.getCName()
     if name in self.seen:
-      #return 'm_Specific({})'.format(name)
       return CFunctionCall('m_Specific', CVariable(name))
       
     if not isinstance(value, (Input, Constant)):
@@ -34,11 +33,9 @@ class GenContext(object):
     self.seen.add(name)
     if name[0] == 'C':
       self.addPtr(name, 'ConstantInt')
-      #return 'm_ConstantInt({})'.format(name)
       return CFunctionCall('m_ConstantInt', CVariable(name))
     
     self.addPtr(name, 'Value')
-    #return 'm_Value({})'.format(name)
     return CFunctionCall('m_Value', CVariable(name))
 
     
