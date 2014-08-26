@@ -218,10 +218,10 @@ class CnstFunction(Constant):
 
   def getTypeConstraints(self):
     c = {
-      self.abs:   lambda a: allTyEqual([a], Type.Int),
-      self.lshr:  lambda a,b: allTyEqual([a,b], Type.Int),
+      self.abs:   lambda a: allTyEqual([a,self], Type.Int),
+      self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.trunc: lambda a: [self.type < a.type],
-      self.umax:  lambda a,b: allTyEqual([a,b], Type.Int),
+      self.umax:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.width: lambda a: [],
     }[self.op](*self.args)
 
