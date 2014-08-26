@@ -1,7 +1,0 @@
-Name: AddSub:1453
-
-%1 = sdiv %x, %c
-%r = sub 0, %1
-  => 
-%nc = sub 0, %c
-%r = sdiv %x, %nc

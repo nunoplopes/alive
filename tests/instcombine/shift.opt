@@ -1,0 +1,7 @@
+Name: Shift: 344
+
+%1 = mul %x, C1
+%r = shl %1, C2
+  =>
+%t = shl C1, C2
+%r = mul %x, %t

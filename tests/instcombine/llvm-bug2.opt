@@ -1,6 +1,0 @@
-Name: AddSub:1453
-
-%1 = sub 0, %b
-%r = sub %a, %1
-  => 
-%r = add nsw %a, %b
