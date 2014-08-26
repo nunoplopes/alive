@@ -1,8 +1,0 @@
-
-;Pre: width(%a) < C1 + C2 && C1 > 0 && C2 > 0 ; This causes a error
-
-Pre: 0+ width(%a) < C1 + C2 && C1 > 0 && C2 > 0 ; needs UGT
-%0 = shl %a, C1
-%1 = shl %0, C2
-=>
-%1 = 0
