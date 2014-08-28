@@ -31,6 +31,9 @@ class Constant(Value):
   def toAPInt(self):
     return CTest('<APInt>')
 
+  def toOperand(self):
+    return CFunctionCall('ConstantInt::get', CFieldAccess(CVariable('I'), 'getType', [], False), self.toAPInt())
+
 
 ################################
 class ConstantVal(Constant):

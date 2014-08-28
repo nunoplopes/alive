@@ -65,7 +65,7 @@ class CUnaryExpr(CExpression):
 		self.x = x
 	
 	def formatExpr(self, prec = 0):
-		return nest(2, self.op + self.x.formatExpr(0))
+		return nest(2, self.op + self.x.formatExpr(3))
 
 class CBinExpr(CExpression):
 	@staticmethod
@@ -124,6 +124,18 @@ class CIf(CStatement):
 			f = f + ' else {' + nest(4, iter_seq(line + s.format() for s in self.else_block)) + line + '}'
 		
 		return f
+
+class CDefinition(CStatement):
+	def __init__(self, ty, var, val, isPtr=False):
+		assert isinstance(val, CExpression)
+		self.ty = ty
+		self.var = var
+		self.val = val
+		self.isPtr = isPtr
+	
+	def format(self):
+		star = '*' if self.isPtr else ''
+		return group(nest(4, seq(self.ty.formatExpr(18), ' ', star, self.var.formatExpr(0), ' =', line, self.val.formatExpr(18), ';')))
 
 test = CIf(CBinExpr('&&', CTest('foo'), CBinExpr('&&', CTest('bar'), CTest('baz'))),
 	[CTest('stmt'), CTest('stmt')])

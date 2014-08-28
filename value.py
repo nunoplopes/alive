@@ -435,6 +435,9 @@ class Value:
   def getCName(self):
     return self._mungeCName(self.getName())
 
+  def toOperand(self):
+    return CVariable(self.getCName())
+
   def isConst(self):
     return False
 

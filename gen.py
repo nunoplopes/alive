@@ -56,7 +56,7 @@ test = '''
 #opts = parse_opt_file(test)
 opts = parse_opt_file(sys.stdin.read())
 
-for n,p,s,t,u in opts:
+for n,p,s,t,us,ut in opts:
   # transform the last instruction in the source
   context = GenContext()
   
@@ -77,44 +77,13 @@ for n,p,s,t,u in opts:
   
   if not isinstance(p, TruePred):
     matches.append(p.getPatternMatch())
+    
+  gen = [CDefinition(CVariable('Value'), CVariable(v.getCName()), v.toInstruction(), True)
+          for v in t.itervalues() if isinstance(v, Instr)]
   
-  cond = CIf(CBinExpr.reduce('&&', matches), [])
+  cond = CIf(CBinExpr.reduce('&&', matches), gen)
 
 
   code = '{ // ' + n + nest(4, decl_seg + line + line + cond.format()) + line + '}'
   code.pprint()
   
-#   for w in (40,50,60,70,80,90,100):
-#     code.pprint(w)
-
-#   print '{ //', n
-#   for decl in context.decls:
-#     print decl
-#   
-#   print 'if ({0}) {{'.format(' && '.join(matches))
-#   print '}'
-#   print '}'
-  
-  
-#   # declarations
-#   for v in s.itervalues():
-#     # don't declare constants
-#     if isinstance(v, Constant):
-#       continue
-#     
-#     name = v.getCName()
-#     # v is a constant iff its name starts with C
-#     if name[0] == 'C':
-#       print 'ConstantInt *{0};'.format(name)
-#     else:
-#       print 'Value *{0};'.format(name)
-#   
-#   context = GenContext()
-#   
-#   # get matches
-#   vals = [v for v in s.itervalues() if (not isinstance(v, (Constant,Input)))]
-#   vals.reverse()
-#   for v in vals:
-#     
-#     print v.getPatternMatch(context)
-#     

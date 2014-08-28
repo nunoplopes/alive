@@ -294,6 +294,20 @@ class BinOp(Instr):
 
     return match
 
+  op_cnstr = {
+    Add:  'Instruction::Add',
+    Sub:  'Instruction::Sub',
+    Mul:  'Instruction::Mul',
+    UDiv: 'Instruction::UDiv',
+    And:  'Instruction::And',
+    Or:   'Instruction::Or',
+  }
+
+  def toInstruction(self):
+    return CFunctionCall('BinaryOperator::Create', CVariable(self.op_cnstr[self.op]),
+      self.v1.toOperand(), self.v2.toOperand(), CVariable('""'), CVariable('I'))
+
+
 ################################
 class ConversionOp(Instr):
   Trunc, ZExt, SExt, Ptr2Int, Int2Ptr, Bitcast, Last = range(7)
@@ -491,14 +505,27 @@ class Icmp(Instr):
                self.type.getTypeConstraints(),
                self.stype.getTypeConstraints())
 
+  op_enum = {
+    EQ:  'IcmpInst::ICMP_EQ',
+    NE:  'IcmpInst::ICMP_NE',
+    UGT: 'IcmpInst::ICMP_UGT',
+    UGE: 'IcmpInst::ICMP_UGE',
+    ULT: 'IcmpInst::ICMP_ULT',
+    ULE: 'IcmpInst::ICMP_ULE',
+    SGT: 'IcmpInst::ICMP_SGT',
+    SGE: 'IcmpInst::ICMP_SGE',
+    SLT: 'IcmpInst::ICMP_SLT',
+    SLE: 'IcmpInst::ICMP_SLE',
+  }
+
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName()
-    
+
     if self.op == Icmp.Var:
       opname = 'P_' + self._mungeCName(self.opname)
     else:
       opname = 'P_' + name
-      
+
     context.addVar(opname, 'ICmpInstr::PredicateType')
 
     mICmp = CFunctionCall('match', CVariable(name),
@@ -509,33 +536,10 @@ class Icmp(Instr):
     if self.op == Icmp.Var:
       return mICmp
 
-    optype = {
-      self.EQ:  'IcmpInst::ICMP_EQ',
-      self.NE:  'IcmpInst::ICMP_NE',
-      self.UGT: 'IcmpInst::ICMP_UGT',
-      self.UGE: 'IcmpInst::ICMP_UGE',
-      self.ULT: 'IcmpInst::ICMP_ULT',
-      self.ULE: 'IcmpInst::ICMP_ULE',
-      self.SGT: 'IcmpInst::ICMP_SGT',
-      self.SGE: 'IcmpInst::ICMP_SGE',
-      self.SLT: 'IcmpInst::ICMP_SLT',
-      self.SLE: 'IcmpInst::ICMP_SLE',        
-    }[self.op]
+    optype = self.op_enum[self.op]
 
     return CBinExpr('&&', mICmp, CBinExpr('==', CVariable(opname), CVariable(optype)))
 
-#     extra = ' && {0} == {1}'.format(opname, optype)
-#     
-#     
-#     if self.op
-#     return 'match({name}, m_ICmp({pred}, {l}, {r})){extra}'.format(
-#       name = name,
-#       pred = opname,
-#       l = context.ref(self.v1),
-#       r = context.ref(self.v2),
-#       extra = extra
-#     )
-      
 
 ################################
 class Select(Instr):
@@ -572,16 +576,10 @@ class Select(Instr):
     if name == None: name = self.getCName()
 
     return CFunctionCall('match', CVariable(name),
-              CFunctionCall('m_Select', 
+              CFunctionCall('m_Select',
                   context.ref(self.c),
                   context.ref(self.v1),
                   context.ref(self.v2)))
-#     return 'match({0}, m_Select({1}, {2}, {3}))'.format(
-#       name,
-#       context.ref(self.c),
-#       context.ref(self.v1),
-#       context.ref(self.v2)
-#     )
 
 ################################
 class Alloca(Instr):
