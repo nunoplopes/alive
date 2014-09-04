@@ -601,19 +601,17 @@ class GEP(Instr):
       assert isinstance(idxs[i], IntType if (i & 1) == 0 else Value)
     self.type = type
     self.ptr = ptr
-    self.idxs = idxs
+    self.idxs = idxs[1:len(idxs):2]
     self.inbounds = inbounds
 
   def __repr__(self):
     inb = 'inbounds ' if self.inbounds else ''
     idxs = ''
     for i in range(len(self.idxs)):
-      if (i & 1) == 1:
-        continue
-      t = str(self.idxs[i])
+      t = str(self.idxs[i].type)
       if len(t) > 0:
         t += ' '
-      idxs += ', %s%s' % (t, self.idxs[i+1].getName())
+      idxs += ', %s%s' % (t, self.idxs[i].getName())
     return 'getelementptr %s%s %s%s' % (inb, self.type, self.ptr.getName(),
                                         idxs)
 
@@ -621,18 +619,16 @@ class GEP(Instr):
     ptr = state.eval(self.ptr, defined, qvars)
     type = self.type
     for i in range(len(self.idxs)):
-      if (i & 1) == 1:
-        continue
-      idx = truncateOrSExt(state.eval(self.idxs[i+1], defined, qvars), ptr)
-      ptr += getAllocSize(type) * idx
-      if i + 2 != len(self.idxs):
+      idx = truncateOrSExt(state.eval(self.idxs[i], defined, qvars), ptr)
+      ptr += getAllocSize(type.getPointeeType())/8 * idx
+      if i + 1 != len(self.idxs):
         type = type.getUnderlyingType()
 
     # TODO: handle inbounds
     return ptr
 
   def getTypeConstraints(self):
-    return And(self.type.ensureTypeDepth(len(self.idxs)/2),
+    return And(self.type.ensureTypeDepth(len(self.idxs)),
                Instr.getTypeConstraints(self))
 
 

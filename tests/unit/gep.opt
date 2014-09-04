@@ -1,0 +1,25 @@
+Name: gep1
+%1 = ptrtoint i16* %e to i64
+%2 = ptrtoint i16* %b to i64
+%3 = sub i64 %1, %2
+%4 = ashr exact i64 %3, 1
+%ret = getelementptr inbounds i16* %b, i64 %4
+  =>
+%ret = getelementptr inbounds i16* %e, i64 0
+
+Name: gep2
+%0 = ptrtoint i1* %Y
+%1 = sub i64 0, %0
+%r = getelementptr i1* %X, %1
+  =>
+%0 = ptrtoint i1* %Y
+%2 = ptrtoint %X to i64
+%3 = sub %2, %0
+%r = inttoptr %3
+
+Name: gep3
+%gep = getelementptr i8* %A, 1
+%ret = ptrtoint %gep to i32
+  =>
+%ptrtoint = ptrtoint %A to i32
+%ret = add %ptrtoint, 1
