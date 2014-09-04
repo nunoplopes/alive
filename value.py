@@ -403,6 +403,49 @@ class ArrayType(Type):
                self.elems.getTypeConstraints(),
                self.type.getTypeConstraints())
 
+################################
+class UType(object):
+  '''Unification types.
+
+  Used to quickly determine which values have the same types as other values.
+  If a subset contains any preferred elements, one of those will be selected
+  as representative.
+  '''
+  # TODO: combine this with existing type system?
+  # TODO: handle concrete and named types
+
+  def __init__(self, label, preferred=False):
+    self._label = label
+    self._preferred = preferred
+    self._rep = None
+
+  def rep(self):
+    if self._rep is self:
+      print 'Loop detected for', self._label
+      return self
+      ## TODO: Change this to assert, or remove
+
+    if self._rep == None:
+      return self
+
+    self._rep = self._rep.rep()
+    return self._rep
+
+  def label(self):
+    return self.rep()._label
+
+  def unify(self, other):
+    rself = self.rep()
+    rother = other.rep()
+
+    if rother is rself:
+      return
+
+    if rself._preferred:
+      rother._rep = rself
+    else:
+      rself._rep = rother
+
 
 ################################
 class Value:
@@ -565,6 +608,13 @@ class Input(Value):
     mem = BitVec('mem_' + self.name, block_size * num_elems)
     state.addAlloca(ptr, mem, (block_size, num_elems, 1))
     return ptr
+
+  def utype(self):
+    if not hasattr(self, '_utype'):
+      self._utype = UType(self.getCName(), preferred=True)
+
+    r = self._utype.rep()
+    return r
 
   def toAPInt(self):
     name = self.getName()

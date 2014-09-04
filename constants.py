@@ -132,6 +132,10 @@ class CnstUnaryOp(Constant):
   def toAPInt(self):
     return CUnaryExpr(self.opnames[self.op], self.v.toAPInt())
 
+  def utype(self):
+    return self.v.utype()
+
+
 ################################
 class CnstBinaryOp(Constant):
   And, Or, Xor, Add, Sub, Mul, Div, Rem, Shr, Shl, Last = range(11)
@@ -186,6 +190,13 @@ class CnstBinaryOp(Constant):
       return CFieldAccess(self.v1.toAPInt(), 'ashr', [self.v2.toAPInt()])
 
     return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPInt())
+
+  def utype(self):
+    if not hasattr(self, '_utype'):
+      self._utype = self.v1.utype()
+      self._utype.unify(self.v2.utype())
+
+    return self._utype
 
 ################################
 class CnstFunction(Constant):

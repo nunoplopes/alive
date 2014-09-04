@@ -307,6 +307,12 @@ class BinOp(Instr):
     return CFunctionCall('BinaryOperator::Create', CVariable(self.op_cnstr[self.op]),
       self.v1.toOperand(), self.v2.toOperand(), CVariable('""'), CVariable('I'))
 
+  def utype(self):
+    if not hasattr(self, '_utype'):
+      self._utype = self.v1.utype()
+      self._utype.unify(self.v2.utype())
+    
+    return self._utype.rep()
 
 ################################
 class ConversionOp(Instr):
@@ -419,6 +425,11 @@ class ConversionOp(Instr):
     return CFunctionCall('match', CVariable(name),
               CFunctionCall(matcher, context.ref(self.v)))
 
+  def utype(self):
+    if not hasattr(self, '_utype'):
+      self._utype = UType(self.getCName())
+
+    return self._utype.rep()
 
 ################################
 class Icmp(Instr):
