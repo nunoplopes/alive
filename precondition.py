@@ -213,11 +213,12 @@ class LLVMBoolPred(BoolPred):
     return mk_and(c)
 
   def toSMT(self, state):
-    args = [v.toSMT([], state, []) for v in self.args]
+    defargs = []
+    args = [v.toSMT(defargs, state, []) for v in self.args]
     return {
       self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.known:     lambda a,b: a == b,
+      self.known:     lambda a,b: mk_and(defargs + [a == b]),
       self.maskZero:  lambda a,b: a & b == 0,
       self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
     }[self.op](*args)
