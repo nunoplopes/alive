@@ -167,9 +167,10 @@ def check_typed_opt(pre, src, tgt, types):
     if k[0] == 'C' or not tgtv.has_key(k):
       continue
 
-    (a, defa, qvars) = v
-    (b, defb, qvarsb) = tgtv[k]
+    (a, defa, poisona, qvars) = v
+    (b, defb, poisonb, qvarsb) = tgtv[k]
     defb = mk_and(defb)
+    poisonb = mk_and(poisonb)
 
     # Check if domain of defined values of Src implies that of Tgt.
     check_expr(qvars, defa + [mk_not(defb)] + extra_cnstrs, lambda s :
@@ -177,8 +178,15 @@ def check_typed_opt(pre, src, tgt, types):
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
+    # Check if domain of poison values of Src implies that of Tgt.
+    check_expr(qvars, defa + poisona + [mk_not(poisonb)] + extra_cnstrs,
+      lambda s :
+      ("Domain of poisoness of Target is smaller than Source's for %s %s\n"
+         % (var_type(k, types), k),
+       str_model(s, a), 'poison', k, srcv, tgtv, types))
+
     # Check that final values of vars are equal.
-    check_expr(qvars, defa + [a != b] + extra_cnstrs, lambda s :
+    check_expr(qvars, defa + poisona + [a != b] + extra_cnstrs, lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 

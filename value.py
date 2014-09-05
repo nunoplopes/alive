@@ -507,8 +507,8 @@ class TypeFixedValue(Value):
     assert isinstance(other, TypeFixedValue)
     return self.smtvar == other.smtvar
 
-  def toSMT(self, defined, state, qvars):
-    return self.val
+  def toSMT(self, poison, state, qvars):
+    return [], self.val
 
   def getTypeConstraints(self):
     c = [self.v.getTypeConstraints()]
@@ -545,7 +545,7 @@ class Input(Value):
   def __repr__(self):
     return self.getName()
 
-  def toSMT(self, defined, state, qvars):
+  def toSMT(self, poison, state, qvars):
     ptr = BitVec(self.name, self.type.getSize())
     # if we are dealing with an arbitrary pointer, assume it points to something
     # that can (arbitrarily) hold 7 elements.
@@ -555,9 +555,9 @@ class Input(Value):
          (self.type.myType == Type.Ptr or self.type.myType == Type.Unknown):
       block_size = self.type.types[Type.Ptr].getSize()
     else:
-      return ptr
+      return [], ptr
 
     num_elems = 7
     mem = BitVec('mem_' + self.name, block_size * num_elems)
     state.addAlloca(ptr, mem, (block_size, num_elems, 1))
-    return ptr
+    return [], ptr
