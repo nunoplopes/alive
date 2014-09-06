@@ -425,7 +425,7 @@ class UType(object):
       return self
       ## TODO: Change this to assert, or remove
 
-    if self._rep == None:
+    if self._rep is None:
       return self
 
     self._rep = self._rep.rep()
@@ -433,6 +433,9 @@ class UType(object):
 
   def label(self):
     return self.rep()._label
+
+  def __eq__(self, other):
+    return self.rep() is other.rep()
 
   def unify(self, other):
     rself = self.rep()
@@ -446,6 +449,16 @@ class UType(object):
     else:
       rself._rep = rother
 
+def unified_iter(iterable):
+  'Unify the arguments and return their representative'
+  it = iter(iterable)
+  u1 = next(it)
+  for u2 in it:
+    u1.unify(u2)
+  return u1
+
+def unified(*utypes):
+  return unified_iter(utypes)
 
 ################################
 class Value:
@@ -480,6 +493,12 @@ class Value:
 
   def toOperand(self):
     return CVariable(self.getCName())
+
+  def toAPIntOrLit(self):
+    return self.toAPInt()
+
+  def toCType(self):
+    return CVariable(self.utype().label()).arr('getType',[])
 
   def isConst(self):
     return False
@@ -526,7 +545,6 @@ class Value:
         for e in a:
           if isinstance(e, (Type, Value)):
             e.fixupTypes(types)
-
 
 ################################
 class TypeFixedValue(Value):
@@ -616,11 +634,12 @@ class Input(Value):
     r = self._utype.rep()
     return r
 
+  def setRepresentative(self, context):
+    self._utype = context.repForName(self.getCName())
+
   def toAPInt(self):
     name = self.getName()
     if name[0] != 'C':
       raise AliveError('Input {0} used in an expression'.format(name))
     
-    #return CVariable('{0}->getValue()'.format(self.getCName()))
-    return CFieldAccess(CVariable(self.getCName()), 'getValue', [], direct=False)
-      # FIXME: better syntax here
+    return self.toOperand().arr('getValue',[])

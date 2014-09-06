@@ -75,7 +75,8 @@ class State:
 
 ################################
 class Instr(Value):
-  pass
+  def utype(self):
+    return self._utype
 
 
 ################################
@@ -99,6 +100,12 @@ class CopyOperand(Instr):
     return And(self.type == self.v.type,
                self.type.getTypeConstraints())
 
+  def setRepresentative(self, context):
+    self._utype = context.repForName(self.getCName())
+    self._utype.unify(self.v.utype())
+
+  def toInstruction(self):
+    return self.v.toOperand()
 
 ################################
 class BinOp(Instr):
@@ -289,30 +296,33 @@ class BinOp(Instr):
               CFunctionCall(matcher, v1, v2))
 
     for flag in self.flags:
-      match = CBinExpr('&&', match,
-        CFieldAccess(CVariable(name), self.flag_method[flag], [], direct=False))
+      match = CBinExpr('&&', match, CVariable(name).arr(self.flag_method[flag], []))
 
     return match
 
-  op_cnstr = {
-    Add:  'Instruction::Add',
-    Sub:  'Instruction::Sub',
-    Mul:  'Instruction::Mul',
-    UDiv: 'Instruction::UDiv',
-    And:  'Instruction::And',
-    Or:   'Instruction::Or',
+  caps = {
+    Add:  'Add',
+    Sub:  'Sub',
+    Mul:  'Mul',
+    UDiv: 'UDiv',
+    SDiv: 'SDiv',
+    URem: 'URem',
+    SRem: 'SRem',
+    Shl:  'Shl',
+    AShr: 'AShr',
+    LShr: 'LShr',
+    And:  'And',
+    Or:   'Or',
+    Xor:  'Xor',
   }
 
   def toInstruction(self):
-    return CFunctionCall('BinaryOperator::Create', CVariable(self.op_cnstr[self.op]),
+    return CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
       self.v1.toOperand(), self.v2.toOperand(), CVariable('""'), CVariable('I'))
 
-  def utype(self):
-    if not hasattr(self, '_utype'):
-      self._utype = self.v1.utype()
-      self._utype.unify(self.v2.utype())
-    
-    return self._utype.rep()
+  def setRepresentative(self, context):
+    self._utype = unified(context.repForName(self.getCName()),
+      self.v1.utype(), self.v2.utype())
 
 ################################
 class ConversionOp(Instr):
@@ -425,11 +435,29 @@ class ConversionOp(Instr):
     return CFunctionCall('match', CVariable(name),
               CFunctionCall(matcher, context.ref(self.v)))
 
-  def utype(self):
-    if not hasattr(self, '_utype'):
-      self._utype = UType(self.getCName())
+  constr = {
+    Trunc:   'TruncInst',
+    ZExt:    'ZExtInst',
+    SExt:    'SExtInst',
+    Ptr2Int: 'PtrToIntInst',
+    Int2Ptr: 'IntToPtrInst',
+    Bitcast: 'BitCastInst',
+  }
 
-    return self._utype.rep()
+  def toInstruction(self):
+    return CFunctionCall('new ' + self.constr[self.op],
+      self.v.toOperand(),
+      self.toCType(),
+      CVariable('""'),
+      CVariable('I'))
+
+  def setRepresentative(self, context):
+    self._utype = context.repForName(self.getCName())
+    if self.type.defined:
+      self._utype.unify(context.newRep(self.type.size))
+    if self.stype.defined:
+      self.v.utype().unify(context.newRep(self.stype.size))
+
 
 ################################
 class Icmp(Instr):
@@ -537,7 +565,7 @@ class Icmp(Instr):
     else:
       opname = 'P_' + name
 
-    context.addVar(opname, 'ICmpInstr::PredicateType')
+    context.addVar(opname, 'ICmpInst::PredicateType')
 
     mICmp = CFunctionCall('match', CVariable(name),
               CFunctionCall('m_ICmp', CVariable(opname),
@@ -551,6 +579,24 @@ class Icmp(Instr):
 
     return CBinExpr('&&', mICmp, CBinExpr('==', CVariable(opname), CVariable(optype)))
 
+  def setRepresentative(self, context):
+    self._utype = context.repForSize(1, self.getCName())
+    self.v1.utype().unify(self.v2.utype())
+    if isinstance(self.stype, IntType) and self.stype.defined:
+      self.v1.utype().unify(context.newRep(self.stype.size))
+
+  def toInstruction(self):
+    if self.op == Icmp.Var:
+      opname = 'P_' + self._mungeCName(self.opname)
+    else:
+      opname = Icmp.op_enum[self.op]
+
+    return CFunctionCall('new ICmpInst',
+      CVariable('I'),
+      CVariable(opname),
+      self.v1.toOperand(),
+      self.v2.toOperand(),
+      CVariable('""'))
 
 ################################
 class Select(Instr):
@@ -591,6 +637,22 @@ class Select(Instr):
                   context.ref(self.c),
                   context.ref(self.v1),
                   context.ref(self.v2)))
+
+  def setRepresentative(self, context):
+    self._utype = context.repForName(self.getCName())
+    self._utype.unify(self.v1.utype())
+    self._utype.unify(self.v2.utype())
+    self.c.utype().unify(context.newRep(1))
+    if isinstance(self.type, IntType) and self.type.defined:
+      self._utype.unify(context.newRep(self.type.size))
+
+  def toInstruction(self):
+    return CFunctionCall('SelectInst::Create',
+      self.c.toOperand(),
+      self.v1.toOperand(),
+      self.v2.toOperand(),
+      CVariable('""'),
+      CVariable('I'))
 
 ################################
 class Alloca(Instr):

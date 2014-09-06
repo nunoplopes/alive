@@ -32,8 +32,10 @@ class Constant(Value):
     return CTest('<APInt>')
 
   def toOperand(self):
-    return CFunctionCall('ConstantInt::get', CFieldAccess(CVariable('I'), 'getType', [], False), self.toAPInt())
+    return CFunctionCall('ConstantInt::get', self.toCType(), self.toAPIntOrLit())
 
+  def utype(self):
+    return self._utype
 
 ################################
 class ConstantVal(Constant):
@@ -64,12 +66,26 @@ class ConstantVal(Constant):
 
   def toSMT(self, defined, state, qvars):
     return BitVecVal(self.val, self.type.getSize())
-    
+
+  def toOperand(self):
+    return CFunctionCall('Constant::get', self.toCType(), CVariable(str(self.val)))
+    # NOTE: address sign for >64-bit ints
+
   def toAPInt(self):
-    # This assumes we can use integer literals whenever an APInt is needed
     # FIXME: ensure value is integral
+
+    return CFunctionCall('APInt',
+      self.toCType().arr('getBitWidth', []),
+      CVariable(self.val))
+
+  def toAPIntOrLit(self):
     return CVariable(str(self.val))
 
+  def setRepresentative(self, context):
+    # TODO: handle non-integers?
+    if self.type.defined:
+      self._utype = context.newRep(self.type.size)
+    self._utype = context.newRep()
 
 ################################
 class UndefVal(Constant):
@@ -132,8 +148,9 @@ class CnstUnaryOp(Constant):
   def toAPInt(self):
     return CUnaryExpr(self.opnames[self.op], self.v.toAPInt())
 
-  def utype(self):
-    return self.v.utype()
+  def setRepresentative(self, context):
+    self.v.setRepresentative(context)
+    self._utype = self.v.utype()
 
 
 ################################
@@ -185,18 +202,25 @@ class CnstBinaryOp(Constant):
       self.Shl: lambda a,b: a << b,
     }[self.op](v1, v2)
 
+  def toOperand(self):
+    if self.op == self.Or:
+      return CFunctionCall('ConstantExpr::getOr', self.v1.toOperand(), self.v2.toOperand())
+
+    return Constant.toOperand(self)
+
   def toAPInt(self):
     if self.op == self.Shr:
-      return CFieldAccess(self.v1.toAPInt(), 'ashr', [self.v2.toAPInt()])
+      return self.v1.toAPInt().dot('ashr', [self.v2.toAPIntOrLit()])
+
+    if self.op in {self.Add, self.Sub, self.Shl}:
+      return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPIntOrLit())
 
     return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPInt())
 
-  def utype(self):
-    if not hasattr(self, '_utype'):
-      self._utype = self.v1.utype()
-      self._utype.unify(self.v2.utype())
-
-    return self._utype
+  def setRepresentative(self, context):
+    self.v1.setRepresentative(context)
+    self.v2.setRepresentative(context)
+    self._utype = unified(self.v1.utype(), self.v2.utype())
 
 ################################
 class CnstFunction(Constant):
@@ -270,15 +294,43 @@ class CnstFunction(Constant):
 
   def toAPInt(self):
     if self.op == self.abs:
-      pass
+      return self.args[0].toAPInt().dot('abs', [])
 
     if self.op == self.lshr:
-      return CFieldAccess(self.args[0].toAPInt(), 'lshr', [self.args[1].toAPInt()])
-    
+      return self.args[0].toAPInt().dot('lshr', [self.args[1].toAPIntOrLit()])
+
+    if self.op == self.trunc:
+      return self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getBitWidth',[])])
+
     if self.op == self.umax:
       return CFunctionCall('APIntOps::umax', *(arg.toAPInt() for arg in self.args))
-    
+
     if self.op == self.width:
-      return CTest('<width' + str(self.args[0]) + '>')
-    
+      return CFunctionCall('APInt',
+        self.toCType().arr('getBitWidth', []),
+        self.args[0].toCType().arr('getBitWidth', []))
+
     raise AliveError(self.opnames[self.op] + ' not implemented')
+
+  def toAPIntOrLit(self):
+    if self.op == self.width:
+      return self.args[0].toCType().arr('getBitWidth',[])
+
+    return self.toAPInt()
+
+  def setRepresentative(self, context):
+    for arg in self.args:
+      arg.setRepresentative(context)
+
+    if self.op == self.abs:
+      self._utype = self.args[0].utype()
+
+    elif self.op == self.lshr or self.op == self.umax:
+      self._utype = unified_iter(arg.utype() for arg in self.args)
+
+    elif self.op == self.trunc or self.op == self.width:
+      self._utype = UType('##' + self.getName()) # FIXME
+
+    else:
+      raise AliveError(self.opnames[self.op] + ' not implemented')
+      

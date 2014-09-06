@@ -30,6 +30,7 @@ class BoolPred:
   def getPatternMatch(self):
     return CTest('<Pred:{0}>'.format(self))
 
+
 ################################
 class TruePred(BoolPred):
   def __repr__(self):
@@ -43,6 +44,11 @@ class TruePred(BoolPred):
 
   def getPatternMatch(self):
     return CVariable('TRUE') # FIXME
+
+  def setRepresentative(self, context):
+    pass
+
+
 
 ################################
 class PredNot(BoolPred):
@@ -58,9 +64,12 @@ class PredNot(BoolPred):
 
   def toSMT(self, state):
     return Not(self.v.toSMT(state))
-    
+
   def getPatternMatch(self):
     return CUnaryExpr('!', self.v.getPatternMatch())
+
+  def setRepresentative(self, context):
+    self.v.setRepresentative(context)
 
 
 ################################
@@ -77,9 +86,13 @@ class PredAnd(BoolPred):
 
   def toSMT(self, state):
     return And([v.toSMT(state) for v in self.args])
-  
+
   def getPatternMatch(self):
     return CBinExpr.reduce('&&', (arg.getPatternMatch() for arg in self.args))
+
+  def setRepresentative(self, context):
+    for arg in self.args:
+      arg.setRepresentative(context)
 
 
 ################################
@@ -96,9 +109,13 @@ class PredOr(BoolPred):
 
   def toSMT(self, state):
     return Or([v.toSMT(state) for v in self.args])
-  
+
   def getPatternMatch(self):
     return CBinExpr.reduce('||', (arg.getPatternMatch() for arg in self.args))
+
+  def setRepresentative(self, context):
+    for arg in self.args:
+      arg.setRepresentative(context)
 
 
 ################################
@@ -146,11 +163,26 @@ class BinaryBoolPred(BoolPred):
       self.UGE: lambda a,b: UGE(a, b),
     }[self.op](v1, v2)
 
-  def getPatternMatch(self):
-    # FIXME: this will need correction once we add unsigned comparisons
-    # FIXME: currently does comparisons of APInts. Is this correct?
-    return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPInt())
+  gens = {
+    EQ:  lambda a,b: CBinExpr('==', a, b),
+    NE:  lambda a,b: CBinExpr('!=', a, b),
+    SLT: lambda a,b: a.dot('slt', [b]),
+    SLE: lambda a,b: a.dot('sle', [b]),
+    SGT: lambda a,b: a.dot('sgt', [b]),
+    SGE: lambda a,b: a.dot('sge', [b]),
+    ULT: lambda a,b: a.dot('ult', [b]),
+    ULE: lambda a,b: a.dot('ule', [b]),
+    UGT: lambda a,b: a.dot('ugt', [b]),
+    UGE: lambda a,b: a.dot('uge', [b]),
+  }
 
+  def getPatternMatch(self):
+    return self.gens[self.op](self.v1.toAPInt(), self.v2.toAPIntOrLit())
+
+  def setRepresentative(self, context):
+    self.v1.setRepresentative(context)
+    self.v2.setRepresentative(context)
+    self.v1.utype().unify(self.v2.utype())
 
 ################################
 class LLVMBoolPred(BoolPred):
@@ -234,12 +266,11 @@ class LLVMBoolPred(BoolPred):
     return mk_and(c)
 
   def toSMT(self, state):
-    defargs = []
-    args = [v.toSMT(defargs, state, []) for v in self.args]
+    args = [v.toSMT([], state, []) for v in self.args]
     return {
       self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.known:     lambda a,b: And(mk_and(defargs), a == b),
+      self.known:     lambda a,b: a == b,
       self.maskZero:  lambda a,b: a & b == 0,
       self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
     }[self.op](*args)
@@ -247,7 +278,7 @@ class LLVMBoolPred(BoolPred):
   def getPatternMatch(self):
     if self.op == self.known:
       raise AliveError('Cannot use Known for code generation')
-    
+
     args = []
     for i in range(self.num_args[self.op]):
       if self.arg_types[self.op][i] == 'const':
@@ -256,8 +287,11 @@ class LLVMBoolPred(BoolPred):
         args.append(CVariable(self.args[i].getCName()))
       else:
         assert False
-    
+
     if self.op in {self.isPower2, self.isSignBit}:
-      return CFieldAccess(args[0], self.opnames[self.op], [])
-    
+      return args[0].dot(self.opnames[self.op], [])
+
     return CFunctionCall(self.opnames[self.op], *args)
+
+  def setRepresentative(self, context):
+    print 'not unifying', str(self)

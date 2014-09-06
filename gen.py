@@ -3,6 +3,7 @@ from language import *
 from precondition import *
 from parser import parse_opt_file
 from codegen import *
+from itertools import combinations
 
 class GenContext(object):
   def __init__(self):
@@ -38,7 +39,38 @@ class GenContext(object):
     self.addPtr(name, 'Value')
     return CFunctionCall('m_Value', CVariable(name))
 
-    
+
+class UnifyContext(object):
+  def __init__(self):
+    self.names = {}
+    self.sizes = {}
+    self.preferred = True
+
+  def newRep(self, size = None):
+    if size == None:
+      return UType('##ANONYMOUS')
+
+    if not size in self.sizes:
+      self.sizes[size] = UType('##i' + str(size))
+
+    return self.sizes[size]
+
+  def repForName(self, name):
+    if not name in self.names:
+      self.names[name] = UType(name, self.preferred)
+    return self.names[name]
+
+  def repForSize(self, size, name):
+    if not size in self.sizes:
+      self.sizes[size] = UType(name, self.preferred)
+
+    if name in self.names:
+      self.sizes[size].unify(self.names[name])
+    else:
+      self.names[name] = self.sizes[size]
+
+    return self.sizes[size]
+
     
   
 
@@ -66,20 +98,61 @@ for n,p,s,t,us,ut in opts:
   while not isinstance(root, Instr): 
     root = vals.pop()
   matches = [root.getPatternMatch(context, name = 'I')]
+  root_name = root.getName()
 
   while context.todo:
     v = context.todo.pop()
     
     matches.append(v.getPatternMatch(context))
 
+  # make sure the root type is called 'I'
+  # TODO: rethink handling of preferences
+  ucontext = UnifyContext()
+  for v in s.values():
+    v.setRepresentative(ucontext)
+  ucontext.repForName('I').unify(root.utype())
+  ucontext.preferred = False
 
+
+  # declare variables to be matched in condition
   decl_seg = iter_seq(line + decl for decl in context.decls)
   
+  # add non-trivial preconditions
   if not isinstance(p, TruePred):
+    p.setRepresentative(ucontext)
     matches.append(p.getPatternMatch())
-    
+
+  # check for type unification implied by target, but not by source
+  # for each variable (input?) in both source and target
+  both = [k for k in s.iterkeys() if k in t]
+  #print 'both=', both
+  diff = [(k1,k2) for (k1,k2) in combinations(both, 2) if not s[k1].utype().rep() is s[k2].utype().rep()]
+  #print 'diff=', diff
+
+  for k,v in t.iteritems():
+    v.setRepresentative(ucontext)
+    if k in s:
+      if not v.utype().rep() is s[k].utype().rep():
+        print 'not unified:', k
+        v.utype().unify(s[k].utype())
+
+  need_match = [(k1,k2) for (k1,k2) in diff if t[k1].utype().rep() is t[k2].utype().rep()]
+  #print 'need_match=', need_match
+
+  for (k1,k2) in need_match:
+    m = CBinExpr('==',
+      s[k1].toOperand().arr('getType', []),
+      s[k2].toOperand().arr('getType', []))
+    # can't use .toCType(), because these are now unified
+    matches.append(m)
+
   gen = [CDefinition(CVariable('Value'), CVariable(v.getCName()), v.toInstruction(), True)
-          for v in t.itervalues() if isinstance(v, Instr)]
+          for (k,v) in t.iteritems() if isinstance(v, Instr) and not k in s]
+  new_root = t[root_name]
+  gen.append(CDefinition(CVariable('Value'), 
+    CVariable(new_root.getCName()), new_root.toInstruction(), True))
+  gen.append(CVariable('I').arr('replaceAllUsesWith', [new_root.toOperand()]))
+  gen.append(CReturn(CVariable('true')))
   
   cond = CIf(CBinExpr.reduce('&&', matches), gen)
 

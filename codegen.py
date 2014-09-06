@@ -18,6 +18,15 @@ class CExpression(CFragment):
 	def pprint(self, width=80, prec=0):
 		self.formatExpr(prec).pprint(width)
 
+	def dot(self, field, args=None):
+		return CFieldAccess(self, field, args)
+
+	def arr(self, field, args=None):
+		return CFieldAccess(self, field, args, direct=False)
+
+	def format(self):
+		return self.formatExpr(18) + ';'
+
 class CVariable(CExpression):
 	def __init__(self, name):
 		self.name = name
@@ -136,6 +145,18 @@ class CDefinition(CStatement):
 	def format(self):
 		star = '*' if self.isPtr else ''
 		return group(nest(4, seq(self.ty.formatExpr(18), ' ', star, self.var.formatExpr(0), ' =', line, self.val.formatExpr(18), ';')))
+
+class CReturn(CStatement):
+	def __init__(self, ret = None):
+		assert ret == None or isinstance(ret, CExpression)
+		self.ret = ret
+
+	def format(self):
+		f = text('return')
+		if self.ret != None:
+			f += nest(2, line + self.ret.formatExpr(18))
+		f += ';'
+		return group(f)
 
 test = CIf(CBinExpr('&&', CTest('foo'), CBinExpr('&&', CTest('bar'), CTest('baz'))),
 	[CTest('stmt'), CTest('stmt')])
