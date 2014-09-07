@@ -628,11 +628,7 @@ class Input(Value):
     return ptr
 
   def utype(self):
-    if not hasattr(self, '_utype'):
-      self._utype = UType(self.getCName(), preferred=True)
-
-    r = self._utype.rep()
-    return r
+    return self._utype
 
   def setRepresentative(self, context):
     self._utype = context.repForName(self.getCName())
