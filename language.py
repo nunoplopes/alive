@@ -52,7 +52,7 @@ class State:
     self.ptrs += [(ptr, mem, info)]
 
   def getAllocaConstraints(self):
-    ptrs = [ptr for (ptr, size, mem) in self.ptrs]
+    ptrs = [ptr for (ptr, mem, info) in self.ptrs]
     return mk_distinct(ptrs)
 
   def eval(self, v, poison, qvars):
@@ -576,12 +576,15 @@ class Alloca(Instr):
     block_size = getAllocSize(self.type.type)
     num_elems = self.numElems.getValue()
     size = num_elems * block_size
+    initialized = BitVecVal(0, size)
 
-    defined  = [ULT(ptr, ptr + size), ptr != 0,
-                getPtrAlignCnstr(ptr, self.align)]
+    defined = [ULT(ptr, ptr + (size >> 3)),
+               ptr != 0,
+               num_elems != 0,
+               getPtrAlignCnstr(ptr, self.align)]
 
     mem = BitVec('alloca' + self.getName(), size)
-    state.addAlloca(ptr, mem, (block_size, num_elems, self.align))
+    state.addAlloca(ptr, mem, (block_size, num_elems, self.align, initialized))
     return defined, ptr
 
   def getTypeConstraints(self):
@@ -649,34 +652,51 @@ class Load(Instr):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'load %s %s%s' % (str(self.stype), self.v.getName(), align)
 
-  def _recPtrLoad(self, l, v, defined):
+  def extractBV(self, BV, offset, size):
+    old_size = BV.size()
+    BV = BV << offset
+    return Extract(old_size - 1, old_size - size, BV)
+
+  def _recPtrLoad(self, l, v, defined, mustload):
+    if len(l) == 0:
+      return None
+
     (ptr, mem, info) = l[0]
-    (block_size, num_elems, align) = info
-    size = block_size * num_elems
+    (block_size, num_elems, align, initialized) = info
+    size = mem.size()
     read_size = self.type.getSize()
+    actual_read_size = getAllocSize(self.type)
 
     if size > read_size:
-      offset = v - ptr
-      mem = mem << truncateOrZExt(offset, mem)
-      mem = Extract(size - 1, size - read_size, mem)
+      offset = truncateOrZExt(v - ptr, mem)
+      mem = self.extractBV(mem, offset, read_size)
+      initialized = self.extractBV(initialized, offset, actual_read_size)
     elif size < read_size:
       # undef behavior; skip this block
-      return self._recPtrLoad(l[1:], v, defined)
+      return self._recPtrLoad(l[1:], v, defined, mustload)
 
-    if len(l) == 1:
-      return mem
+    inbounds = And(UGE(v, ptr), ULE(v + read_size/8, ptr + size/8))
+    mustload += [inbounds]
 
-    inbounds = And(UGE(v, ptr), ULE(v+read_size, ptr+size))
+    # reading unitialized data is undef behavior
+    defined += [Implies(inbounds,
+                        initialized ==
+                          BitVecVal((1<<actual_read_size)-1, actual_read_size))]
+
     if self.align != 0:
       # overestimating the alignment is undefined behavior.
       defined += [Implies(inbounds, align >= self.align)]
-    return If(inbounds, mem, self._recPtrLoad(l[1:], v, defined))
+
+    mem2 = self._recPtrLoad(l[1:], v, defined, mustload)
+    return mem if mem2 is None else If(inbounds, mem, mem2)
 
   def toSMT(self, poison, state, qvars):
     v = state.eval(self.v, poison, qvars)
     defined = [v != 0]
-    val = self._recPtrLoad(state.ptrs, v, defined)
-    return defined, val
+    mustload = []
+    val = self._recPtrLoad(state.ptrs, v, defined, mustload)
+    defined += [mk_or(mustload)]
+    return ([BoolVal(False)], 0) if val is None else (defined, val)
 
   def getTypeConstraints(self):
     return And(self.stype == self.v.type,
@@ -731,17 +751,21 @@ class Store(Instr):
     tgt = state.eval(self.dst, poison, qvars)
     defined = [tgt != 0]
 
-    write_size = self.stype.getSize()
+    write_size = getAllocSize(self.stype)
     newmem = []
     mustwrite = []
     for (ptr, mem, info) in state.ptrs:
-      (block_size, num_elems, align) = info
+      (block_size, num_elems, align, initialized) = info
       size = block_size * num_elems
-      inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size, ptr + size))
+      inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size/8, ptr + size/8))
       mustwrite += [inbounds]
 
       mem = If(inbounds, self._mkMem(src, tgt, ptr, size, mem), mem)
-      newmem += [(ptr, mem, info)]
+      allOnes = BitVecVal((1 << write_size) - 1, mem.size())
+      initialized2 = If(inbounds,
+                        self._mkMem(allOnes, tgt, ptr, size, initialized),
+                        initialized)
+      newmem += [(ptr, mem, (block_size, num_elems, align, initialized2))]
 
       if self.align != 0:
         # overestimating the alignment is undefined behavior.

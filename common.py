@@ -101,7 +101,7 @@ def truncateOrPad(src, tgt):
 # Error handling
 
 class AliveError(Exception):
-	pass
+  pass
 
 class ParseError():
   def __init__(self, msgs, token = None):
