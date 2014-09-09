@@ -784,11 +784,29 @@ class Store(Instr):
 
 
 ################################
+class Unreachable(Instr):
+  def __init__(self):
+    self.id = mk_unique_id()
+
+  def getUniqueName(self):
+    return 'unreachable_' + self.id
+
+  def __repr__(self):
+    return 'unreachable'
+
+  def toSMT(self, poison, state, qvars):
+    return [BoolVal(False)], None
+
+  def getTypeConstraints(self):
+    return BoolVal(True)
+
+
+################################
 def print_prog(p):
   for k,v in p.iteritems():
     if isinstance(v, (Input, Constant)):
       continue
-    if isinstance(v, Store):
+    if isinstance(v, (Store, Unreachable)):
       print v
     else:
       print '%s = %s' % (k, v)

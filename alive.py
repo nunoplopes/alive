@@ -238,8 +238,10 @@ def check_opt(opt):
   sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
+  has_unreach = any(v.startswith('unreachable') for v in tgt.iterkeys())
   for v in src.iterkeys():
-    if v[0] == '%' and v not in used_src and v not in used_tgt and v not in tgt:
+    if v[0] == '%' and v not in used_src and v not in used_tgt and v not in tgt\
+       and not has_unreach:
       print 'ERROR: Temporary register %s unused and not overwritten' % v
       exit(-1)
 

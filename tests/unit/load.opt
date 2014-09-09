@@ -14,3 +14,9 @@ store 3, %p
 %p = alloca i32, 5
 store 3, %p
 %val = undef
+
+
+Name: unreach
+%v = load null
+  =>
+unreachable
