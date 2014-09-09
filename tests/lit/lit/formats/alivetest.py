@@ -36,7 +36,7 @@ def readFile(path):
   return fd.read()
 
 
-class ALIVeTest(FileBasedTest):
+class AliveTest(FileBasedTest):
   def __init__(self):
     self.regex = re.compile(r";\s*(ERROR:.*)")
 
