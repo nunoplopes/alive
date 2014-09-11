@@ -10,13 +10,16 @@ class GenContext(object):
     self.seen = set()
     self.todo = []
     self.decls = []
+    self.seen_cmps = set()
   
   def addPtr(self, name, ctype):
     self.decls.append(ctype + ' *' + name + ';')
   
   def addVar(self, name, ctype):
     self.decls.append(ctype + ' ' + name + ';')
-  
+    # FIXME: don't create duplicate variables
+    # FIXME: return CDefinition
+
   def ref(self, value):
     'Returns an expression matching the given value.'
     
@@ -39,6 +42,12 @@ class GenContext(object):
     self.addPtr(name, 'Value')
     return CFunctionCall('m_Value', CVariable(name))
 
+  def checkNewComparison(self, cmp_name):
+    if cmp_name in self.seen_cmps:
+      return False
+
+    self.seen_cmps.add(cmp_name)
+    return True
 
 class UnifyContext(object):
   def __init__(self):

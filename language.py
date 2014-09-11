@@ -560,24 +560,39 @@ class Icmp(Instr):
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName()
 
+    # We need a unique variable so that m_ICmp can bind it to the predicate.
+    # If this instruction has a fixed predicate, we will constrain it to be equal
+    # to the bound value. Otherwise, we will refer to it later.
+    #
+    # Named comparisons can occur more than once. We name the first one based on
+    # the comparison name, so that comparisons in the target can use it.
+    # Subsequent references use new names (based on the instruction) which are
+    # constrained to be equal to the comparison name.
+    # NOTE: Anonymous named comparisons are named after their instruction. This
+    # may lead to unexpected collisions
     if self.op == Icmp.Var:
-      opname = 'P_' + self._mungeCName(self.opname)
+      cmpName = 'P_' + self._mungeCName(self.opname)
+      if context.checkNewComparison(cmpName):
+        pred = cmpName
+        extra = None
+      else:
+        pred = 'P_' + name
+        extra = CBinExpr('==', CVariable(pred), CVariable(cmpName))
     else:
-      opname = 'P_' + name
+      pred = 'P_' + name
+      extra = CBinExpr('==', CVariable(pred), Icmp.op_enum[self.op])
 
-    context.addVar(opname, 'ICmpInst::PredicateType')
+    context.addVar(pred, 'ICmpInst::PredicateType')
 
     mICmp = CFunctionCall('match', CVariable(name),
-              CFunctionCall('m_ICmp', CVariable(opname),
+              CFunctionCall('m_ICmp', CVariable(pred),
                 context.ref(self.v1),
                 context.ref(self.v2)))
 
-    if self.op == Icmp.Var:
+    if extra:
+      return CBinExpr('&&', mICmp, extra)
+    else:
       return mICmp
-
-    optype = self.op_enum[self.op]
-
-    return CBinExpr('&&', mICmp, CBinExpr('==', CVariable(opname), CVariable(optype)))
 
   def setRepresentative(self, context):
     self._utype = context.repForSize(1, self.getCName())
