@@ -582,7 +582,7 @@ class Icmp(Instr):
       pred = 'P_' + name
       extra = CBinExpr('==', CVariable(pred), Icmp.op_enum[self.op])
 
-    context.addVar(pred, 'ICmpInst::PredicateType')
+    context.addVar(pred, 'CmpInst::Predicate')
 
     mICmp = CFunctionCall('match', CVariable(name),
               CFunctionCall('m_ICmp', CVariable(pred),
