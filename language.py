@@ -545,16 +545,16 @@ class Icmp(Instr):
                self.stype.getTypeConstraints())
 
   op_enum = {
-    EQ:  'IcmpInst::ICMP_EQ',
-    NE:  'IcmpInst::ICMP_NE',
-    UGT: 'IcmpInst::ICMP_UGT',
-    UGE: 'IcmpInst::ICMP_UGE',
-    ULT: 'IcmpInst::ICMP_ULT',
-    ULE: 'IcmpInst::ICMP_ULE',
-    SGT: 'IcmpInst::ICMP_SGT',
-    SGE: 'IcmpInst::ICMP_SGE',
-    SLT: 'IcmpInst::ICMP_SLT',
-    SLE: 'IcmpInst::ICMP_SLE',
+    EQ:  'ICmpInst::ICMP_EQ',
+    NE:  'ICmpInst::ICMP_NE',
+    UGT: 'ICmpInst::ICMP_UGT',
+    UGE: 'ICmpInst::ICMP_UGE',
+    ULT: 'ICmpInst::ICMP_ULT',
+    ULE: 'ICmpInst::ICMP_ULE',
+    SGT: 'ICmpInst::ICMP_SGT',
+    SGE: 'ICmpInst::ICMP_SGE',
+    SLT: 'ICmpInst::ICMP_SLT',
+    SLE: 'ICmpInst::ICMP_SLE',
   }
 
   def getPatternMatch(self, context, name = None):

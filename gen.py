@@ -25,7 +25,17 @@ class GenContext(object):
     
     if isinstance(value, ConstantVal):
       #TODO specialize m_Zero, m_Ones, etc?
-      return CFunctionCall('m_ConstantInt', CVariable(value.val))
+      if value.val == 0:
+        return CFunctionCall('m_Zero')
+      if value.val == 1:
+        return CFunctionCall('m_One')
+      if value.val == -1:
+        return CFunctionCall('m_AllOnes')
+
+      # not implemented in LLVM 3.4.1
+      #return CFunctionCall('m_SpecificInt', CVariable(value.val))
+      raise AliveError("Can't match literal " + value.val)
+      
     
     name = value.getCName()
     if name in self.seen:
@@ -97,7 +107,7 @@ test = '''
 #opts = parse_opt_file(test)
 opts = parse_opt_file(sys.stdin.read())
 
-print 'bool runInFunction(Instruction* I) {'
+print 'bool runOnInstruction(Instruction* I) {'
 
 for n,p,s,t,us,ut in opts:
   # transform the last instruction in the source

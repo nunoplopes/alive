@@ -486,6 +486,9 @@ class Value:
       if s[0] in '0123456789C':
         s = 'V_' + s
 
+    if s in {'and', 'or', 'not', 'if', 'auto', 'bool'}: #FIXME: add all C++ keywords
+      s = 'V_' + s
+
     return s
 
   def getCName(self):

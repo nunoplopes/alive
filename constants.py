@@ -68,14 +68,14 @@ class ConstantVal(Constant):
     return BitVecVal(self.val, self.type.getSize())
 
   def toOperand(self):
-    return CFunctionCall('Constant::get', self.toCType(), CVariable(str(self.val)))
+    return CFunctionCall('ConstantInt::get', self.toCType(), CVariable(str(self.val)))
     # NOTE: address sign for >64-bit ints
 
   def toAPInt(self):
     # FIXME: ensure value is integral
 
     return CFunctionCall('APInt',
-      self.toCType().arr('getBitWidth', []),
+      self.toCType().arr('getPrimitiveSizeInBits', []),
       CVariable(self.val))
 
   def toAPIntOrLit(self):
@@ -300,15 +300,15 @@ class CnstFunction(Constant):
       return self.args[0].toAPInt().dot('lshr', [self.args[1].toAPIntOrLit()])
 
     if self.op == self.trunc:
-      return self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getBitWidth',[])])
+      return self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getPrimitiveSizeInBits',[])])
 
     if self.op == self.umax:
       return CFunctionCall('APIntOps::umax', *(arg.toAPInt() for arg in self.args))
 
     if self.op == self.width:
       return CFunctionCall('APInt',
-        self.toCType().arr('getBitWidth', []),
-        self.args[0].toCType().arr('getBitWidth', []))
+        self.toCType().arr('getPrimitiveSizeInBits', []),
+        self.args[0].toCType().arr('getPrimitiveSizeInBits', []))
 
     raise AliveError(self.opnames[self.op] + ' not implemented')
 
