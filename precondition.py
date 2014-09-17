@@ -294,4 +294,6 @@ class LLVMBoolPred(BoolPred):
     return CFunctionCall(self.opnames[self.op], *args)
 
   def setRepresentative(self, context):
-    print 'not unifying', str(self)
+    pass
+    # TODO: should NSWAdd or maskZero unify their args?
+    # Instcombine suggests that NSWAdd does not (see AddSub:1149)
