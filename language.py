@@ -580,7 +580,7 @@ class Icmp(Instr):
         extra = CBinExpr('==', CVariable(pred), CVariable(cmpName))
     else:
       pred = 'P_' + name
-      extra = CBinExpr('==', CVariable(pred), Icmp.op_enum[self.op])
+      extra = CBinExpr('==', CVariable(pred), CVariable(Icmp.op_enum[self.op]))
 
     context.addVar(pred, 'CmpInst::Predicate')
 
