@@ -97,6 +97,8 @@ test = '''
 #opts = parse_opt_file(test)
 opts = parse_opt_file(sys.stdin.read())
 
+print 'bool runInFunction(Instruction* I) {'
+
 for n,p,s,t,us,ut in opts:
   # transform the last instruction in the source
   context = GenContext()
@@ -166,6 +168,9 @@ for n,p,s,t,us,ut in opts:
   cond = CIf(CBinExpr.reduce('&&', matches), gen)
 
 
-  code = '{ // ' + n + nest(4, decl_seg + line + line + cond.format()) + line + '}'
+  code = nest(2, line + '{ // ' + n + nest(2, decl_seg + line + line + cond.format()) + line + '}')
   code.pprint()
-  
+
+print
+print '  return false;'
+print '}'
