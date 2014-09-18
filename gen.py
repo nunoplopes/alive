@@ -19,12 +19,12 @@ class GenContext(object):
     self.decls.append(ctype + ' ' + name + ';')
     # FIXME: don't create duplicate variables
     # FIXME: return CDefinition
-
-  def ref(self, value):
-    'Returns an expression matching the given value.'
     
+  def _arg_expr(self, value, bound, extras):
+    if isinstance(value, CExpression):
+      return value
+
     if isinstance(value, ConstantVal):
-      #TODO specialize m_Zero, m_Ones, etc?
       if value.val == 0:
         return CFunctionCall('m_Zero')
       if value.val == 1:
@@ -32,25 +32,41 @@ class GenContext(object):
       if value.val == -1:
         return CFunctionCall('m_AllOnes')
 
-      # not implemented in LLVM 3.4.1
-      #return CFunctionCall('m_SpecificInt', CVariable(value.val))
+      # eventually use m_SpecificInt
       raise AliveError("Can't match literal " + value.val)
-      
-    
+
+    # assume value is an instruction or input
     name = value.getCName()
-    if name in self.seen:
+    if name in bound:
+      # name has been bound in this match
+      old_name = name
+      name = name + 'x_' + str(len(self.seen))
+      extras.append(CBinExpr('==', CVariable(name), CVariable(old_name)))
+
+    elif name in self.seen:
+      # name was bound in a previous call to match
       return CFunctionCall('m_Specific', CVariable(name))
-      
-    if not isinstance(value, (Input, Constant)):
+
+    elif not isinstance(value, (Input, Constant)):
       self.todo.append(value)
-    
+
     self.seen.add(name)
+    bound.add(name)
     if name[0] == 'C':
       self.addPtr(name, 'ConstantInt')
       return CFunctionCall('m_ConstantInt', CVariable(name))
     
     self.addPtr(name, 'Value')
     return CFunctionCall('m_Value', CVariable(name))
+
+  def match(self, varname, matchtype, *args):
+    bound = set()
+    extras = []
+
+    cargs = [self._arg_expr(arg, bound, extras) for arg in args]
+    match = CFunctionCall('match', CVariable(varname), CFunctionCall(matchtype, *cargs))
+
+    return CBinExpr.reduce('&&', [match] + extras)
 
   def checkNewComparison(self, cmp_name):
     if cmp_name in self.seen_cmps:

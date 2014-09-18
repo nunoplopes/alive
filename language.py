@@ -288,12 +288,7 @@ class BinOp(Instr):
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName()
 
-    matcher = self.matcher[self.op]
-    v1 = context.ref(self.v1)
-    v2 = context.ref(self.v2)
-
-    match = CFunctionCall('match', CVariable(name),
-              CFunctionCall(matcher, v1, v2))
+    match = context.match(name, self.matcher[self.op], self.v1, self.v2)
 
     for flag in self.flags:
       match = CBinExpr('&&', match, CVariable(name).arr(self.flag_method[flag], []))
@@ -432,8 +427,7 @@ class ConversionOp(Instr):
 
     matcher = self.matcher[self.op]
 
-    return CFunctionCall('match', CVariable(name),
-              CFunctionCall(matcher, context.ref(self.v)))
+    return context.match(name, matcher, self.v)
 
   constr = {
     Trunc:   'TruncInst',
@@ -584,10 +578,7 @@ class Icmp(Instr):
 
     context.addVar(pred, 'CmpInst::Predicate')
 
-    mICmp = CFunctionCall('match', CVariable(name),
-              CFunctionCall('m_ICmp', CVariable(pred),
-                context.ref(self.v1),
-                context.ref(self.v2)))
+    mICmp = context.match(name, 'm_ICmp', CVariable(pred), self.v1, self.v2)
 
     if extra:
       return CBinExpr('&&', mICmp, extra)
@@ -647,11 +638,7 @@ class Select(Instr):
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName()
 
-    return CFunctionCall('match', CVariable(name),
-              CFunctionCall('m_Select',
-                  context.ref(self.c),
-                  context.ref(self.v1),
-                  context.ref(self.v2)))
+    return context.match(name, 'm_Select', self.c, self.v1, self.v2)
 
   def setRepresentative(self, context):
     self._utype = context.repForName(self.getCName())
