@@ -1,0 +1,93 @@
+Name: InstructionSimplify:1241
+
+%r = lshr 0, %x
+ =>
+%r = 0
+
+
+Name: InstructionSimplify:1241
+
+%r = shl 0, %x
+ =>
+%r = 0
+
+Name: InstructionSimplify:1241
+
+%r = ashr 0, %x
+ =>
+%r = 0
+
+Name: InstructionSimplify: 1244
+
+%r = shl %x, 0
+ =>
+%r = %x
+
+Name: InstructionSimplify: 1244
+
+%r = lshr %x, 0
+ =>
+%r = %x
+
+
+Name: InstructionSimplify: 1244
+
+%r = ashr %x, 0
+ =>
+%r = %x
+
+
+Name: InstructionSimplify: 1248
+
+%r = lshr %x, undef
+ =>
+%r = undef
+
+
+Name: InstructionSimplify:304
+
+%1 = select %a, C1, C1
+%r = shl %1, C2
+ =>
+%r = shl C1, C2
+
+Name: InstructionSimplify:304
+
+%1 = select %a, C1, C1
+%r = shl C2, %1
+ =>
+%r = shl C2, C1
+
+
+Name: InstructionSimplify: 317
+
+%1 = select %a, undef, C1
+%r = shl C2, %1
+ =>
+%r = shl C2, C1
+
+
+Name: InstructionSimplify:317
+
+%1 = select %a, %b, undef
+%r = shl %x, %1
+ =>
+%r = shl %x, %b
+
+
+Name: InstCombineShift: 344
+
+%1 = mul i8 %x, C1
+%r = shl %1, C2
+  =>
+%t = shl C1, C2
+%r = mul %x, %t
+
+
+Name: InstructionSimplify:1275
+
+%r = shl undef, %x
+ =>
+%r = 0
+
+

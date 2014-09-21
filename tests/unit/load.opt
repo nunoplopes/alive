@@ -1,4 +1,22 @@
+Name: load null
 %s = select %cond, null, %p
 %a = load %s
   =>
 %a = load %p
+
+
+Name: uninit read
+%p = alloca i32, 5
+store 3, %p
+%ptr = getelementptr %p, i64 1
+%val = load i32* %ptr
+  =>
+%p = alloca i32, 5
+store 3, %p
+%val = undef
+
+
+Name: unreach
+%v = load null
+  =>
+unreachable

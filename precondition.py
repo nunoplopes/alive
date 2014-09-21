@@ -1,4 +1,4 @@
-# Copyright 2014 The ALIVe authors.
+# Copyright 2014 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -148,8 +148,8 @@ class BinaryBoolPred(BoolPred):
                    self.v2.getTypeConstraints()])
 
   def toSMT(self, state):
-    v1 = self.v1.toSMT([], state, [])
-    v2 = self.v2.toSMT([], state, [])
+    v1 = self.v1.toSMT([], state, [])[1]
+    v2 = self.v2.toSMT([], state, [])[1]
     return {
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
@@ -266,7 +266,7 @@ class LLVMBoolPred(BoolPred):
     return mk_and(c)
 
   def toSMT(self, state):
-    args = [v.toSMT([], state, []) for v in self.args]
+    args = [v.toSMT([], state, [])[1] for v in self.args]
     return {
       self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
       self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),

@@ -1,4 +1,4 @@
-# Copyright 2014 The ALIVe authors.
+# Copyright 2014 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -168,6 +168,11 @@ def parseStore(toks):
   s = Store(toks[1], toks[2], toks[3], toks[4], toks[5])
   identifiers[s.getUniqueName()] = s
 
+def parseUnreachable(toks):
+  global identifiers
+  u = Unreachable()
+  identifiers[u.getUniqueName()] = u
+
 
 def parseInstr(toks):
   global identifiers
@@ -178,7 +183,6 @@ def parseInstr(toks):
 
   toks[1].setName(reg)
   identifiers[reg] = toks[1]
-  return
 
 
 ################################
@@ -327,8 +331,10 @@ op = operandinstr | icmp | select | alloca | gep | load | binop | conversionop
 store = (Literal('store') + typeoperand + comma + ptroperand +\
          optalign).setParseAction(pa(parseStore))
 
+unreachable = Literal('unreachable').setParseAction(pa(parseUnreachable))
+
 instr = (reg + Suppress('=') + op).setParseAction(pa(parseInstr)) |\
-        store | comment
+        store | unreachable | comment
 
 instrc = instr + Optional(comment)
 prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\

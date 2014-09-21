@@ -1,4 +1,4 @@
-; ERROR: Domain of definedness of Target is smaller than Source
+; ERROR: Domain of poisoness of Target is smaller than Source
 %A = add %x, %y
   =>
 %A = add nsw %x, %y

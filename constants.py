@@ -1,4 +1,4 @@
-# Copyright 2014 The ALIVe authors.
+# Copyright 2014 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -64,8 +64,8 @@ class ConstantVal(Constant):
       return And(c, self.type >= bits)
     return c
 
-  def toSMT(self, defined, state, qvars):
-    return BitVecVal(self.val, self.type.getSize())
+  def toSMT(self, poison, state, qvars):
+    return [], BitVecVal(self.val, self.type.getSize())
 
   def toOperand(self):
     return CFunctionCall('ConstantInt::get', self.toCType(), CVariable(str(self.val)))
@@ -101,10 +101,10 @@ class UndefVal(Constant):
     # overload Constant's method
     return self.type.getTypeConstraints()
 
-  def toSMT(self, defined, state, qvars):
+  def toSMT(self, poison, state, qvars):
     v = BitVec('undef' + self.id, self.type.getSize())
     qvars += [v]
-    return v
+    return [], v
 
 
 ################################
@@ -139,11 +139,11 @@ class CnstUnaryOp(Constant):
                    self.v.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, defined, state, qvars):
-    return {
+  def toSMT(self, poison, state, qvars):
+    return [], {
       self.Not: lambda a: ~a,
       self.Neg: lambda a: -a,
-    }[self.op](self.v.toSMT(defined, state, qvars))
+    }[self.op](self.v.toSMT(poison, state, qvars)[1])
 
   def toAPInt(self):
     return CUnaryExpr(self.opnames[self.op], self.v.toAPInt())
@@ -186,10 +186,10 @@ class CnstBinaryOp(Constant):
                    self.v2.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, defined, state, qvars):
-    v1 = self.v1.toSMT(defined, state, qvars)
-    v2 = self.v2.toSMT(defined, state, qvars)
-    return {
+  def toSMT(self, poison, state, qvars):
+    v1 = self.v1.toSMT(poison, state, qvars)[1]
+    v2 = self.v2.toSMT(poison, state, qvars)[1]
+    return [], {
       self.And: lambda a,b: a & b,
       self.Or:  lambda a,b: a | b,
       self.Xor: lambda a,b: a ^ b,
@@ -272,19 +272,19 @@ class CnstFunction(Constant):
 
   def getTypeConstraints(self):
     c = {
-      self.abs:   lambda a: allTyEqual([a], Type.Int),
-      self.lshr:  lambda a,b: allTyEqual([a,b], Type.Int),
+      self.abs:   lambda a: allTyEqual([a,self], Type.Int),
+      self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.trunc: lambda a: [self.type < a.type],
-      self.umax:  lambda a,b: allTyEqual([a,b], Type.Int),
+      self.umax:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.width: lambda a: [],
     }[self.op](*self.args)
 
     return mk_and([v.getTypeConstraints() for v in self.args] +\
                   [self.type.getTypeConstraints()] + c)
 
-  def toSMT(self, defined, state, qvars):
-    args = [v.toSMT(defined, state, qvars) for v in self.args]
-    return {
+  def toSMT(self, poison, state, qvars):
+    args = [v.toSMT(poison, state, qvars)[1] for v in self.args]
+    return [], {
       self.abs:   lambda a: If(a >= 0, a, -a),
       self.lshr:  lambda a,b: LShR(a,b),
       self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
