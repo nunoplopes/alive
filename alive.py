@@ -202,7 +202,7 @@ def check_typed_opt(pre, src, tgt, types):
       exit(-1)
 
     check_expr([], [mem != memb] + extra_cnstrs, lambda s :
-      ('ERROR: Mismatch in final memory state for %s (%d bits)' %
+      ('Mismatch in final memory state for %s (%d bits)' %
          (ptr, mem.sort().size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
 
