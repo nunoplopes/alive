@@ -70,7 +70,7 @@ def parseOperand(v, type):
   # %var
   if v[0] == '%' or v[0] == 'C':
     if identifiers.has_key(v):
-      used_identifiers[v] = True
+      used_identifiers.add(v)
       return identifiers[v]
     if parsing_phase == Target:
       raise ParseError('Cannot declare new input variables or constants in '
@@ -102,6 +102,10 @@ def parseTypeOperand(toks):
 
 def parseIntOperand(toks):
   t = toks[0].ensureIntType()
+  return [t, parseOperand(toks[1], t)]
+
+def parseBoolOperand(toks):
+  t = toks[0].ensureIntType(1)
   return [t, parseOperand(toks[1], t)]
 
 def parsePtrOperand(toks):
@@ -139,9 +143,8 @@ def parseIcmp(toks):
   return Icmp(toks[1], toks[2], toks[3], parseOperand(toks[4], toks[2]))
 
 def parseSelect(toks):
-  t = getMostSpecificType(toks[2], toks[4])
-  return Select(t, parseOperand(toks[1], IntType(1)),
-                parseOperand(toks[3], t), parseOperand(toks[5], t))
+  t = getMostSpecificType(toks[3], toks[5])
+  return Select(t, toks[2], parseOperand(toks[4], t), parseOperand(toks[6], t))
 
 def parseOptionalNumElems(loc, toks):
   t = IntType()
@@ -172,6 +175,12 @@ def parseUnreachable(toks):
   global identifiers
   u = Unreachable()
   identifiers[u.getUniqueName()] = u
+
+def parseBBLabel(toks):
+  if toks[0] in used_bb_labels:
+    raise ParseError('Redefinition of BB label')
+  used_bb_labels.add(toks[0])
+  print toks
 
 
 def parseInstr(toks):
@@ -206,7 +215,7 @@ def parseCnstVar(v):
     raise ParseError('Only constants allowed in expressions')
 
   if identifiers.has_key(id):
-    used_identifiers[id] = True
+    used_identifiers.add(id)
     return identifiers[id]
 
   if parsing_phase == Pre:
@@ -285,6 +294,7 @@ type <<= (Literal('i') + posnum + ZeroOrMore(Literal('*'))).\
            setParseAction(pa(parseNamedType))
 
 opttype = Optional(type).setParseAction(pa(parseOptType))
+i1 = Optional('i1').setParseAction(lambda toks : IntType(1))
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(pa(lambda toks : [toks]))
@@ -292,6 +302,7 @@ operand = cnst_expr | Literal('undef')
 
 typeoperand = (opttype + operand).setParseAction(pa(parseTypeOperand))
 intoperand  = (opttype + operand).setParseAction(pa(parseIntOperand))
+booloperand = (i1 + operand).setParseAction(pa(parseBoolOperand))
 ptroperand  = (opttype + operand).setParseAction(pa(parsePtrOperand))
 
 binop = (opname + flags + opttype + operand + comma + operand).\
@@ -307,7 +318,7 @@ optionalname = Optional(identifier).setParseAction(pa(parseOptional('')))
 icmp = (Literal('icmp') + optionalname + typeoperand + comma + operand).\
          setParseAction(pa(parseIcmp))
 
-select = (Literal('select') + Suppress(Optional('i1')) + operand +\
+select = (Literal('select') + booloperand +\
           comma + opttype + operand + comma + opttype + operand).\
             setParseAction(pa(parseSelect))
 
@@ -333,8 +344,15 @@ store = (Literal('store') + typeoperand + comma + ptroperand +\
 
 unreachable = Literal('unreachable').setParseAction(pa(parseUnreachable))
 
+newBB = (identifier + Suppress(':')).setParseAction(pa(parseBBLabel))
+
+label = Suppress('label') + reg
+br = Literal('br') + booloperand + comma + label + comma + label
+
+ret = Literal('ret') + typeoperand
+
 instr = (reg + Suppress('=') + op).setParseAction(pa(parseInstr)) |\
-        store | unreachable | comment
+        store | unreachable | newBB | br | ret | comment
 
 instrc = instr + Optional(comment)
 prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\
@@ -342,8 +360,9 @@ prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\
 
 
 def parse_llvm(txt):
-  global identifiers, used_identifiers
-  used_identifiers = {}
+  global identifiers, used_identifiers, used_bb_labels
+  used_identifiers = set([])
+  used_bb_labels = set([])
   if parsing_phase == Target:
     old_ids = identifiers
     identifiers = collections.OrderedDict()
