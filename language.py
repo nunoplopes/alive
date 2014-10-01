@@ -435,11 +435,6 @@ class Icmp(Instr):
     self.v1 = v1
     self.v2 = v2
 
-  def setName(self, name):
-    if self.op == self.Var and self.opname == '':
-      self.opname = name
-    Value.setName(self, name)
-
   @staticmethod
   def getOpId(name):
     return Icmp.opids.get(name, Icmp.Var)
@@ -470,7 +465,8 @@ class Icmp(Instr):
   def recurseSMT(self, ops, a, b, i):
     if len(ops) == 1:
       return self.opToSMT(ops[0], a, b)
-    var = BitVec('icmp_' + self.opname, 4)
+    opname = self.opname if self.opname != '' else self.getName()
+    var = BitVec('icmp_' + opname, 4)
     assert 1 << 4 > self.Var
     return If(var == i,
               self.opToSMT(ops[0], a, b),
