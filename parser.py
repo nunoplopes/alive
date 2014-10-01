@@ -167,24 +167,40 @@ def parseOperandInstr(toks):
   return CopyOperand(op, toks[0])
 
 def parseStore(toks):
-  global identifiers
+  global identifiers, BBs
   s = Store(toks[1], toks[2], toks[3], toks[4], toks[5])
   identifiers[s.getUniqueName()] = s
+  BBs[bb_label][s.getUniqueName()] = s
 
 def parseUnreachable(toks):
-  global identifiers
+  global identifiers, BBs
   u = Unreachable()
   identifiers[u.getUniqueName()] = u
+  BBs[bb_label][u.getUniqueName()] = u
 
 def parseBBLabel(toks):
   if toks[0] in used_bb_labels:
     raise ParseError('Redefinition of BB label')
-  used_bb_labels.add(toks[0])
-  print toks
+  global BBs, bb_label
+  bb_label = toks[0]
+  BBs[bb_label] = collections.OrderedDict()
+  used_bb_labels.add(bb_label)
+
+def parseBr(toks):
+  global identifiers, BBs
+  s = Br(bb_label, toks[2], toks[3], toks[4])
+  identifiers[s.getUniqueName()] = s
+  BBs[bb_label][s.getUniqueName()] = s
+
+def parseRet(toks):
+  global identifiers, BBs
+  s = Ret(bb_label, toks[1], toks[2])
+  identifiers[s.getUniqueName()] = s
+  BBs[bb_label][s.getUniqueName()] = s
 
 
 def parseInstr(toks):
-  global identifiers
+  global identifiers, BBs
 
   reg = toks[0]
   if identifiers.has_key(reg):
@@ -192,6 +208,7 @@ def parseInstr(toks):
 
   toks[1].setName(reg)
   identifiers[reg] = toks[1]
+  BBs[bb_label][reg] = toks[1]
 
 
 ################################
@@ -347,9 +364,10 @@ unreachable = Literal('unreachable').setParseAction(pa(parseUnreachable))
 newBB = (identifier + Suppress(':')).setParseAction(pa(parseBBLabel))
 
 label = Suppress('label') + reg
-br = Literal('br') + booloperand + comma + label + comma + label
+br = (Literal('br') + booloperand + comma + label + comma + label).\
+       setParseAction(pa(parseBr))
 
-ret = Literal('ret') + typeoperand
+ret = (Literal('ret') + typeoperand).setParseAction(pa(parseRet))
 
 instr = (reg + Suppress('=') + op).setParseAction(pa(parseInstr)) |\
         store | unreachable | newBB | br | ret | comment
@@ -360,9 +378,13 @@ prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\
 
 
 def parse_llvm(txt):
-  global identifiers, used_identifiers, used_bb_labels
+  global identifiers, used_identifiers, used_bb_labels, BBs, bb_label
   used_identifiers = set([])
   used_bb_labels = set([])
+  bb_label = ""
+  BBs = collections.OrderedDict()
+  BBs[bb_label] = collections.OrderedDict()
+
   if parsing_phase == Target:
     old_ids = identifiers
     identifiers = collections.OrderedDict()
@@ -372,7 +394,7 @@ def parse_llvm(txt):
   else:
     identifiers = collections.OrderedDict()
   prog.parseString(txt)
-  return identifiers, used_identifiers
+  return BBs, identifiers, used_identifiers
 
 
 ##########################
@@ -475,16 +497,16 @@ def _parseOpt(s, loc, toks):
 
   parsing_phase = Source
   save_parse_str(src, src_line)
-  src, used_src = parse_llvm(src)
+  src, ident_src, used_src = parse_llvm(src)
 
   parsing_phase = Target
   save_parse_str(tgt, tgt_line)
-  tgt, used_tgt = parse_llvm(tgt)
+  tgt, ident_tgt, used_tgt = parse_llvm(tgt)
 
   parsing_phase = Pre
   save_parse_str(pre, pre_line)
-  pre = parse_pre(pre, src)
-  return name, pre, src, tgt, used_src, used_tgt
+  pre = parse_pre(pre, ident_src)
+  return name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt
 
 def parseOpt(s, loc, toks):
   try:

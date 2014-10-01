@@ -154,9 +154,9 @@ def print_var_vals(s, vs1, vs2, stopv, types):
   _print_var_vals(s, vs2, stopv, seen, types)
 
 
-def check_typed_opt(pre, src, tgt, types):
-  srcv = toSMT(src)
-  tgtv = toSMT(tgt)
+def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
+  srcv = toSMT(src, ident_src)
+  tgtv = toSMT(tgt, ident_tgt)
   pre  = pre.toSMT(srcv)
   extra_cnstrs = [pre,
                   srcv.getAllocaConstraints(),
@@ -208,19 +208,19 @@ def check_typed_opt(pre, src, tgt, types):
 
 
 def check_opt(opt):
-  name, pre, src, tgt, used_src, used_tgt = opt
+  name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt = opt
 
   print '----------------------------------------'
   print 'Optimization: ' + name
   print 'Precondition: ' + str(pre)
   print_prog(src)
-  print '  =>'
+  print '=>'
   print_prog(tgt)
   print
 
   # infer allowed types for registers
-  type_src = getTypeConstraints(src)
-  type_tgt = getTypeConstraints(tgt)
+  type_src = getTypeConstraints(ident_src)
+  type_tgt = getTypeConstraints(ident_tgt)
   type_pre = pre.getTypeConstraints()
 
   s = SolverFor('QF_LIA')
@@ -238,15 +238,15 @@ def check_opt(opt):
   sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
-  has_unreach = any(v.startswith('unreachable') for v in tgt.iterkeys())
-  for v in src.iterkeys():
-    if v[0] == '%' and v not in used_src and v not in used_tgt and v not in tgt\
-       and not has_unreach:
+  has_unreach = any(v.startswith('unreachable') for v in ident_tgt.iterkeys())
+  for v in ident_src.iterkeys():
+    if v[0] == '%' and v not in used_src and v not in used_tgt and\
+       v not in ident_tgt and not has_unreach:
       print 'ERROR: Temporary register %s unused and not overwritten' % v
       exit(-1)
 
-  for v in tgt.iterkeys():
-    if v[0] == '%' and v not in used_tgt and v not in src:
+  for v in ident_tgt.iterkeys():
+    if v[0] == '%' and v not in used_tgt and v not in ident_src:
       print 'ERROR: Temporary register %s unused and does not overwrite any'\
             ' Source register' % v
       exit(-1)
@@ -258,10 +258,10 @@ def check_opt(opt):
     if res != sat:
       break
     types = s.model()
-    fixupTypes(src, types)
-    fixupTypes(tgt, types)
+    fixupTypes(ident_src, types)
+    fixupTypes(ident_tgt, types)
     pre.fixupTypes(types)
-    check_typed_opt(pre, src, tgt, types)
+    check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types)
     block_model(s, sneg, types)
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))

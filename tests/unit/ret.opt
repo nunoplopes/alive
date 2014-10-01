@@ -1,0 +1,6 @@
+; ERROR: Mismatch in values
+entry:
+  ret 3
+=>
+entry:
+  ret 4

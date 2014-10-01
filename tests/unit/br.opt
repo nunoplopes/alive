@@ -1,0 +1,72 @@
+Name: 0
+entry:
+  %0 = udiv %a, %b
+  %1 = icmp ne 0, %0
+  %2 = icmp ne 1, %0
+  %3 = and %1, %2
+  br %3, label %true, label %false
+true:
+  %4 = icmp eq 0, %b
+  %5 = zext %4 to i32
+  ret %5
+false:
+  ret 555
+=>
+true:
+  %4 = false
+
+
+Name: 1
+Pre: Known(%2, false)
+entry:
+  %0 = i64 %x1
+  %1 = and i64 18446744073709551612, %0
+  %2 = icmp eq i64 0, %1
+  %3 = i32 %x2
+  %4 = i32 %x3
+  %5 = zext i32 %4 to i64
+  %6 = and i64 2, %0
+  %7 = xor i64 3, %6
+  %8 = sub nsw i64 %5, %7
+  %9 = mul nuw i64 24, %8
+  %10 = sdiv exact i64 %9, 24
+  %11 = trunc i64 %10 to i32
+  %12 = icmp ult i32 %3, %11
+  br %12, label %foo, label %bar
+foo:
+  %13 = zext i32 %3 to i64
+  %14 = icmp slt i64 %13, %8
+bar:
+  ret i32 42
+  =>
+foo:
+  %14 = true
+
+
+Name: 2
+Pre: Known(%6, false) && Known(%11, true)
+  %0 = i64 %x1
+  %1 = i64 %x2
+  %2 = icmp eq i64 %0, %1
+  %3 = i64 %x3
+  %4 = i64 %x4
+  %5 = icmp eq i64 %3, %4
+  %6 = or i1 %2, %5
+  %7 = i64 0
+  %8 = mul i64 1, %7
+  %9 = mul i64 280, %7
+  %10000 = add i64 24, %4
+  %10001 = add i64 %10000, %8
+  %10002 = add i64 %10001, %9
+  %10 = i64 %10002
+  %11 = icmp eq i64 %0, %10
+  %12 = sub i64 %1, %0
+  %13 = ashr exact i64 %12, 5
+  %14 = icmp eq i64 0, %13
+  br %14, label %true, label %false
+true:
+  %15 = icmp slt i64 0, %12
+false:
+  =>
+true:
+  %15 = false

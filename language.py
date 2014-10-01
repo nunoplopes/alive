@@ -41,15 +41,29 @@ class State:
     self.vars = collections.OrderedDict()
     self.defined = [] # definedness so far in the BB
     self.ptrs = []
+    self.bb_pres = {}
 
   def add(self, v, smt, defined, poison, qvars):
     if v.getUniqueName() == '':
       return
     self.defined = self.defined + defined
     self.vars[v.getUniqueName()] = (smt, self.defined, poison, qvars)
+    if isinstance(v, TerminatorInst):
+      for (bb,cond) in v.getSuccessors(self):
+        bb = bb[1:]
+        if bb not in self.bb_pres:
+          self.bb_pres[bb] = []
+        self.bb_pres[bb] += [cond]
 
   def addAlloca(self, ptr, mem, info):
     self.ptrs += [(ptr, mem, info)]
+
+  def newBB(self, name):
+    if name in self.bb_pres:
+      self.defined = [mk_or(self.bb_pres[name])]
+    else:
+      self.defined = []
+    self.current_bb = name
 
   def getAllocaConstraints(self):
     ptrs = [ptr for (ptr, mem, info) in self.ptrs]
@@ -63,7 +77,7 @@ class State:
 
   def iteritems(self):
     for k,v in self.vars.iteritems():
-      if k[0] != '%' and k[0] != 'C':
+      if k[0] != '%' and k[0] != 'C' and not k.startswith('ret_'):
         continue
       yield k,v
 
@@ -797,23 +811,86 @@ class Unreachable(Instr):
   def toSMT(self, poison, state, qvars):
     return [BoolVal(False)], None
 
+
+################################
+class TerminatorInst(Instr):
+  pass
+
+
+################################
+class Br(TerminatorInst):
+  def __init__(self, bb_label, cond, true, false):
+    assert isinstance(bb_label, str)
+    assert isinstance(cond, Value)
+    assert isinstance(true, str)
+    assert isinstance(false, str)
+    self.cond = cond
+    self.true = true
+    self.false = false
+    self.setName('br_' + bb_label)
+
+  def __repr__(self):
+    return "br i1 %s, label %s, label %s" % (self.cond.getName(),
+                                             self.true, self.false)
+
+  def getSuccessors(self, state):
+    poison = []
+    qvars = []
+    cond = state.eval(self.cond, poison, qvars)
+    assert qvars == []
+    return [(self.true, mk_and([cond != 0] + state.defined + poison)),
+            (self.false, mk_and([cond == 0] + state.defined + poison))]
+
+  def toSMT(self, poison, state, qvars):
+    return [BoolVal(True)], None
+
+
+################################
+class Ret(TerminatorInst):
+  def __init__(self, bb_label, type, val):
+    assert isinstance(bb_label, str)
+    assert isinstance(type, Type)
+    assert isinstance(val, Value)
+    self.type = type
+    self.val = val
+    self.setName('ret_' + bb_label)
+
+  def __repr__(self):
+    t = str(self.type)
+    if len(t) > 0:
+      t = t + ' '
+    return "ret %s%s" % (t, self.val.getName())
+
+  def getSuccessors(self, state):
+    return []
+
+  def toSMT(self, poison, state, qvars):
+    return [BoolVal(True)], state.eval(self.val, poison, qvars)
+
   def getTypeConstraints(self):
-    return BoolVal(True)
+    return And(self.type == self.val.type, self.type.getTypeConstraints())
 
 
 ################################
 def print_prog(p):
-  for k,v in p.iteritems():
-    if isinstance(v, (Input, Constant)):
-      continue
-    if isinstance(v, (Store, Unreachable)):
-      print v
-    else:
-      print '%s = %s' % (k, v)
+  for bb, instrs in p.iteritems():
+    if bb != "":
+      print "%s:" % bb
+
+    for k,v in instrs.iteritems():
+      if isinstance(v, (Store, Unreachable, TerminatorInst)):
+        print "  %s" % v
+      else:
+        print '  %s = %s' % (k, v)
 
 
 def getTypeConstraints(p):
-  return [v.getTypeConstraints() for v in p.itervalues()]
+  t = [v.getTypeConstraints() for v in p.itervalues()]
+  # ensure all return instructions have the same type
+  ret_types = [v.type for v in p.itervalues() if isinstance(v, Ret)]
+  if len(ret_types) > 1:
+    t += mkTyEqual(ret_types)
+  return t
 
 
 def fixupTypes(p, types):
@@ -821,11 +898,21 @@ def fixupTypes(p, types):
     v.fixupTypes(types)
 
 
-def toSMT(prog):
+def toSMT(prog, idents):
   state = State()
-  for k,v in prog.iteritems():
-    poison = []
-    qvars = []
-    defined, smt = v.toSMT(poison, state, qvars)
-    state.add(v, smt, defined, poison, qvars)
+  for k,v in idents.iteritems():
+    if isinstance(v, (Input, Constant)):
+      poison = []
+      qvars = []
+      defined, smt = v.toSMT(poison, state, qvars)
+      assert defined == [] and poison == []
+      state.add(v, smt, [], [], qvars)
+
+  for bb, instrs in prog.iteritems():
+    state.newBB(bb)
+    for k,v in instrs.iteritems():
+      poison = []
+      qvars = []
+      defined, smt = v.toSMT(poison, state, qvars)
+      state.add(v, smt, defined, poison, qvars)
   return state

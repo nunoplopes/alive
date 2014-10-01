@@ -22,6 +22,8 @@ def allTyEqual(vars, Ty):
     c += [vars[0].type == vars[i].type]
   return c
 
+def mkTyEqual(types):
+  return [types[0] == types[i] for i in range(1, len(types))]
 
 
 class Type:
@@ -439,8 +441,9 @@ class Value:
 
   def setName(self, name):
     self.name = name
-    self.type = copy.deepcopy(self.type)
-    self.type.setName(name)
+    if hasattr(self, 'type'):
+      self.type = copy.deepcopy(self.type)
+      self.type.setName(name)
     for attr in dir(self):
       a = getattr(self, attr)
       if isinstance(a, TypeFixedValue):
