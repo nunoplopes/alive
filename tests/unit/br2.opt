@@ -1,0 +1,13 @@
+; ERROR: Mismatch in preconditions for BB
+%1 = zext %0 to i32
+%2 = icmp eq %1, C
+br %2, label %here, label %there
+here:
+there:
+   =>
+%1 = zext %0
+%2 = icmp eq %1, C
+br %2, label %there, label %here
+here:
+there:
+

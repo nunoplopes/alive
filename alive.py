@@ -134,7 +134,10 @@ def var_type(var, types):
 
 
 def str_model(s, v):
-  val = s.model().evaluate(v, True).as_long()
+  val = s.model().evaluate(v, True)
+  if isinstance(val, BoolRef):
+    return "true" if is_true(val) else "false"
+  val = val.as_long()
   return "%d (%s)" % (val, hex(val))
 
 
@@ -162,6 +165,21 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
                   srcv.getAllocaConstraints(),
                   tgtv.getAllocaConstraints()]
 
+  # 1) check preconditions of BBs
+  tgtbbs = tgtv.bb_pres
+  for k,v in srcv.bb_pres.iteritems():
+    if not tgtbbs.has_key(k):
+      continue
+    # assume open world. May need to add language support to state that a BB is
+    # complete (closed world)
+    p1 = mk_and(v)
+    p2 = mk_and(tgtbbs[k])
+    check_expr([], [p1 != p2] + extra_cnstrs, lambda s :
+      ("Mismatch in preconditions for BB '%s'\n" % k, str_model(s, p1),
+       str_model(s, p2), None, srcv, tgtv, types))
+
+
+  # 2) check register values
   for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
     if k[0] == 'C' or not tgtv.has_key(k):
@@ -190,7 +208,8 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
-  # now check that the final memory state is similar in both programs
+
+  # 3) check that the final memory state is similar in both programs
   memsb = {str(ptr) : mem for (ptr, mem, info) in tgtv.ptrs}
   for (ptr, mem, info) in srcv.ptrs:
     memb = memsb.get(str(ptr))
