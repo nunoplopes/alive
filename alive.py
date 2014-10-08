@@ -210,8 +210,8 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
 
 
   # 3) check that the final memory state is similar in both programs
-  memsb = {str(ptr) : mem for (ptr, mem, info) in tgtv.ptrs}
-  for (ptr, mem, info) in srcv.ptrs:
+  memsb = {str(ptr) : mem for (ptr, mem, qvars, info) in tgtv.ptrs}
+  for (ptr, mem, qvars, info) in srcv.ptrs:
     memb = memsb.get(str(ptr))
     if memb == None:
       # If memory was not written in Source, then ignore the block.
@@ -220,7 +220,7 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
       print '\nERROR: No memory state for %s in Target' % str(ptr)
       exit(-1)
 
-    check_expr([], [mem != memb] + extra_cnstrs, lambda s :
+    check_expr(qvars, [mem != memb] + extra_cnstrs, lambda s :
       ('Mismatch in final memory state for %s (%d bits)' %
          (ptr, mem.sort().size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))

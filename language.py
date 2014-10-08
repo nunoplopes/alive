@@ -56,7 +56,7 @@ class State:
         self.bb_pres[bb] += [cond]
 
   def addAlloca(self, ptr, mem, info):
-    self.ptrs += [(ptr, mem, info)]
+    self.ptrs += [(ptr, mem, [], info)]
 
   def newBB(self, name):
     if name in self.bb_pres:
@@ -66,7 +66,7 @@ class State:
     self.current_bb = name
 
   def getAllocaConstraints(self):
-    ptrs = [ptr for (ptr, mem, info) in self.ptrs]
+    ptrs = [ptr for (ptr, mem, qvars, info) in self.ptrs]
     return mk_distinct(ptrs)
 
   def eval(self, v, poison, qvars):
@@ -667,11 +667,11 @@ class Load(Instr):
     BV = BV << offset
     return Extract(old_size - 1, old_size - size, BV)
 
-  def _recPtrLoad(self, l, v, defined, mustload):
+  def _recPtrLoad(self, l, v, defined, mustload, qvars):
     if len(l) == 0:
       return None
 
-    (ptr, mem, info) = l[0]
+    (ptr, mem, qvs, info) = l[0]
     (block_size, num_elems, align, initialized) = info
     size = mem.size()
     read_size = self.type.getSize()
@@ -683,10 +683,11 @@ class Load(Instr):
       initialized = self.extractBV(initialized, offset, actual_read_size)
     elif size < read_size:
       # undef behavior; skip this block
-      return self._recPtrLoad(l[1:], v, defined, mustload)
+      return self._recPtrLoad(l[1:], v, defined, mustload, qvars)
 
     inbounds = And(UGE(v, ptr), ULE(v + read_size/8, ptr + size/8))
     mustload += [inbounds]
+    qvars += qvs
 
     # reading unitialized data is undef behavior
     defined += [Implies(inbounds,
@@ -697,14 +698,14 @@ class Load(Instr):
       # overestimating the alignment is undefined behavior.
       defined += [Implies(inbounds, align >= self.align)]
 
-    mem2 = self._recPtrLoad(l[1:], v, defined, mustload)
+    mem2 = self._recPtrLoad(l[1:], v, defined, mustload, qvars)
     return mem if mem2 is None else If(inbounds, mem, mem2)
 
   def toSMT(self, poison, state, qvars):
     v = state.eval(self.v, poison, qvars)
     defined = [v != 0]
     mustload = []
-    val = self._recPtrLoad(state.ptrs, v, defined, mustload)
+    val = self._recPtrLoad(state.ptrs, v, defined, mustload, qvars)
     defined += [mk_or(mustload)]
     return ([BoolVal(False)], 0) if val is None else (defined, val)
 
@@ -764,18 +765,25 @@ class Store(Instr):
     write_size = getAllocSize(self.stype)
     newmem = []
     mustwrite = []
-    for (ptr, mem, info) in state.ptrs:
+    for (ptr, mem, qvs, info) in state.ptrs:
       (block_size, num_elems, align, initialized) = info
       size = block_size * num_elems
       inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size/8, ptr + size/8))
       mustwrite += [inbounds]
 
-      mem = If(inbounds, self._mkMem(src, tgt, ptr, size, mem), mem)
+      if state.defined == []:
+        writes = inbounds
+      else:
+        # the store may or may not happen if undefined behavior happened before.
+        mwvar = FreshBool('mw_')
+        qvs += [mwvar]
+        writes = And(Or(mk_and(state.defined), mwvar), inbounds)
+      mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
       allOnes = BitVecVal((1 << write_size) - 1, mem.size())
       initialized2 = If(inbounds,
                         self._mkMem(allOnes, tgt, ptr, size, initialized),
                         initialized)
-      newmem += [(ptr, mem, (block_size, num_elems, align, initialized2))]
+      newmem += [(ptr, mem, qvs, (block_size, num_elems, align, initialized2))]
 
       if self.align != 0:
         # overestimating the alignment is undefined behavior.

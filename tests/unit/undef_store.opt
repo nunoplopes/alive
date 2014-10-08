@@ -1,0 +1,8 @@
+; ERROR: Mismatch in final memory state
+store i32 4, %p
+%a = udiv i63 %x, 0
+%b = i32 2
+  =>
+%a = udiv %x, 0
+store i32 4, %p
+%b = add 1, 1
