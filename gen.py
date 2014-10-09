@@ -5,6 +5,8 @@ from parser import parse_opt_file
 from codegen import *
 from itertools import combinations
 
+HAS_SPECIFIC_INT = False
+
 class GenContext(object):
   def __init__(self):
     self.seen = set()
@@ -33,7 +35,10 @@ class GenContext(object):
         return CFunctionCall('m_AllOnes')
 
       # eventually use m_SpecificInt
-      raise AliveError("Can't match literal " + value.val)
+      if HAS_SPECIFIC_INT:
+        return CFunctionCall('m_SpecificInt', CVariable(str(value.val)))
+
+      raise AliveError("Can't match literal " + str(value.val))
 
     # assume value is an instruction or input
     name = value.getCName()
