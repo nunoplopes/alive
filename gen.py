@@ -183,13 +183,15 @@ for n,p,s,t,us,ut in opts:
     # can't use .toCType(), because these are now unified
     matches.append(m)
 
-  gen = [CDefinition(CVariable('Value'), CVariable(v.getCName()), v.toInstruction(), True)
-          for (k,v) in t.iteritems() if isinstance(v, Instr) and not k in s]
+  gen = []
+  for (k,v) in t.iteritems():
+    if isinstance(v, Instr) and not k in s:
+      gen.extend(v.toConstruct())
   new_root = t[root_name]
-  gen.append(CDefinition(CVariable('Value'), 
-    CVariable(new_root.getCName()), new_root.toInstruction(), True))
+  gen.extend(new_root.toConstruct())
   gen.append(CVariable('I').arr('replaceAllUsesWith', [new_root.toOperand()]))
   gen.append(CReturn(CVariable('true')))
+
   
   cond = CIf(CBinExpr.reduce('&&', matches), gen)
 

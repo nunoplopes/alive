@@ -80,6 +80,9 @@ class Instr(Value):
   def utype(self):
     return self._utype
 
+  def toConstruct(self):
+    return [CDefinition(CVariable('Value'), CVariable(self.getCName()), self.toInstruction(), True)]
+
 
 ################################
 class CopyOperand(Instr):
@@ -312,9 +315,17 @@ class BinOp(Instr):
     Xor:  'Xor',
   }
 
-  def toInstruction(self):
-    return CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
-      self.v1.toOperand(), self.v2.toOperand(), CVariable('""'), CVariable('I'))
+  def toConstruct(self):
+    gen = [CDefinition(CVariable('Value'), CVariable(self.getCName()), 
+      CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
+        self.v1.toOperand(), self.v2.toOperand(), CVariable('""'), CVariable('I')),
+      True)]
+
+    for f in self.flags:
+      setter = {'nsw': 'setHasNoSignedWrap', 'nuw': 'setHasNoUnsignedWrap', 'exact': 'setIsExact'}[f]
+      gen.append(CVariable(self.getCName()).arr(setter, [CVariable('true')]))
+
+    return gen
 
   def setRepresentative(self, context):
     self._utype = unified(context.repForName(self.getCName()),
