@@ -142,6 +142,21 @@ def bv_log2(v):
 
 
 ##########################
+# Type inference utilities
+
+def register_pick_one_type(v):
+  global gbl_one_type_only
+  gbl_one_type_only.add(str(v))
+
+def reset_pick_one_type():
+  global gbl_one_type_only
+  gbl_one_type_only = set([])
+
+def get_pick_one_type():
+  return gbl_one_type_only
+
+
+##########################
 # Error handling
 
 class AliveError(Exception):

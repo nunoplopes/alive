@@ -24,14 +24,20 @@ def block_model(s, sneg, m):
   sneg.push()
   bools = []
   exprs = []
+  req   = []
+  skip_model = get_pick_one_type()
+
   for n in m.decls():
     b = FreshBool()
-    expr = (Int(str(n)) == m[n])
+    name = str(n)
+    expr = (Int(name) == m[n])
     sneg.add(b == expr)
-    bools += [b]
-    exprs += [expr]
+    if name in skip_model:
+      req += [b]
+    else:
+      bools += [b]
+      exprs += [expr]
 
-  req = []
   req_exprs = []
   for i in range(len(bools)):
     if sneg.check(req + bools[i+1:]) != unsat:
@@ -237,6 +243,8 @@ def check_opt(opt):
   print_prog(tgt)
   print
 
+  reset_pick_one_type()
+
   # infer allowed types for registers
   type_src = getTypeConstraints(ident_src)
   type_tgt = getTypeConstraints(ident_tgt)
@@ -244,6 +252,14 @@ def check_opt(opt):
 
   s = SolverFor('QF_LIA')
   s.add(type_pre)
+  if s.check() != sat:
+    print 'Precondition does not type check'
+    exit(-1)
+
+  # Only one type per variable/expression in the precondition is required.
+  for v in s.model().decls():
+    register_pick_one_type(v)
+
   s.add(type_src)
   if s.check() != sat:
     print 'Source program does not type check'
