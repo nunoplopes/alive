@@ -171,3 +171,62 @@ Pre: WillNotOverflowUnsignedMul(C1, C2)
 %r = udiv %Op0, C2
   =>
 %r = udiv %X, C1*C2
+
+
+Name: 748
+; FIXME: merge with the following
+Pre: C2 % C1 == 0
+%m = mul nsw i7 %X, C1
+%r = sdiv %m, C2
+  =>
+%r = sdiv %X, C2/C1
+
+
+Name: 748
+Pre: C2 % C1 == 0
+%m = mul nsw i7 %X, C1
+%r = sdiv exact %m, C2
+  =>
+%r = sdiv exact %X, C2/C1
+
+
+Name: 748
+; FIXME: merge with the following
+Pre: C2 %u C1 == 0
+%m = mul nuw i7 %X, C1
+%r = udiv %m, C2
+  =>
+%r = udiv %X, C2 /u C1
+
+
+Name: 748
+Pre: C2 %u C1 == 0
+%m = mul nuw i7 %X, C1
+%r = udiv exact %m, C2
+  =>
+%r = udiv exact %X, C2 /u C1
+
+
+Name: 756
+; FIXME: merge the following 3
+Pre: C1 % C2 == 0
+%m = mul nsw i7 %X, C1
+%r = sdiv %m, C2
+  =>
+%r = mul nsw %X, C1/C2
+
+
+Name: 756
+Pre: C1 %u C2 == 0
+%m = mul nuw i7 %X, C1
+%r = udiv %m, C2
+  =>
+%r = mul nuw %X, C1/u C2
+
+
+Name: 756
+Pre: C1 %u C2 == 0
+%m = mul nuw nsw i7 %X, C1
+%r = udiv %m, C2
+  =>
+%r = mul nuw nsw %X, C1/u C2

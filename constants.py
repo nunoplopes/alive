@@ -120,9 +120,9 @@ class CnstUnaryOp(Constant):
 
 ################################
 class CnstBinaryOp(Constant):
-  And, Or, Xor, Add, Sub, Mul, Div, Rem, Shr, Shl, Last = range(11)
+  And, Or, Xor, Add, Sub, Mul, Div, DivU, Rem, RemU, Shr, Shl, Last = range(13)
 
-  opnames = ['&', '|', '^', '+', '-', '*', '/', '%', '>>', '<<']
+  opnames = ['&', '|', '^', '+', '-', '*', '/', '/u', '%', '%u', '>>', '<<']
 
   def __init__(self, op, v1, v2):
     assert 0 <= op < self.Last
@@ -155,16 +155,18 @@ class CnstBinaryOp(Constant):
     v1 = self.v1.toSMT(poison, state, qvars)[1]
     v2 = self.v2.toSMT(poison, state, qvars)[1]
     return [], {
-      self.And: lambda a,b: a & b,
-      self.Or:  lambda a,b: a | b,
-      self.Xor: lambda a,b: a ^ b,
-      self.Add: lambda a,b: a + b,
-      self.Sub: lambda a,b: a - b,
-      self.Mul: lambda a,b: a * b,
-      self.Div: lambda a,b: a / b,
-      self.Rem: lambda a,b: SRem(a, b),
-      self.Shr: lambda a,b: a >> b,
-      self.Shl: lambda a,b: a << b,
+      self.And:  lambda a,b: a & b,
+      self.Or:   lambda a,b: a | b,
+      self.Xor:  lambda a,b: a ^ b,
+      self.Add:  lambda a,b: a + b,
+      self.Sub:  lambda a,b: a - b,
+      self.Mul:  lambda a,b: a * b,
+      self.Div:  lambda a,b: a / b,
+      self.DivU: lambda a,b: UDiv(a, b),
+      self.Rem:  lambda a,b: SRem(a, b),
+      self.RemU: lambda a,b: URem(a, b),
+      self.Shr:  lambda a,b: a >> b,
+      self.Shl:  lambda a,b: a << b,
     }[self.op](v1, v2)
 
 
