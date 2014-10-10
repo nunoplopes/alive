@@ -197,7 +197,7 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
     poisonb = mk_and(poisonb)
 
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, defa + [mk_not(defb)] + extra_cnstrs, lambda s :
+    check_expr(qvars, defa + poisona + [mk_not(defb)] + extra_cnstrs, lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
