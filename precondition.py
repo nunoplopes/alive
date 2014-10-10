@@ -177,7 +177,7 @@ class LLVMBoolPred(BoolPred):
       raise ParseError('Unknown boolean predicate')
 
   arg_types = {
-    isPower2:  ['const'],
+    isPower2:  ['any'],
     isSignBit: ['const'],
     known:     ['any', 'const'],
     maskZero:  ['input', 'const'],
