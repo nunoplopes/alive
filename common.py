@@ -65,11 +65,11 @@ def toBV(b):
 
 
 def truncateOrZExt(src, tgt):
-  srcb = src.sort().size()
+  srcb = src.size()
   if isinstance(tgt, int):
     tgtb = tgt
   else:
-    tgtb = tgt.sort().size()
+    tgtb = tgt.size()
   if srcb == tgtb:
     return src
   if srcb > tgtb:
@@ -78,8 +78,8 @@ def truncateOrZExt(src, tgt):
 
 
 def truncateOrSExt(src, tgt):
-  srcb = src.sort().size()
-  tgtb = tgt.sort().size()
+  srcb = src.size()
+  tgtb = tgt.size()
   if srcb == tgtb:
     return src
   if srcb > tgtb:
@@ -88,13 +88,57 @@ def truncateOrSExt(src, tgt):
 
 
 def truncateOrPad(src, tgt):
-  srcb = src.sort().size()
-  tgtb = tgt.sort().size()
+  srcb = src.size()
+  tgtb = tgt.size()
   if srcb == tgtb:
     return src
   if srcb > tgtb:
     return Extract(srcb - 1, srcb - tgtb, src)
   return Concat(src, BitVecVal(0, tgtb - srcb))
+
+
+"""
+def no_overflow_smul(a, b):
+  size = a.size()
+  assert b.size() == size
+  m = SignExt(size, a) * SignExt(size, b)
+  min = BitVecVal(-(1 << (size-1)), 2*size)
+  max = BitVecVal((1 << (size-1)) -1, 2*size)
+  return And(m >= min, m <= max)
+"""
+def no_overflow_smul(a, b):
+  size = a.size()
+  assert b.size() == size
+  m = SignExt(size, a) * SignExt(size, b)
+  return m == SignExt(size, a * b)
+
+
+def no_overflow_umul(a, b):
+  size = a.size()
+  assert b.size() == size
+  m = Extract(2*size-1, size, ZeroExt(size, a) * ZeroExt(size, b))
+  return m == BitVecVal(0, size)
+
+
+def bv_log2(v):
+  size = v.size()
+  def rec(h, l):
+    if h <= l:
+      return BitVecVal(l, size)
+    mid = l+int((h-l)/2)
+    return If(Extract(h,mid+1,v) != 0, rec(h, mid+1), rec(mid, l))
+  return rec(size-1, 0)
+
+"""
+linear version of log2
+def bv_log2(v):
+  size = v.size()
+  def rec(i):
+    if i == 0:
+      return BitVecVal(0, size)
+    return If(Extract(i,i,v) == BitVecVal(1, 1), BitVecVal(i, size), rec(i-1))
+  return rec(size-1)
+"""
 
 
 ##########################

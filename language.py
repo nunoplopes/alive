@@ -202,10 +202,8 @@ class BinOp(Instr):
       self.Sub: {'nsw': lambda a,b: SignExt(1,a)-SignExt(1,b) == SignExt(1,a-b),
                  'nuw': lambda a,b: ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1,a-b),
                 },
-      self.Mul: {'nsw': lambda a,b: SignExt(bits, a) * SignExt(bits, b) ==
-                                    SignExt(bits, a * b),
-                 'nuw': lambda a,b: ZeroExt(bits, a) * ZeroExt(bits, b) ==
-                                    ZeroExt(bits, a * b),
+      self.Mul: {'nsw': lambda a,b: no_overflow_smul(a, b),
+                 'nuw': lambda a,b: no_overflow_umul(a, b),
                 },
       self.UDiv:{'exact': lambda a,b: UDiv(a, b) * b == a,
                 },

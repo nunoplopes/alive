@@ -170,10 +170,11 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  abs, lshr, trunc, umax, width, Last = range(6)
+  abs, log2, lshr, trunc, umax, width, Last = range(7)
 
   opnames = {
     abs:   'abs',
+    log2:  'log2',
     lshr:  'lshr',
     trunc: 'trunc',
     umax:  'umax',
@@ -183,6 +184,7 @@ class CnstFunction(Constant):
 
   num_args = {
     abs:   1,
+    log2:  1,
     lshr:  2,
     trunc: 1,
     umax:  2,
@@ -219,6 +221,7 @@ class CnstFunction(Constant):
   def getTypeConstraints(self):
     c = {
       self.abs:   lambda a: allTyEqual([a,self], Type.Int),
+      self.log2:  lambda a: allTyEqual([a,self], Type.Int),
       self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.trunc: lambda a: [self.type < a.type],
       self.umax:  lambda a,b: allTyEqual([a,b,self], Type.Int),
@@ -232,6 +235,7 @@ class CnstFunction(Constant):
     args = [v.toSMT(poison, state, qvars)[1] for v in self.args]
     return [], {
       self.abs:   lambda a: If(a >= 0, a, -a),
+      self.log2:  lambda a: bv_log2(a),
       self.lshr:  lambda a,b: LShR(a,b),
       self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
       self.umax:  lambda a,b: If(UGT(a,b), a, b),

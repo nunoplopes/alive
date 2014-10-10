@@ -133,7 +133,7 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  isPower2, isSignBit, known, maskZero, NSWAdd, Last = range(6)
+  isPower2, isSignBit, known, maskZero, NSWAdd, NSWMul, NUWMul, Last = range(8)
 
   opnames = {
     isPower2:  'isPowerOf2',
@@ -141,6 +141,8 @@ class LLVMBoolPred(BoolPred):
     known:     'Known',
     maskZero:  'MaskedValueIsZero',
     NSWAdd:    'WillNotOverflowSignedAdd',
+    NSWMul:    'WillNotOverflowSignedMul',
+    NUWMul:    'WillNotOverflowUnsignedMul',
   }
   opids = {v:k for k, v in opnames.items()}
 
@@ -150,6 +152,8 @@ class LLVMBoolPred(BoolPred):
     known:     2,
     maskZero:  2,
     NSWAdd:    2,
+    NSWMul:    2,
+    NUWMul:    2,
   }
 
   def __init__(self, op, args):
@@ -182,6 +186,8 @@ class LLVMBoolPred(BoolPred):
     known:     ['any', 'const'],
     maskZero:  ['input', 'const'],
     NSWAdd:    ['input', 'input'],
+    NSWMul:    ['const', 'const'],
+    NUWMul:    ['const', 'const'],
   }
 
   @staticmethod
@@ -205,6 +211,8 @@ class LLVMBoolPred(BoolPred):
     known:     lambda a,b: allTyEqual([a,b], Type.Int),
     maskZero:  lambda a,b: allTyEqual([a,b], Type.Int),
     NSWAdd:    lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWMul:    lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWMul:    lambda a,b: allTyEqual([a,b], Type.Int),
   }
 
   def getTypeConstraints(self):
@@ -220,4 +228,6 @@ class LLVMBoolPred(BoolPred):
       self.known:     lambda a,b: a == b,
       self.maskZero:  lambda a,b: a & b == 0,
       self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
+      self.NSWMul:    lambda a,b: no_overflow_smul(a, b),
+      self.NUWMul:    lambda a,b: no_overflow_umul(a, b),
     }[self.op](*args)
