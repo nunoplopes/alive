@@ -1,0 +1,173 @@
+;Name: simplifyValueKnownNonZero 1
+;Pre: isPowerOf2(%Power)
+;%shl = shl %Power, %A
+;%Y = lshr %shl, %B
+;%r = udiv %X, %Y
+;  =>
+;%sub = sub %A, %B
+;%Y = shl %Power, %sub
+;%r = udiv %X, %Y
+
+; TODO: continue simplifyValueKnownNonZero
+
+
+Name: 152
+%r = mul %x, -1
+  =>
+%r = sub 0, %x
+
+
+Name: 160
+; FIXME: slow
+%sh = shl i7 %x, C2
+%r = mul %sh, C1
+  =>
+%r = mul %x, C1<<C2
+
+
+Name: 168
+; FIXME: slow
+Pre: isPowerOf2(C1)
+%r = mul i11 %x, C1
+  =>
+%r = shl %x, log2(C1)
+
+
+Name: 201
+Pre: C < 0 && isPowerOf2(abs(C))
+%Op0 = sub %Y, %X
+%r = mul %Op0, C
+  =>
+%sub = sub %X, %Y
+%r = mul %sub, abs(C)
+
+
+Name: 203
+Pre: C < 0 && isPowerOf2(abs(C))
+%Op0 = add %Y, C1
+%r = mul %Op0, C
+  =>
+%sub = sub -C1, %Y
+%r = mul %sub, abs(C)
+
+
+; FIXME: FoldOpIntoSelect -- 218
+; FIXME: FoldOpIntoPhi -- 222
+
+
+Name: 229
+; FIXME: missing pre that %mul is folded to something other than a mult.
+%Op0 = add %X, C1
+%r = mul %Op0, %Op1
+  =>
+%mul = mul C1, %Op1
+%tmp = mul %X, %Op1
+%r = add %tmp, %mul
+
+
+Name: 239
+%a = sub 0, %X
+%b = sub 0, %Y
+%r = mul %a, %b
+  =>
+%r = mul %X, %Y
+
+
+Name: 265
+; FIXME: Combine the following two
+%div = udiv exact %X, %Y
+%r = mul %div, %Y
+  =>
+%r = %X
+
+
+Name: 265
+%div = sdiv exact %X, %Y
+%r = mul %div, %Y
+  =>
+%r = %X
+
+
+Name: 266
+; FIXME: Combine the following two
+%div = udiv exact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%r = sub 0, %X
+
+
+Name: 266
+%div = sdiv exact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%r = sub 0, %X
+
+
+Name: 283
+%r = mul i1 %X, %Y
+  =>
+%r = and %X, %Y
+
+
+Name: 290 & 292
+%Op0 = shl 1, %Y
+%r = mul %Op0, %Op1
+  =>
+%r = shl %Op1, %Y
+
+
+Name: 304
+Pre: MaskedValueIsZero(%Op0, -2)
+%r = mul %Op0, %Op1
+  =>
+%s = sub 0, %Op0
+%r = and %s, %Op1
+
+
+Name: SimplifyDivRemOfSelect
+; FIXME: applies to *div/*rem
+%sel = select %c, %Y, 0
+%r = udiv %X, %sel
+  =>
+%r = udiv %X, %Y
+
+
+; FIXME: cannot do the remaining part of SimplifyDivRemOfSelect
+
+
+;Naame: 734
+; FIXME: incorrect
+;Pre: !WillNotOverflowSignedMul(C1, C2)
+;%Op0 = sdiv %X, C1
+;%r = sdiv %Op0, C2
+;  =>
+;%r = 0
+
+
+Name: 734
+; FIXME: slow
+Pre: !WillNotOverflowUnsignedMul(C1, C2)
+%Op0 = udiv i17 %X, C1
+%r = udiv %Op0, C2
+  =>
+%r = 0
+
+
+Name: 735
+; FIXME: slow
+Pre: WillNotOverflowSignedMul(C1, C2)
+%Op0 = sdiv i7 %X, C1
+%r = sdiv %Op0, C2
+  =>
+%r = sdiv %X, C1*C2
+
+
+Name: 735
+; FIXME: slow
+Pre: WillNotOverflowUnsignedMul(C1, C2)
+%Op0 = udiv i7 %X, C1
+%r = udiv %Op0, C2
+  =>
+%r = udiv %X, C1*C2
