@@ -289,9 +289,11 @@ class IntType(Type):
 
   def getTypeConstraints(self):
     # Integers are assumed to be up to 64 bits.
-    c = [self.typevar == Type.Int, self.bitsvar > 0, self.bitsvar <= 64]
+    c = [self.typevar == Type.Int]
     if self.defined:
       c += [self.bitsvar == self.getSize()]
+    else:
+      c += [Or(self.bitsvar == 8, self.bitsvar == 16, And(self.bitsvar > 0, self.bitsvar <= 64))]
     return And(c)
 
 
