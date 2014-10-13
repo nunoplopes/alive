@@ -288,10 +288,14 @@ class IntType(Type):
     return BoolVal(depth == 0)
 
   def getTypeConstraints(self):
-    # Integers are assumed to be up to 64 bits.
-    c = [self.typevar == Type.Int, self.bitsvar > 0, self.bitsvar <= 64]
+    c = [self.typevar == Type.Int]
     if self.defined:
       c += [self.bitsvar == self.getSize()]
+    else:
+      # Integers are assumed to be up to 64 bits.
+      # We bias towards 4/8 bits, as counterexamples become easier to understand
+      c += [Or(self.bitsvar == 8, self.bitsvar == 4,
+               And(self.bitsvar > 0, self.bitsvar <= 64))]
     return And(c)
 
 
