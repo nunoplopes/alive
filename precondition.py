@@ -133,27 +133,32 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  isPower2, isSignBit, known, maskZero, NSWAdd, NSWMul, NUWMul, Last = range(8)
+  isPower2, isPower2OrZ, isSignBit, known, maskZero, NSWAdd, NSWMul, NUWMul,\
+  NUWShl, Last = range(10)
 
   opnames = {
-    isPower2:  'isPowerOf2',
-    isSignBit: 'isSignBit',
-    known:     'Known',
-    maskZero:  'MaskedValueIsZero',
-    NSWAdd:    'WillNotOverflowSignedAdd',
-    NSWMul:    'WillNotOverflowSignedMul',
-    NUWMul:    'WillNotOverflowUnsignedMul',
+    isPower2:    'isPowerOf2',
+    isPower2OrZ: 'isPowerOf2OrZero',
+    isSignBit:   'isSignBit',
+    known:       'Known',
+    maskZero:    'MaskedValueIsZero',
+    NSWAdd:      'WillNotOverflowSignedAdd',
+    NSWMul:      'WillNotOverflowSignedMul',
+    NUWMul:      'WillNotOverflowUnsignedMul',
+    NUWShl:      'WillNotOverflowUnsignedShl',
   }
   opids = {v:k for k, v in opnames.items()}
 
   num_args = {
-    isPower2:  1,
-    isSignBit: 1,
-    known:     2,
-    maskZero:  2,
-    NSWAdd:    2,
-    NSWMul:    2,
-    NUWMul:    2,
+    isPower2:    1,
+    isPower2OrZ: 1,
+    isSignBit:   1,
+    known:       2,
+    maskZero:    2,
+    NSWAdd:      2,
+    NSWMul:      2,
+    NUWMul:      2,
+    NUWShl:      2,
   }
 
   def __init__(self, op, args):
@@ -181,13 +186,15 @@ class LLVMBoolPred(BoolPred):
       raise ParseError('Unknown boolean predicate')
 
   arg_types = {
-    isPower2:  ['any'],
-    isSignBit: ['const'],
-    known:     ['any', 'const'],
-    maskZero:  ['input', 'const'],
-    NSWAdd:    ['input', 'input'],
-    NSWMul:    ['const', 'const'],
-    NUWMul:    ['const', 'const'],
+    isPower2:    ['any'],
+    isPower2OrZ: ['any'],
+    isSignBit:   ['const'],
+    known:       ['any', 'const'],
+    maskZero:    ['input', 'const'],
+    NSWAdd:      ['input', 'input'],
+    NSWMul:      ['const', 'const'],
+    NUWMul:      ['const', 'const'],
+    NUWShl:      ['const', 'const'],
   }
 
   @staticmethod
@@ -206,13 +213,15 @@ class LLVMBoolPred(BoolPred):
     assert False
 
   argConstraints = {
-    isPower2:  lambda a: allTyEqual([a], Type.Int),
-    isSignBit: lambda a: allTyEqual([a], Type.Int),
-    known:     lambda a,b: allTyEqual([a,b], Type.Int),
-    maskZero:  lambda a,b: allTyEqual([a,b], Type.Int),
-    NSWAdd:    lambda a,b: allTyEqual([a,b], Type.Int),
-    NSWMul:    lambda a,b: allTyEqual([a,b], Type.Int),
-    NUWMul:    lambda a,b: allTyEqual([a,b], Type.Int),
+    isPower2:    lambda a: allTyEqual([a], Type.Int),
+    isPower2OrZ: lambda a: allTyEqual([a], Type.Int),
+    isSignBit:   lambda a: allTyEqual([a], Type.Int),
+    known:       lambda a,b: allTyEqual([a,b], Type.Int),
+    maskZero:    lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWAdd:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWShl:      lambda a,b: allTyEqual([a,b], Type.Int),
   }
 
   def getTypeConstraints(self):
@@ -223,11 +232,13 @@ class LLVMBoolPred(BoolPred):
   def toSMT(self, state):
     args = [v.toSMT([], state, [])[1] for v in self.args]
     return {
-      self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
-      self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.known:     lambda a,b: a == b,
-      self.maskZero:  lambda a,b: a & b == 0,
-      self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
-      self.NSWMul:    lambda a,b: no_overflow_smul(a, b),
-      self.NUWMul:    lambda a,b: no_overflow_umul(a, b),
+      self.isPower2:    lambda a: And(a != 0, a & (a-1) == 0),
+      self.isPower2OrZ: lambda a: a & (a-1) == 0,
+      self.isSignBit:   lambda a: a == (1 << (a.sort().size()-1)),
+      self.known:       lambda a,b: a == b,
+      self.maskZero:    lambda a,b: a & b == 0,
+      self.NSWAdd:      lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
+      self.NSWMul:      lambda a,b: no_overflow_smul(a, b),
+      self.NUWMul:      lambda a,b: no_overflow_umul(a, b),
+      self.NUWShl:      lambda a,b: LShR(a << b, b) == a,
     }[self.op](*args)

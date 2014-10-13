@@ -1,3 +1,4 @@
+; FIXME: the following 3 require changes in Undef. behav. semantics
 ;Name: simplifyValueKnownNonZero 1
 ;Pre: isPowerOf2(%Power)
 ;%shl = shl %Power, %A
@@ -8,7 +9,23 @@
 ;%Y = shl %Power, %sub
 ;%r = udiv %X, %Y
 
-; TODO: continue simplifyValueKnownNonZero
+
+;Name: simplifyValueKnownNonZero 2
+;Pre: isPowerOf2(%B)
+;%Y = lshr %A, %B
+;%r = udiv %X, %Y
+;  =>
+;%Y = lshr exact %A, %B
+;%r = udiv %X, %Y
+
+
+;Name: simplifyValueKnownNonZero 3
+;Pre: isPowerOf2(%B)
+;%Y = shl %A, %B
+;%r = udiv %X, %Y
+;  =>
+;%Y = shl nsw %A, %B
+;%r = udiv %X, %Y
 
 
 Name: 152
@@ -137,24 +154,6 @@ Name: SimplifyDivRemOfSelect
 ; FIXME: cannot do the remaining part of SimplifyDivRemOfSelect
 
 
-;Naame: 734
-; FIXME: incorrect
-;Pre: !WillNotOverflowSignedMul(C1, C2)
-;%Op0 = sdiv %X, C1
-;%r = sdiv %Op0, C2
-;  =>
-;%r = 0
-
-
-Name: 734
-; FIXME: slow
-Pre: !WillNotOverflowUnsignedMul(C1, C2)
-%Op0 = udiv i17 %X, C1
-%r = udiv %Op0, C2
-  =>
-%r = 0
-
-
 Name: 735
 ; FIXME: slow
 Pre: WillNotOverflowSignedMul(C1, C2)
@@ -230,3 +229,210 @@ Pre: C1 %u C2 == 0
 %r = udiv %m, C2
   =>
 %r = mul nuw nsw %X, C1/u C2
+
+
+Name: 764
+; FIXME: slow
+; FIXME: merge the following 4
+Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+%s = shl nsw i9 %X, C1
+%r = sdiv %s, C2
+  =>
+%r = sdiv %X, C2/(1<<C1)
+
+
+Name: 764
+; FIXME: slow
+Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+%s = shl nsw i7 %X, C1
+%r = sdiv exact %s, C2
+  =>
+%r = sdiv exact %X, C2/(1<<C1)
+
+
+Name: 764
+; FIXME: slow
+Pre: C2 %u (1<<C1) == 0
+%s = shl nuw i9 %X, C1
+%r = udiv %s, C2
+  =>
+%r = udiv %X, C2/u (1<<C1)
+
+
+Name: 764
+; FIXME: slow
+Pre: C2 %u (1<<C1) == 0
+%s = shl nuw i7 %X, C1
+%r = udiv exact %s, C2
+  =>
+%r = udiv exact %X, C2/u (1<<C1)
+
+
+Name: 772
+; FIXME: slow
+; FIXME: merge the following 3
+Pre: (1<<C1) % C2 == 0 && C1 != width(C1)-1
+%s = shl nsw i9 %X, C1
+%r = sdiv %s, C2
+  =>
+%r = mul nsw %X, (1<<C1)/C2
+
+
+Name: 772
+Pre: (1<<C1) %u C2 == 0
+%s = shl nuw i9 %X, C1
+%r = udiv %s, C2
+  =>
+%r = mul nuw %X, (1<<C1) /u C2
+
+
+Name: 772
+Pre: (1<<C1) %u C2 == 0
+%s = shl nsw nuw i9 %X, C1
+%r = udiv %s, C2
+  =>
+%r = mul nsw nuw %X, (1<<C1) /u C2
+
+
+Name: 805
+%r = sdiv 1, %X
+  =>
+%inc = add %X, 1
+%c = icmp ult %inc, 3
+%r = select %c, %X, 0
+
+
+Name: 809
+%r = udiv 1, %X
+  =>
+%c = icmp eq %X, 1
+%r = zext %c
+
+
+Name: 820
+; FIXME: merge with the following?
+; FIXME: slow
+%Z = srem i9 %X, %Op1
+%Op0 = sub %X, %Z
+%r = sdiv %Op0, %Op1
+  =>
+%r = sdiv %X, %Op1
+
+
+Name: 820
+; FIXME: slow
+%Z = urem i9 %X, %Op1
+%Op0 = sub %X, %Z
+%r = udiv %Op0, %Op1
+  =>
+%r = udiv %X, %Op1
+
+
+Name: 968
+; FIXME: slow
+Pre: WillNotOverflowUnsignedShl(C2, C1)
+%Op0 = lshr i9 %X, C1
+%r = udiv %Op0, C2
+  =>
+%r = udiv %X, C2 << C1
+
+
+Name: 976
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = udiv %Op0, %Op1
+  =>
+%d = udiv %X, %Y
+%r = zext %d
+
+
+; FIXME: how to handle visitUDivOperand??
+
+
+Name: 1030
+%r = sdiv %X, -1
+  =>
+%r = sub 0, %X
+
+
+Name: 1033
+; FIXME: slow
+Pre: C >= 0 && isPowerOf2(C)
+%r = sdiv exact i33 %Op0, C
+  =>
+%r = ashr exact %Op0, log2(C)
+
+
+Name: 1045
+Pre: isSignBit(C)
+%r = sdiv %Op0, C
+  =>
+%cmp = icmp eq %Op0, C
+%r = zext %cmp
+
+
+Name: 1049
+; FIXME: slow
+%Op0 = sub nsw i11 0, %X
+%r = sdiv %Op0, C
+  =>
+%r = sdiv %X, -C
+
+
+Name: 1062
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && MaskedValueIsZero(%Op1, 1<<(width(%Op0)-1))
+%r = sdiv %Op0, %Op1
+  =>
+%r = udiv %Op0, %Op1
+
+
+Name: 1065
+; FIXME: slow
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && isPowerOf2(C)
+%Op1 = shl i23 C, %X
+%r = sdiv %Op0, %Op1
+  =>
+; FIXME: we shouldnt require Op1 to be typed here
+%Op1 = shl C, %X
+%r = udiv %Op0, %Op1
+
+
+Name: 1285
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = urem %Op0, %Op1
+  =>
+%u = urem %X, %Y
+%r = zext %u
+
+
+Name: 1291
+; FIXME: slow
+Pre: isPowerOf2OrZero(%Op1)
+%r = urem i33 %Op0, %Op1
+  =>
+%add = add %Op1, -1
+%r = and %Op0, %add
+
+
+Name: 1298
+%r = urem 1, %Op1
+  =>
+%cmp = icmp ne %Op1, 1
+%r = zext %cmp
+
+
+Name: 1321
+; FIXME: slow
+Pre: C > 0
+%Op1 = sub i11 0, C
+%r = srem %Op0, %Op1
+  =>
+%r = srem %Op0, C
+
+
+Name: 1333
+Pre: MaskedValueIsZero(%Op1, 1<<(width(%Op1)-1)) && MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1))
+%r = srem %Op0, %Op1
+  =>
+%r = urem %Op0, %Op1
