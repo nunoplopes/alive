@@ -139,12 +139,23 @@ def var_type(var, types):
   assert False
 
 
+def val2binhex(v, bits):
+  return '0x%0*X' % ((bits+3) / 4, v)
+  #if bits % 4 == 0:
+  #  return '0x%0*X' % (bits / 4, v)
+  #return format(v, '#0'+str(bits)+'b')
+
+
 def str_model(s, v):
   val = s.model().evaluate(v, True)
   if isinstance(val, BoolRef):
     return "true" if is_true(val) else "false"
-  val = val.as_long()
-  return "%d (%s)" % (val, hex(val))
+  valu = val.as_long()
+  vals = val.as_signed_long()
+  bin = val2binhex(valu, val.size())
+  if valu != vals:
+    return "%s (%d, %d)" % (bin, valu, vals)
+  return "%s (%d)" % (bin, valu)
 
 
 def _print_var_vals(s, vars, stopv, seen, types):
