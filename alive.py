@@ -50,6 +50,15 @@ def block_model(s, sneg, m):
   s.add(Not(mk_and(req_exprs)))
 
 
+pre_tactic = AndThen(
+  Tactic('propagate-values'),
+  Repeat(AndThen(Tactic('simplify'), Tactic('ctx-solver-simplify')))
+)
+def simplify_pre(f):
+  # TODO: extract set of implied things (iffs, tgt=0, etc).
+  return pre_tactic.apply(f)[0].as_expr()
+
+
 def get_z3_id(x):
   return Z3_get_ast_id(x.ctx.ref(), x.as_ast())
 
@@ -94,6 +103,7 @@ def check_incomplete_solver(res, s):
 
 tactic = AndThen(
   Repeat(AndThen(Tactic('simplify'), Tactic('propagate-values'))),
+  #Tactic('ctx-simplify')
   Tactic('elim-term-ite'),
   Tactic('simplify'),
   Tactic('propagate-values'),
@@ -174,29 +184,18 @@ def print_var_vals(s, vs1, vs2, stopv, types):
   _print_var_vals(s, vs2, stopv, seen, types)
 
 
-def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
-  srcv = toSMT(src, ident_src)
-  tgtv = toSMT(tgt, ident_tgt)
-  pre  = pre.toSMT(srcv)
-  extra_cnstrs = [pre,
-                  srcv.getAllocaConstraints(),
-                  tgtv.getAllocaConstraints()]
-
-  # 1) check preconditions of BBs
-  tgtbbs = tgtv.bb_pres
-  for k,v in srcv.bb_pres.iteritems():
-    if not tgtbbs.has_key(k):
-      continue
-    # assume open world. May need to add language support to state that a BB is
-    # complete (closed world)
-    p1 = mk_and(v)
-    p2 = mk_and(tgtbbs[k])
-    check_expr([], [p1 != p2] + extra_cnstrs, lambda s :
-      ("Mismatch in preconditions for BB '%s'\n" % k, str_model(s, p1),
-       str_model(s, p2), None, srcv, tgtv, types))
+def get_smt_vars(f):
+  if is_const(f):
+    if is_bv_value(f) or is_bool(f):
+      return {}
+    return {str(f): f}
+  ret = {}
+  for c in f.children():
+    ret.update(get_smt_vars(c))
+  return ret
 
 
-  # 2) check register values
+def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
   for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
     if k[0] == 'C' or not tgtv.has_key(k):
@@ -228,6 +227,116 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
 
+def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
+  query = []
+  flag_vars_src = {}
+  flag_vars_tgt = {}
+
+  for k,v in srcv.iteritems():
+    # skip instructions only on one side; assumes they remain unchanged
+    if k[0] == 'C' or not tgtv.has_key(k):
+      continue
+
+    (a, defa, poisona, qvars) = v
+    (b, defb, poisonb, qvarsb) = tgtv[k]
+
+    pre = mk_and(defa + poisona + prev_flags + extra_cnstrs)
+    eq = [] if a.eq(b) else [a == b]
+    q = mk_implies(pre, mk_and(defb + poisonb + eq))
+    if is_true(q):
+      continue
+    q = mk_and(users[k] + [q])
+
+    input_vars = []
+    for k,v in get_smt_vars(q).iteritems():
+      if k[0] == '%' or k[0] == 'C' or k.startswith('icmp_') or\
+         k.startswith('alloca') or k.startswith('mem_'):
+        input_vars.append(v)
+      elif k.startswith('f_'):
+        if k.endswith('_src'):
+          flag_vars_src[k] = v
+        else:
+          assert k.endswith('_tgt')
+          flag_vars_tgt[k] = v
+      elif k.startswith('u_') or k.startswith('undef'):
+        continue
+      else:
+        print "Unknown smt var: " + str(v)
+        exit(-1)
+
+    q = mk_exists(qvars, q)
+    q = mk_forall(input_vars, q)
+    query.append(q)
+
+  s = Solver()#tactic.solver()
+  s.add(query)
+  if __debug__:
+    gen_benchmark(s)
+
+  res = s.check()
+  check_incomplete_solver(res, s)
+  if s.check() == unsat:
+    # optimization is incorrect. Run the normal procedure for nice diagnostics.
+    check_refinement(srcv, tgtv, types, extra_cnstrs, users)
+    exit()
+
+  # enumerate all models (all possible flag assignments)
+  models = []
+  while True:
+    m = s.model()
+    min_model = []
+    for v in flag_vars_src.itervalues():
+      val = m[v]
+      if val and val.as_long() == 1:
+        min_model.append(v == 1)
+    for v in flag_vars_tgt.itervalues():
+      val = m[v]
+      if val and val.as_long() == 0:
+        min_model.append(v == 0)
+
+    m = mk_and(min_model)
+    models.append(m)
+    s.add(mk_not(m))
+    if __debug__:
+      gen_benchmark(s)
+
+    res = s.check()
+    check_incomplete_solver(res, s)
+    if s.check() == unsat:
+      return mk_or(models)
+
+
+gbl_prev_flags = []
+
+def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
+  srcv = toSMT(src, ident_src, True)
+  tgtv = toSMT(tgt, ident_tgt, False)
+  pre  = pre.toSMT(srcv)
+  extra_cnstrs = [pre,
+                  srcv.getAllocaConstraints(),
+                  tgtv.getAllocaConstraints()]
+
+  # 1) check preconditions of BBs
+  tgtbbs = tgtv.bb_pres
+  for k,v in srcv.bb_pres.iteritems():
+    if not tgtbbs.has_key(k):
+      continue
+    # assume open world. May need to add language support to state that a BB is
+    # complete (closed world)
+    p1 = mk_and(v)
+    p2 = mk_and(tgtbbs[k])
+    check_expr([], [p1 != p2] + extra_cnstrs, lambda s :
+      ("Mismatch in preconditions for BB '%s'\n" % k, str_model(s, p1),
+       str_model(s, p2), None, srcv, tgtv, types))
+
+  # 2) check register values
+  if do_infer_flags():
+    global gbl_prev_flags
+    flgs = infer_flags(srcv, tgtv, types, extra_cnstrs, gbl_prev_flags, users)
+    gbl_prev_flags = [simplify_pre(mk_and(gbl_prev_flags + [flgs]))]
+  else:
+    check_refinement(srcv, tgtv, types, extra_cnstrs, users)
+
   # 3) check that the final memory state is similar in both programs
   memsb = {str(ptr) : mem for (ptr, mem, qvars, info) in tgtv.ptrs}
   for (ptr, mem, qvars, info) in srcv.ptrs:
@@ -257,6 +366,8 @@ def check_opt(opt):
   print
 
   reset_pick_one_type()
+  global gbl_prev_flags
+  gbl_prev_flags = []
 
   # infer allowed types for registers
   type_src = getTypeConstraints(ident_src)
@@ -323,7 +434,10 @@ def check_opt(opt):
     sys.stdout.flush()
 
   if res == unsat:
-    print '\nOptimization is correct!\n'
+    print '\nOptimization is correct!'
+    if do_infer_flags():
+      print 'Flags: %s' % gbl_prev_flags[0]
+    print
   else:
     print '\nVerification incomplete; did not check all bit widths\n'
 
@@ -332,6 +446,8 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('-m', '--match', action='append', metavar='name',
     help='run tests containing this text')
+  parser.add_argument('--infer-flags', action='store_true', default=False,
+    help='Infer NSW/NUW/exact flags automaically', dest='infer_flags')
   parser.add_argument('-V', '--verify', action='store_true', default=True,
     help='check correctness of optimizations (default: True)')
   parser.add_argument('--no-verify', action='store_false', dest='verify')
@@ -339,6 +455,9 @@ def main():
     help='optimization file (read from stdin if none given)',)
 
   args = parser.parse_args()
+
+  set_infer_flags(args.infer_flags)
+
   for f in args.file:
     opts = parse_opt_file(f.read())
 

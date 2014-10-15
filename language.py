@@ -223,8 +223,13 @@ class BinOp(Instr):
       self.Xor: {},
     }[self.op]
 
-    for f in self.flags:
-      poison += [poison_conds[f](v1, v2)]
+    if do_infer_flags():
+      for flag,fn in poison_conds.iteritems():
+        bit = get_flag_var(flag, self.getName())
+        poison += [Implies(bit == 1, fn(v1, v2))]
+    else:
+      for f in self.flags:
+        poison += [poison_conds[f](v1, v2)]
 
     # definedness of the instruction
     return {
@@ -908,7 +913,8 @@ def fixupTypes(p, types):
     v.fixupTypes(types)
 
 
-def toSMT(prog, idents):
+def toSMT(prog, idents, isSource):
+  set_smt_is_source(isSource)
   state = State()
   for k,v in idents.iteritems():
     if isinstance(v, (Input, Constant)):

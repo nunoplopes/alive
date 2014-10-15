@@ -54,10 +54,25 @@ def mk_distinct(l):
   return Distinct(l)
 
 
+def mk_implies(a, b):
+  if is_true(a):
+    return b
+  if is_false(a) or is_true(b):
+    return BoolVal(True)
+  if is_false(b):
+    return Not(a)
+  return Implies(a, b)
+
 def mk_forall(l, f):
   if l == []:
     return f
   return ForAll(l, f)
+
+
+def mk_exists(l, f):
+  if l == []:
+    return f
+  return Exists(l, f)
 
 
 def toBV(b):
@@ -161,6 +176,22 @@ def get_pick_one_type():
 # number of users of an instruction
 def get_users_var(name):
   return BitVec('u_' + name, 8)
+
+def get_flag_var(flag, inst):
+  dst = 'src' if gbl_is_source else 'tgt'
+  return BitVec('f_%s_%s_%s' % (flag, inst, dst), 1)
+
+def set_smt_is_source(s):
+  global gbl_is_source
+  gbl_is_source = s
+
+gbl_infer_flags = False
+def set_infer_flags(f):
+  global gbl_infer_flags
+  gbl_infer_flags = f
+
+def do_infer_flags():
+  return gbl_infer_flags
 
 
 ##########################
