@@ -157,6 +157,13 @@ def get_pick_one_type():
 
 
 ##########################
+
+# number of users of an instruction
+def get_users_var(name):
+  return BitVec('u_' + name, 8)
+
+
+##########################
 # Error handling
 
 class AliveError(Exception):

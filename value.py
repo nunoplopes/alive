@@ -487,6 +487,13 @@ class Value:
           if isinstance(e, (Type, Value)):
             e.fixupTypes(types)
 
+  def countUsers(self, m):
+    for attr in dir(self):
+      a = getattr(self, attr)
+      if isinstance(a, Value):
+        name = a.getUniqueName()
+        m[name] = m.get(name, 0) + 1
+
 
 ################################
 class TypeFixedValue(Value):

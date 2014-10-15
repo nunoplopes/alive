@@ -1,31 +1,34 @@
-; FIXME: the following 3 require changes in Undef. behav. semantics
-;Name: simplifyValueKnownNonZero 1
-;Pre: isPowerOf2(%Power)
-;%shl = shl %Power, %A
-;%Y = lshr %shl, %B
-;%r = udiv %X, %Y
-;  =>
-;%sub = sub %A, %B
-;%Y = shl %Power, %sub
-;%r = udiv %X, %Y
+Name: simplifyValueKnownNonZero 1
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = udiv %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = udiv %X, %Y
 
 
-;Name: simplifyValueKnownNonZero 2
-;Pre: isPowerOf2(%B)
-;%Y = lshr %A, %B
-;%r = udiv %X, %Y
-;  =>
-;%Y = lshr exact %A, %B
-;%r = udiv %X, %Y
+Name: simplifyValueKnownNonZero 2
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = udiv %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = udiv %X, %Y
 
 
-;Name: simplifyValueKnownNonZero 3
-;Pre: isPowerOf2(%B)
-;%Y = shl %A, %B
-;%r = udiv %X, %Y
-;  =>
-;%Y = shl nsw %A, %B
-;%r = udiv %X, %Y
+Name: simplifyValueKnownNonZero 3
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = udiv %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = udiv %X, %Y
+
+
+; FIXME: cannot do the recursive case of simplifyValueKnownNonZero()
 
 
 Name: 152

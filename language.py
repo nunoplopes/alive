@@ -886,6 +886,14 @@ def print_prog(p):
         print '  %s = %s' % (k, v)
 
 
+def countUsers(prog):
+  m = {}
+  for bb, instrs in prog.iteritems():
+    for k, v in instrs.iteritems():
+      v.countUsers(m)
+  return m
+
+
 def getTypeConstraints(p):
   t = [v.getTypeConstraints() for v in p.itervalues()]
   # ensure all return instructions have the same type

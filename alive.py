@@ -174,7 +174,7 @@ def print_var_vals(s, vs1, vs2, stopv, types):
   _print_var_vals(s, vs2, stopv, seen, types)
 
 
-def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
+def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
   srcv = toSMT(src, ident_src)
   tgtv = toSMT(tgt, ident_tgt)
   pre  = pre.toSMT(srcv)
@@ -207,21 +207,23 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types):
     defb = mk_and(defb)
     poisonb = mk_and(poisonb)
 
+    n_users = users[k]
+    base_cnstr = defa + poisona + extra_cnstrs + n_users
+
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, defa + poisona + [mk_not(defb)] + extra_cnstrs, lambda s :
+    check_expr(qvars, base_cnstr + [mk_not(defb)], lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
     # Check if domain of poison values of Src implies that of Tgt.
-    check_expr(qvars, defa + poisona + [mk_not(poisonb)] + extra_cnstrs,
-      lambda s :
+    check_expr(qvars, base_cnstr + [mk_not(poisonb)], lambda s :
       ("Domain of poisoness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'poison', k, srcv, tgtv, types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, defa + poisona + [a != b] + extra_cnstrs, lambda s :
+    check_expr(qvars, base_cnstr + [a != b], lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
@@ -297,6 +299,13 @@ def check_opt(opt):
             ' Source register' % v
       exit(-1)
 
+  # build constraints that indicate the number of users for each register.
+  users_count = countUsers(src)
+  users = {}
+  for k in ident_src.iterkeys():
+    n_users = users_count.get(k)
+    users[k] = [get_users_var(k) != n_users] if n_users else []
+
   # now check for correctness
   proofs = 0
   while True:
@@ -307,7 +316,7 @@ def check_opt(opt):
     fixupTypes(ident_src, types)
     fixupTypes(ident_tgt, types)
     pre.fixupTypes(types)
-    check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types)
+    check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users)
     block_model(s, sneg, types)
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))

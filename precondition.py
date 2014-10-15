@@ -134,7 +134,7 @@ class BinaryBoolPred(BoolPred):
 ################################
 class LLVMBoolPred(BoolPred):
   isPower2, isPower2OrZ, isSignBit, known, maskZero, NSWAdd, NSWMul, NUWMul,\
-  NUWShl, Last = range(10)
+  NUWShl, OneUse, Last = range(11)
 
   opnames = {
     isPower2:    'isPowerOf2',
@@ -146,6 +146,7 @@ class LLVMBoolPred(BoolPred):
     NSWMul:      'WillNotOverflowSignedMul',
     NUWMul:      'WillNotOverflowUnsignedMul',
     NUWShl:      'WillNotOverflowUnsignedShl',
+    OneUse:      'hasOneUse',
   }
   opids = {v:k for k, v in opnames.items()}
 
@@ -159,6 +160,7 @@ class LLVMBoolPred(BoolPred):
     NSWMul:      2,
     NUWMul:      2,
     NUWShl:      2,
+    OneUse:      1,
   }
 
   def __init__(self, op, args):
@@ -195,6 +197,7 @@ class LLVMBoolPred(BoolPred):
     NSWMul:      ['const', 'const'],
     NUWMul:      ['const', 'const'],
     NUWShl:      ['const', 'const'],
+    OneUse:      ['var'],
   }
 
   @staticmethod
@@ -204,6 +207,8 @@ class LLVMBoolPred(BoolPred):
       return (True, 'any value')
     if kind == 'input':
       return (isinstance(val, (Input, Constant)), 'constant or input var')
+    if kind == 'var':
+      return (not isinstance(val, Constant), 'register')
     if kind == 'const':
       if isinstance(val, Input):
         ok = val.getName()[0] == 'C'
@@ -222,6 +227,7 @@ class LLVMBoolPred(BoolPred):
     NSWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
     NUWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
     NUWShl:      lambda a,b: allTyEqual([a,b], Type.Int),
+    OneUse:      lambda a: []
   }
 
   def getTypeConstraints(self):
@@ -241,4 +247,5 @@ class LLVMBoolPred(BoolPred):
       self.NSWMul:      lambda a,b: no_overflow_smul(a, b),
       self.NUWMul:      lambda a,b: no_overflow_umul(a, b),
       self.NUWShl:      lambda a,b: LShR(a << b, b) == a,
+      self.OneUse:      lambda a: get_users_var(self.args[0].getUniqueName()) == 1,
     }[self.op](*args)
