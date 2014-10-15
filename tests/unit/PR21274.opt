@@ -1,0 +1,9 @@
+; ERROR: Domain of definedness of Target is smaller than Source
+Pre: isPowerOf2(%Power) && hasOneUse(%Y)
+%s = shl %Power, %A
+%Y = lshr %s, %B
+%r = udiv %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl %Power, %sub
+%r = udiv %X, %Y
