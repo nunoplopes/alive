@@ -427,11 +427,10 @@ Name: 1298
 
 Name: 1321
 ; FIXME: slow
-Pre: C > 0
-%Op1 = sub i11 0, C
-%r = srem %Op0, %Op1
+Pre: C < 0 && !isSignBit(C)
+%r = srem i11 %Op0, C
   =>
-%r = srem %Op0, C
+%r = srem %Op0, -C
 
 
 Name: 1333
