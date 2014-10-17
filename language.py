@@ -774,13 +774,7 @@ class Store(Instr):
       inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size/8, ptr + size/8))
       mustwrite += [inbounds]
 
-      if state.defined == []:
-        writes = inbounds
-      else:
-        # the store may or may not happen if undefined behavior happened before.
-        mwvar = FreshBool('mw_')
-        qvs += [mwvar]
-        writes = And(Or(mk_and(state.defined), mwvar), inbounds)
+      writes = mk_and(state.defined + [inbounds])
       mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
       allOnes = BitVecVal((1 << write_size) - 1, mem.size())
       initialized2 = If(inbounds,
