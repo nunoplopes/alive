@@ -156,6 +156,17 @@ def bv_log2(v):
 """
 
 
+def ctlz(v, output_width):
+  size = v.size()
+  def rec(i):
+    if i < 0:
+      return BitVecVal(size, output_width)
+    return If(Extract(i,i,v) == BitVecVal(1, 1),
+              BitVecVal(size-1-i, output_width),
+              rec(i-1))
+  return rec(size-1)
+
+
 ##########################
 # Type inference utilities
 
