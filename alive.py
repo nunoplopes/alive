@@ -50,6 +50,29 @@ def block_model(s, sneg, m):
   s.add(Not(mk_and(req_exprs)))
 
 
+def pick_pre_types(s, s2):
+  m = s.model()
+  skip_model = get_pick_one_type()
+  vars = []
+
+  for n in m.decls():
+    name = str(n)
+    # FIXME: only fix size_* variables?
+    if name in skip_model and name.startswith('size_'):
+      vars += [Int(name)]
+    else:
+      s2.add(Int(name) == m[n])
+
+  for v in vars:
+    b = FreshBool()
+    e = v >= 32
+    s2.add(b == e)
+    if s2.check(b) == sat:
+      s.add(e)
+  res = s.check()
+  assert res == sat
+
+
 pre_tactic = AndThen(
   Tactic('propagate-values'),
   Repeat(AndThen(Tactic('simplify'), Tactic('ctx-solver-simplify')))
@@ -189,7 +212,13 @@ def get_smt_vars(f):
     if is_bv_value(f) or is_bool(f):
       return {}
     return {str(f): f}
+
   ret = {}
+  if isinstance(f, list):
+    for v in f:
+      ret.update(get_smt_vars(v))
+    return ret
+
   for c in f.children():
     ret.update(get_smt_vars(c))
   return ret
@@ -385,11 +414,13 @@ def check_opt(opt):
     register_pick_one_type(v)
 
   s.add(type_src)
+  unregister_pick_one_type(get_smt_vars(type_src))
   if s.check() != sat:
     print 'Source program does not type check'
     exit(-1)
 
   s.add(type_tgt)
+  unregister_pick_one_type(get_smt_vars(type_tgt))
   if s.check() != sat:
     print 'Source and Target programs do not type check'
     exit(-1)
@@ -417,12 +448,17 @@ def check_opt(opt):
     n_users = users_count.get(k)
     users[k] = [get_users_var(k) != n_users] if n_users else []
 
+  # pick one representative type for types in Pre
+  res = s.check()
+  assert res != unknown
+  if res == sat:
+    s2 = SolverFor('QF_LIA')
+    s2.add(s.assertions())
+    pick_pre_types(s, s2)
+
   # now check for correctness
   proofs = 0
-  while True:
-    res = s.check()
-    if res != sat:
-      break
+  while res == sat:
     types = s.model()
     fixupTypes(ident_src, types)
     fixupTypes(ident_tgt, types)
@@ -432,6 +468,8 @@ def check_opt(opt):
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))
     sys.stdout.flush()
+    res = s.check()
+    assert res != unknown
 
   if res == unsat:
     print '\nOptimization is correct!'

@@ -185,6 +185,11 @@ def register_pick_one_type(v):
   global gbl_one_type_only
   gbl_one_type_only.add(str(v))
 
+def unregister_pick_one_type(vs):
+  global gbl_one_type_only
+  for v in vs.iterkeys():
+    gbl_one_type_only.discard(v)
+
 def reset_pick_one_type():
   global gbl_one_type_only
   gbl_one_type_only = set([])
