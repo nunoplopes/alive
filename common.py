@@ -167,6 +167,17 @@ def ctlz(v, output_width):
   return rec(size-1)
 
 
+def cttz(v, output_width):
+  size = v.size()
+  def rec(i):
+    if i == size:
+      return BitVecVal(size, output_width)
+    return If(Extract(i,i,v) == BitVecVal(1, 1),
+              BitVecVal(i, output_width),
+              rec(i+1))
+  return rec(0)
+
+
 ##########################
 # Type inference utilities
 

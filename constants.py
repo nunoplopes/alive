@@ -172,11 +172,12 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  abs, ctlz, log2, lshr, trunc, umax, width, Last = range(8)
+  abs, ctlz, cttz, log2, lshr, trunc, umax, width, Last = range(9)
 
   opnames = {
     abs:   'abs',
     ctlz:  'countLeadingZeros',
+    cttz:  'countTrailingZeros',
     log2:  'log2',
     lshr:  'lshr',
     trunc: 'trunc',
@@ -188,6 +189,7 @@ class CnstFunction(Constant):
   num_args = {
     abs:   1,
     ctlz:  1,
+    cttz:  1,
     log2:  1,
     lshr:  2,
     trunc: 1,
@@ -226,6 +228,7 @@ class CnstFunction(Constant):
     c = {
       self.abs:   lambda a: allTyEqual([a,self], Type.Int),
       self.ctlz:  lambda a: allTyEqual([a], Type.Int),
+      self.cttz:  lambda a: allTyEqual([a], Type.Int),
       self.log2:  lambda a: allTyEqual([a,self], Type.Int),
       self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.trunc: lambda a: [self.type < a.type],
@@ -241,6 +244,7 @@ class CnstFunction(Constant):
     return [], {
       self.abs:   lambda a: If(a >= 0, a, -a),
       self.ctlz:  lambda a: ctlz(a, self.type.getSize()),
+      self.cttz:  lambda a: cttz(a, self.type.getSize()),
       self.log2:  lambda a: bv_log2(a),
       self.lshr:  lambda a,b: LShR(a,b),
       self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
