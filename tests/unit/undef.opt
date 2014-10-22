@@ -33,12 +33,10 @@ unreachable
 
 
 ; FIXME: slow
-; FIXME: add skip instruction
 Name: undef 7
-%a = 2
 store i9 undef, %X
   =>
-%a = 2
+skip
 
 
 ; FIXME: slow

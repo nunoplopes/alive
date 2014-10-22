@@ -801,6 +801,21 @@ class Store(Instr):
 
 
 ################################
+class Skip(Instr):
+  def __init__(self):
+    self.id = mk_unique_id()
+
+  def getUniqueName(self):
+    return 'skip_' + self.id
+
+  def __repr__(self):
+    return 'skip'
+
+  def toSMT(self, poison, state, qvars):
+    return [BoolVal(True)], None
+
+
+################################
 class Unreachable(Instr):
   def __init__(self):
     self.id = mk_unique_id()
@@ -881,10 +896,11 @@ def print_prog(p):
       print "%s:" % bb
 
     for k,v in instrs.iteritems():
-      if isinstance(v, (Store, Unreachable, TerminatorInst)):
-        print "  %s" % v
-      else:
+      k = str(k)
+      if k[0] == '%':
         print '  %s = %s' % (k, v)
+      else:
+        print "  %s" % v
 
 
 def countUsers(prog):

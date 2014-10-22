@@ -172,6 +172,12 @@ def parseStore(toks):
   identifiers[s.getUniqueName()] = s
   BBs[bb_label][s.getUniqueName()] = s
 
+def parseSkip(toks):
+  global identifiers, BBs
+  s = Skip()
+  identifiers[s.getUniqueName()] = s
+  BBs[bb_label][s.getUniqueName()] = s
+
 def parseUnreachable(toks):
   global identifiers, BBs
   u = Unreachable()
@@ -369,8 +375,10 @@ br = (Literal('br') + booloperand + comma + label + comma + label).\
 
 ret = (Literal('ret') + typeoperand).setParseAction(pa(parseRet))
 
+skip = Suppress('skip').setParseAction(pa(parseSkip))
+
 instr = (reg + Suppress('=') + op).setParseAction(pa(parseInstr)) |\
-        store | unreachable | newBB | br | ret | comment
+        store | unreachable | newBB | br | ret | skip | comment
 
 instrc = instr + Optional(comment)
 prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\
