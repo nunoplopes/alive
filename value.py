@@ -574,6 +574,5 @@ class Input(Value):
     num_elems = 7
     size = block_size * num_elems
     mem = BitVec('mem_' + self.name, size)
-    allOnes = BitVecVal((1 << size) - 1, size)
-    state.addAlloca(ptr, mem, (block_size, num_elems, 1, allOnes))
+    state.addInputMem(ptr, mem, (block_size, num_elems, 1))
     return [], ptr

@@ -1,4 +1,5 @@
-%p = alloca
+; FIXME: slow
+%p = alloca i9
 store %a, %p
 %b = load %p
   =>

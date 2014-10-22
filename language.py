@@ -56,6 +56,9 @@ class State:
         self.bb_pres[bb] += [cond]
 
   def addAlloca(self, ptr, mem, info):
+    self.ptrs += [(ptr, mem, [mem], info)]
+
+  def addInputMem(self, ptr, mem, info):
     self.ptrs += [(ptr, mem, [], info)]
 
   def newBB(self, name):
@@ -589,15 +592,16 @@ class Alloca(Instr):
     block_size = getAllocSize(self.type.type)
     num_elems = self.numElems.getValue()
     size = num_elems * block_size
-    initialized = BitVecVal(0, size)
+
+    if size == 0:
+      return BoolVal(True), ptr
 
     defined = [ULT(ptr, ptr + (size >> 3)),
                ptr != 0,
-               num_elems != 0,
                getPtrAlignCnstr(ptr, self.align)]
 
-    mem = BitVec('alloca' + self.getName(), size)
-    state.addAlloca(ptr, mem, (block_size, num_elems, self.align, initialized))
+    mem = freshBV('alloca' + self.getName(), size)
+    state.addAlloca(ptr, mem, (block_size, num_elems, self.align))
     return defined, ptr
 
   def getTypeConstraints(self):
@@ -675,27 +679,21 @@ class Load(Instr):
       return None
 
     (ptr, mem, qvs, info) = l[0]
-    (block_size, num_elems, align, initialized) = info
+    (block_size, num_elems, align) = info
     size = mem.size()
     read_size = self.type.getSize()
     actual_read_size = getAllocSize(self.type)
 
     if size > read_size:
-      offset = truncateOrZExt(v - ptr, mem)
+      offset = truncateOrZExt((v - ptr) << 3, mem)
       mem = self.extractBV(mem, offset, read_size)
-      initialized = self.extractBV(initialized, offset, actual_read_size)
     elif size < read_size:
       # undef behavior; skip this block
       return self._recPtrLoad(l[1:], v, defined, mustload, qvars)
 
-    inbounds = And(UGE(v, ptr), ULE(v + read_size/8, ptr + size/8))
+    inbounds = And(UGE(v, ptr), UGE((size - read_size)/8, v - ptr))
     mustload += [inbounds]
     qvars += qvs
-
-    # reading unitialized data is undef behavior
-    defined += [Implies(inbounds,
-                        initialized ==
-                          BitVecVal((1<<actual_read_size)-1, actual_read_size))]
 
     if self.align != 0:
       # overestimating the alignment is undefined behavior.
@@ -750,7 +748,7 @@ class Store(Instr):
     write_size = self.stype.getSize()
     if write_size == size:
       return src
-    offset = tgt - ptr
+    offset = (tgt - ptr) << 3
     new = LShR(truncateOrPad(src, mem), truncateOrZExt(offset, mem))
 
     # mask out bits that will be written
@@ -761,26 +759,30 @@ class Store(Instr):
     return new | old
 
   def toSMT(self, poison, state, qvars):
-    src = state.eval(self.src, poison, qvars)
-    tgt = state.eval(self.dst, poison, qvars)
+    qvars_new = []
+    src = state.eval(self.src, poison, qvars_new)
+    tgt = state.eval(self.dst, poison, qvars_new)
+    qvars += qvars_new
     defined = [tgt != 0]
 
     write_size = getAllocSize(self.stype)
     newmem = []
     mustwrite = []
     for (ptr, mem, qvs, info) in state.ptrs:
-      (block_size, num_elems, align, initialized) = info
+      (block_size, num_elems, align) = info
       size = block_size * num_elems
-      inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size/8, ptr + size/8))
+      # skip block if it is too small
+      if size < write_size:
+        newmem += [(ptr, mem, qvs, info)]
+        continue
+
+      inbounds = And(UGE(tgt, ptr), UGE((size - write_size)/8, tgt - ptr))
       mustwrite += [inbounds]
 
       writes = mk_and(state.defined + [inbounds])
       mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
-      allOnes = BitVecVal((1 << write_size) - 1, mem.size())
-      initialized2 = If(inbounds,
-                        self._mkMem(allOnes, tgt, ptr, size, initialized),
-                        initialized)
-      newmem += [(ptr, mem, qvs, (block_size, num_elems, align, initialized2))]
+      qvs += qvars_new
+      newmem += [(ptr, mem, qvs, (block_size, num_elems, align))]
 
       if self.align != 0:
         # overestimating the alignment is undefined behavior.

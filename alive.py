@@ -371,11 +371,7 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
   for (ptr, mem, qvars, info) in srcv.ptrs:
     memb = memsb.get(str(ptr))
     if memb == None:
-      # If memory was not written in Source, then ignore the block.
-      if is_const(simplify(mem)):
-        continue
-      print '\nERROR: No memory state for %s in Target' % str(ptr)
-      exit(-1)
+      memb = freshBV('mem', mem.size())
 
     check_expr(qvars, [mem != memb] + extra_cnstrs, lambda s :
       ('Mismatch in final memory state for %s (%d bits)' %

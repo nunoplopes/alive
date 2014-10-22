@@ -22,6 +22,10 @@ def mk_unique_id():
   return id
 
 
+def freshBV(prefix, size):
+  return BitVec('%s_%s' % (prefix, mk_unique_id()), size)
+
+
 def mk_and(l):
   l = [e for e in l if not is_true(e)]
   if len(l) == 0:
