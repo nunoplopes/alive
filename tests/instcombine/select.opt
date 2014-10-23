@@ -1,3 +1,118 @@
+Name: Select:762
+; FIXME: missing support for CreateZExtOrTrunc
+; FIXME: missing a few cases..
+Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
+%lhs = and %Op, C
+%c = icmp eq %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%v = shl %lhs, log2(umax(C2,C3)) - log2(C)
+%s = xor %v, umax(C2, C3)
+
+
+Name: Select:762
+Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) < log2(C)
+%lhs = and %Op, C
+%c = icmp eq %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%v = lshr %lhs, log2(C) - log2(umax(C2,C3))
+%s = xor %v, umax(C2, C3)
+
+
+Name: Select:762
+Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) == log2(C)
+%lhs = and %Op, C
+%c = icmp eq %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%s = xor %lhs, umax(C2, C3)
+
+
+Name: Select:762
+Pre: isPowerOf2(C) && isPowerOf2(C3) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
+%lhs = and %Op, C
+%c = icmp eq %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%s = shl %lhs, log2(umax(C2,C3)) - log2(C)
+
+
+Name: Select:762
+Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
+%lhs = and %Op, C
+%c = icmp ne %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%s = shl %lhs, log2(umax(C2,C3)) - log2(C)
+
+
+Name: Select:762
+Pre: isPowerOf2(C) && isPowerOf2(C3) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
+%lhs = and %Op, C
+%c = icmp ne %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%v = shl %lhs, log2(umax(C2,C3)) - log2(C)
+%s = xor %v, umax(C2, C3)
+
+
+Name: Select:762
+Pre: C2 != 0 && C3 != 0 && isPowerOf2(C2-C3) && isPowerOf2(C) && log2(C) < width(C2) && log2(C2-C3) > log2(C)
+%lhs = and %Op, C
+%c = icmp eq %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%v = shl %lhs, log2(C2-C3) - log2(C)
+%x = xor %v, C2-C3
+%s = add %x, C3
+
+
+Name: Select:762
+Pre: C2 != 0 && C3 != 0 && isPowerOf2(C2-C3) && isPowerOf2(C) && log2(C) < width(C2) && log2(C2-C3) < log2(C)
+%lhs = and %Op, C
+%c = icmp eq %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%v = lshr %lhs, log2(C)-log2(C2-C3)
+%x = xor %v, C2-C3
+%s = add %x, C3
+
+
+Name: Select:846
+%A = select %B, true, %C
+  =>
+%A = or %B, %C
+
+
+Name: Select:850
+%A = select %B, false, %C
+  =>
+%notb = xor %B, true
+%A = and %notb, %C
+
+
+Name: Select:855
+%A = select %B, %C, false
+  =>
+%A = and %B, %C
+
+
+Name: Select:859
+%A = select %B, %C, true
+  =>
+%notb = xor %B, true
+%A = or %notb, %C
+
+
 Name: Select:851
 %r = select %a, %b, %a
   =>
@@ -45,6 +160,7 @@ Name: Select:883
 %r = sext %notc
 
 Name: Select:962
+; FIXME: valid for any binop
 %s1 = add %x, %y
 %s2 = add %x, %z
 %r = select %c, %s1, %s2
@@ -70,21 +186,35 @@ Name: Select:967b
 %sel = select %c, %neg, %y
 %r = add %x, %sel
 
-Name: Select:1031
-%c1 = icmp cmp %a, %b
-%r1 = select %c1, %a, %b
-%c2 = icmp cmp %a, %r1
-%r2 = select %c2, %a, %r1
-  =>
-%c = icmp cmp %a, %b
-%r2 = select %c, %a, %b
 
-Name: Select:1048
-%x2 = sub 0, %x
-%c = icmp slt %x2, 0
-%negx = sub 0, %x2
-%abs = select %c, %negx, %x2
+Name: Select:1070
+%X = select %c, %W, %Z
+%r = select %c, %X, %Y
   =>
-%c2 = icmp slt %x, 0
-%negx2 = sub 0, %x
-%abs = select %c2, %negx2, %x
+%r = select %c, %W, %Y
+
+
+Name: Select:1078
+%Y = select %c, %W, %Z
+%r = select %c, %X, %Y
+  =>
+%r = select %c, %X, %Z
+
+
+Name: Select:1087
+%c = xor %val, true
+%r = select %c, %X, %Y
+  =>
+%r = select %val, %Y, %X
+
+
+Name: Select:1100
+%r = select true, %X, %Y
+  =>
+%r = %X
+
+
+Name: Select:1105
+%r = select false, %X, %Y
+  =>
+%r = %Y

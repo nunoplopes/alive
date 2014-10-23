@@ -1,4 +1,5 @@
 Name: simplifyValueKnownNonZero 1
+; FIXME: combine the following 12 into 3.
 ; FIXME: slow
 Pre: hasOneUse(%Y)
 %s = shl i33 1, %A
@@ -28,6 +29,95 @@ Pre: isPowerOf2(%A) && hasOneUse(%Y)
 %r = udiv %X, %Y
 
 
+Name: simplifyValueKnownNonZero 4
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = sdiv %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = sdiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 5
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = sdiv %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = sdiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 6
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = sdiv %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = sdiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 7
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = urem %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = urem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 8
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = urem %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = urem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 9
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = urem %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = urem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 10
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = srem %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = srem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 11
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = srem %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = srem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 12
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = srem %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = srem %X, %Y
+
 ; FIXME: cannot do the recursive case of simplifyValueKnownNonZero()
 
 
@@ -51,6 +141,13 @@ Pre: isPowerOf2(C1)
 %r = mul i11 %x, C1
   =>
 %r = shl %x, log2(C1)
+
+Name: 168-2
+; FIXME: slow
+Pre: isPowerOf2(C1)
+%r = mul nuw i11 %x, C1
+  =>
+%r = shl nuw %x, log2(C1)
 
 
 Name: 201
@@ -101,7 +198,7 @@ Name: 265
 %r = %X
 
 
-Name: 265
+Name: 265-2
 %div = sdiv exact %X, %Y
 %r = mul %div, %Y
   =>
@@ -117,12 +214,50 @@ Name: 266
 %r = sub 0, %X
 
 
-Name: 266
+Name: 266-2
 %div = sdiv exact %X, %Y
 %negY = sub 0, %Y
 %r = mul %div, %negY
   =>
 %r = sub 0, %X
+
+
+Name: 275
+; FIXME: slow
+%div = udiv i5 %X, %Y
+%r = mul %div, %Y
+  =>
+%rem = urem %X, %Y
+%r = sub  %X, %rem
+
+
+Name: 275-2
+; FIXME: slow
+%div = sdiv i5 %X, %Y
+%r = mul %div, %Y
+  =>
+%rem = srem %X, %Y
+%r = sub  %X, %rem
+
+
+Name: 276
+; FIXME: slow
+%div = sdiv i5 %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%rem = srem %X, %Y
+%r = sub %rem, %X
+
+
+Name: 276-2
+; FIXME: slow
+%div = udiv i5 %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%rem = urem %X, %Y
+%r = sub %rem, %X
 
 
 Name: 283
@@ -331,6 +466,80 @@ Name: 820
 %r = udiv %X, %Op1
 
 
+Name: 865
+Pre: isPowerOf2(C)
+%r = udiv i9 %x, C
+  =>
+%r = lshr %x, log2(C)
+
+
+Name: 865
+Pre: isPowerOf2(C)
+%r = udiv exact i9 %x, C
+  =>
+%r = lshr exact %x, log2(C)
+
+
+Name: 876
+Pre: C u>= (1<<(width(C)-1))
+%r = udiv %x, C
+  =>
+%c = icmp ult %x, C
+%r = select %c, 0, 1
+
+
+Name: 891
+%s = shl i13 1, %N
+%r = udiv %x, %s
+  =>
+%r = lshr %x, %N
+
+Name: 891-exact
+%s = shl i13 1, %N
+%r = udiv exact %x, %s
+  =>
+%r = lshr exact %x, %N
+
+Name: 891-2
+Pre: isPowerOf2(C)
+%s = shl i13 C, %N
+%r = udiv %x, %s
+  =>
+%N2 = add %N, log2(C)
+%r = lshr %x, %N2
+
+
+Name: 891-2
+Pre: isPowerOf2(C)
+%s = shl i13 C, %N
+%r = udiv exact %x, %s
+  =>
+%N2 = add %N, log2(C)
+%r = lshr exact %x, %N2
+
+
+Name: 891-3
+Pre: isPowerOf2(C)
+%s = shl C, %N
+%Op1 = zext %s
+%r = udiv i13 %x, %Op1
+  =>
+%N2 = add %N, log2(C)
+%N3 = zext %N2
+%r = lshr %x, %N3
+
+
+Name: 891-3
+Pre: isPowerOf2(C)
+%s = shl C, %N
+%Op1 = zext %s
+%r = udiv exact i13 %x, %Op1
+  =>
+%N2 = add %N, log2(C)
+%N3 = zext %N2
+%r = lshr exact %x, %N3
+
+
 Name: 968
 ; FIXME: slow
 Pre: WillNotOverflowUnsignedShl(C2, C1)
@@ -346,6 +555,15 @@ Name: 976
 %r = udiv %Op0, %Op1
   =>
 %d = udiv %X, %Y
+%r = zext %d
+
+
+Name: 976-exact
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = udiv exact i9 %Op0, %Op1
+  =>
+%d = udiv exact %X, %Y
 %r = zext %d
 
 
