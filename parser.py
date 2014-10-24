@@ -280,7 +280,8 @@ identifier = Word(srange("[a-zA-Z0-9_.]"))
 comma = Suppress(',')
 pred_args = Forward()
 
-cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')')).\
+cnst_expr_atoms = (identifier + Suppress('(') + pred_args + Suppress(')') +\
+                   ~oneOf('&& ||')).\
                     setParseAction(pa(parseCnstFunction)) |\
                   Regex(r"C\d*|(?:-\s*)?\d+|%[a-zA-Z0-9_.]+") |\
                   oneOf('false true null')
