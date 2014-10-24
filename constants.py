@@ -172,7 +172,7 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  abs, ctlz, cttz, log2, lshr, trunc, umax, width, Last = range(9)
+  abs, ctlz, cttz, log2, lshr, max, trunc, umax, width, Last = range(10)
 
   opnames = {
     abs:   'abs',
@@ -180,6 +180,7 @@ class CnstFunction(Constant):
     cttz:  'countTrailingZeros',
     log2:  'log2',
     lshr:  'lshr',
+    max:   'max',
     trunc: 'trunc',
     umax:  'umax',
     width: 'width',
@@ -192,6 +193,7 @@ class CnstFunction(Constant):
     cttz:  1,
     log2:  1,
     lshr:  2,
+    max:   2,
     trunc: 1,
     umax:  2,
     width: 1,
@@ -229,8 +231,9 @@ class CnstFunction(Constant):
       self.abs:   lambda a: allTyEqual([a,self], Type.Int),
       self.ctlz:  lambda a: allTyEqual([a], Type.Int),
       self.cttz:  lambda a: allTyEqual([a], Type.Int),
-      self.log2:  lambda a: allTyEqual([a,self], Type.Int),
+      self.log2:  lambda a: allTyEqual([a], Type.Int),
       self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
+      self.max:   lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.trunc: lambda a: [self.type < a.type],
       self.umax:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.width: lambda a: [],
@@ -245,8 +248,9 @@ class CnstFunction(Constant):
       self.abs:   lambda a: If(a >= 0, a, -a),
       self.ctlz:  lambda a: ctlz(a, self.type.getSize()),
       self.cttz:  lambda a: cttz(a, self.type.getSize()),
-      self.log2:  lambda a: bv_log2(a),
+      self.log2:  lambda a: bv_log2(a, self.type.getSize()),
       self.lshr:  lambda a,b: LShR(a,b),
+      self.max:   lambda a,b: If(a > b, a, b),
       self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
       self.umax:  lambda a,b: If(UGT(a,b), a, b),
       self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize()),

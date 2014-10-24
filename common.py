@@ -139,11 +139,11 @@ def no_overflow_umul(a, b):
   return m == BitVecVal(0, size)
 
 
-def bv_log2(v):
+def bv_log2(v, bitwidth):
   size = v.size()
   def rec(h, l):
     if h <= l:
-      return BitVecVal(l, size)
+      return BitVecVal(l, bitwidth)
     mid = l+int((h-l)/2)
     return If(Extract(h,mid+1,v) != 0, rec(h, mid+1), rec(mid, l))
   return rec(size-1, 0)
