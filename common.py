@@ -180,6 +180,17 @@ def cttz(v, output_width):
   return rec(0)
 
 
+def ComputeNumSignBits(v, bitwidth):
+  size = v.size()
+  def rec(i):
+    if i == size:
+      return BitVecVal(0, bitwidth)
+    return If(Extract(size-1,i,v) == BitVecVal((1<<(size-i))-1, size-i),
+              BitVecVal(size-i, bitwidth),
+              rec(i+1))
+  return rec(0)
+
+
 ##########################
 # Type inference utilities
 

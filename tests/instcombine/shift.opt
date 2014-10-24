@@ -1,93 +1,347 @@
-Name: InstructionSimplify:1241
-
-%r = lshr 0, %x
- =>
-%r = 0
-
-
-Name: InstructionSimplify:1241
-
-%r = shl 0, %x
- =>
-%r = 0
-
-Name: InstructionSimplify:1241
-
-%r = ashr 0, %x
- =>
-%r = 0
-
-Name: InstructionSimplify: 1244
-
-%r = shl %x, 0
- =>
-%r = %x
-
-Name: InstructionSimplify: 1244
-
-%r = lshr %x, 0
- =>
-%r = %x
-
-
-Name: InstructionSimplify: 1244
-
-%r = ashr %x, 0
- =>
-%r = %x
-
-
-Name: InstructionSimplify: 1248
-
-%r = lshr %x, undef
- =>
-%r = undef
-
-
-Name: InstructionSimplify:304
-
-%1 = select %a, C1, C1
-%r = shl %1, C2
- =>
-%r = shl C1, C2
-
-Name: InstructionSimplify:304
-
-%1 = select %a, C1, C1
-%r = shl C2, %1
- =>
-%r = shl C2, C1
-
-
-Name: InstructionSimplify: 317
-
-%1 = select %a, undef, C1
-%r = shl C2, %1
- =>
-%r = shl C2, C1
-
-
-Name: InstructionSimplify:317
-
-%1 = select %a, %b, undef
-%r = shl %x, %1
- =>
-%r = shl %x, %b
-
-
-Name: InstCombineShift: 344
-
-%1 = mul i8 %x, C1
-%r = shl %1, C2
+Name: InstCombineShift: 46
+Pre: isPowerOf2(C)
+%Op1 = srem i31 %A, C
+%r = shl %Op0, %Op1
   =>
-%t = shl C1, C2
-%r = mul %x, %t
+%a = and %A, C-1
+%r = shl %Op0, %a
 
 
-Name: InstructionSimplify:1275
+Name: InstCombineShift: 46-2
+Pre: isPowerOf2(C)
+%Op1 = srem i29 %A, C
+%r = ashr %Op0, %Op1
+  =>
+%a = and %A, C-1
+%r = ashr %Op0, %a
 
-%r = shl undef, %x
- =>
+
+Name: InstCombineShift: 46-3
+Pre: isPowerOf2(C)
+%Op1 = srem i27 %A, C
+%r = lshr %Op0, %Op1
+  =>
+%a = and %A, C-1
+%r = lshr %Op0, %a
+
+
+Name: InstCombineShift: 351
+%Op0 = mul i7 %X, C1
+%r = shl %Op0, C2
+  =>
+%r = mul %X, C1 << C2
+
+
+Name: InstCombineShift: 366-1
+%TrOp = shl %X, C1
+%Op0 = trunc %TrOp
+%r = shl i17 %Op0, C2
+  =>
+%TrOp = shl %X, C1
+%s1 = shl %TrOp, zext(C2)
+%and = and %s1, ((1<<width(C2))-1) << zext(C2)
+%r = trunc %and
+
+
+Name: InstCombineShift: 366-2
+%TrOp = lshr %X, C1
+%Op0 = trunc %TrOp
+%r = shl i17 %Op0, C2
+  =>
+%TrOp = lshr %X, C1
+%s1 = shl %TrOp, zext(C2)
+%and = and %s1, ((1<<width(C2))-1) << zext(C2)
+%r = trunc %and
+
+
+Name: InstCombineShift: 366-3
+%TrOp = ashr %X, C1
+%Op0 = trunc %TrOp
+%r = shl i17 %Op0, C2
+  =>
+%TrOp = ashr %X, C1
+%s1 = shl %TrOp, zext(C2)
+%and = and %s1, ((1<<width(C2))-1) << zext(C2)
+%r = trunc %and
+
+
+Name: InstCombineShift: 366-4
+%TrOp = shl %X, C1
+%Op0 = trunc %TrOp
+%r = lshr i17 %Op0, C2
+  =>
+%TrOp = shl %X, C1
+%s1 = lshr %TrOp, zext(C2)
+%and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
+%r = trunc %and
+
+
+Name: InstCombineShift: 366-5
+%TrOp = lshr %X, C1
+%Op0 = trunc %TrOp
+%r = lshr i17 %Op0, C2
+  =>
+%TrOp = lshr %X, C1
+%s1 = lshr %TrOp, zext(C2)
+%and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
+%r = trunc %and
+
+
+Name: InstCombineShift: 366-6
+%TrOp = ashr %X, C1
+%Op0 = trunc %TrOp
+%r = lshr i17 %Op0, C2
+  =>
+%TrOp = ashr %X, C1
+%s1 = lshr %TrOp, zext(C2)
+%and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
+%r = trunc %and
+
+
+Name: InstCombineShift: 422-1
+%Op1 = lshr i31 %X, C
+%Op0 = add %Y, %Op1
+%r = shl %Op0, C
+  =>
+%s = shl %Y, C
+%a = add %s, %X
+%r = and %a, -1 << C
+
+
+Name: InstCombineShift: 422-2
+%Op1 = ashr i31 %X, C
+%Op0 = add %Y, %Op1
+%r = shl %Op0, C
+  =>
+%s = shl %Y, C
+%a = add %s, %X
+%r = and %a, -1 << C
+
+
+Name: InstCombineShift: 440
+%s = lshr %X, C
+%Op1 = and %s, C2
+%Op0 = xor %Y, %Op1
+%r = shl %Op0, C
+  =>
+%a = and %X, C2 << C
+%y2 = shl %Y, C
+%r = xor %a, %y2
+
+
+Name: InstCombineShift: 458
+%s = ashr i31 %X, C
+%Op0 = sub %s, %Y
+%r = shl %Op0, C
+  =>
+%s2 = shl %Y, C
+%a = sub %X, %s2
+%r = and %a, -1<<C
+
+
+Name: InstCombineShift: 476
+%shr = lshr %X, C
+%s = and %shr, C2
+%Op0 = or %s, %Y
+%r = shl %Op0, C
+  =>
+%s2 = shl %Y, C
+%a = and %X, C2<<C
+%r = or %a, %s2
+
+
+Name: InstCombineShift: 497
+; FIXME: missing cases
+%Op0 = xor %X, C2
+%r = lshr %Op0, C
+  =>
+%s2 = lshr %X, C
+%r = xor %s2, C2 u>> C
+
+
+Name: InstCombineShift: 497
+Pre: C2 u>> (width(C)-1) == 0
+%Op0 = xor %X, C2
+%r = ashr %Op0, C
+  =>
+%s2 = ashr %X, C
+%r = xor %s2, C2 >> C
+
+
+Name: InstCombineShift: 497
+Pre: C2 u>> (width(C)-1) == 1
+%Op0 = and %X, C2
+%r = ashr %Op0, C
+  =>
+%s2 = ashr %X, C
+%r = and %s2, C2 >> C
+
+
+Name: InstCombineShift: 497
+%Op0 = add %X, C2
+%r = shl %Op0, C
+  =>
+%s2 = shl %X, C
+%r = add %s2, C2 << C
+
+
+Name: InstCombineShift: 573
+Pre: zext(C+C2) >= width(C)
+%Op0 = shl %X, C2
+%r = shl %Op0, C
+  =>
 %r = 0
 
 
+Name: InstCombineShift: 574
+Pre: zext(C+C2) >= width(C)
+%Op0 = ashr %X, C2
+%r = ashr %Op0, C
+  =>
+%r = ashr %X, width(C)-1
+
+
+Name: InstCombineShift: 577
+Pre: zext(C+C2) < width(C)
+%Op0 = shl i31 %X, C2
+%r = shl %Op0, C
+  =>
+%r = shl %X, C+C2
+
+
+Name: InstCombineShift: 582
+%Op0 = shl %X, C
+%r = lshr %Op0, C
+  =>
+%r = and %X, -1 u>> C
+
+
+Name: InstCombineShift: 592
+Pre: C1 < C2
+%Op0 = ashr exact %X, C1
+%r = shl i33 %Op0, C2
+  =>
+%r = shl %X, C2-C1
+
+
+Name: InstCombineShift: 592
+Pre: C1 < C2
+%Op0 = ashr exact %X, C1
+%r = shl nsw i31 %Op0, C2
+  =>
+%r = shl nsw %X, C2-C1
+
+
+Name: InstCombineShift: 592
+Pre: C1 < C2
+%Op0 = ashr exact %X, C1
+%r = shl nuw %Op0, C2
+  =>
+%r = shl nuw i27 %X, C2-C1
+
+
+Name: InstCombineShift: 592
+Pre: C1 < C2
+%Op0 = lshr exact %X, C1
+%r = shl i33 %Op0, C2
+  =>
+%r = shl %X, C2-C1
+
+
+Name: InstCombineShift: 592
+Pre: C1 < C2
+%Op0 = lshr exact %X, C1
+%r = shl nsw i31 %Op0, C2
+  =>
+%r = shl nsw %X, C2-C1
+
+
+Name: InstCombineShift: 592
+Pre: C1 < C2
+%Op0 = lshr exact %X, C1
+%r = shl nuw %Op0, C2
+  =>
+%r = shl nuw i27 %X, C2-C1
+
+
+Name: InstCombineShift: 612
+Pre: C1 < C2
+%Op0 = shl nuw %X, C1
+%r =  lshr i33 %Op0, C2
+  =>
+%r = lshr %X, C2-C1
+
+
+Name: InstCombineShift: 612
+Pre: C1 < C2
+%Op0 = shl nuw %X, C1
+%r =  lshr exact %Op0, C2
+  =>
+%r = lshr exact i31 %X, C2-C1
+
+
+Name: InstCombineShift: 622
+Pre: C1 < C2
+%Op0 = shl %X, C1
+%r =  lshr i33 %Op0, C2
+  =>
+%s = lshr %X, C2-C1
+%r = and %s, -1 u>> C2
+
+
+
+
+
+
+
+
+
+Name: InstCombineShift: 708
+Pre: MaskedValueIsZero(%Op0, -1<<(width(C)-C))
+%r = shl %Op0, C
+  =>
+%r = shl nuw %Op0, C
+
+
+Name: InstCombineShift: 717
+Pre: ComputeNumSignBits(%Op0) > C
+%r = shl %Op0, C
+  =>
+%r = shl nsw %Op0, C
+
+
+Name: InstCombineShift: 724
+%Op0 = shl i31 C1, %A
+%r = shl %Op0, C2
+  =>
+%r = shl C1<<C2, %A
+
+
+Name: InstCombineShift: 767
+Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
+%r = lshr %Op0, C
+  =>
+%r = lshr exact %Op0, C
+
+
+Name: InstCombineShift: 807
+Pre: C == width(%X)-width(%x)
+%X = zext %x
+%Op0 = shl %X, C
+%r = ashr i33 %Op0, C
+  =>
+%r = sext %x
+
+
+Name: InstCombineShift: 812
+Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
+%r = ashr %Op0, C
+  =>
+%r = ashr exact %Op0, C
+
+
+Name: InstCombineShift: 821
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%r)-1))
+%r = ashr %Op0, %Op1
+  =>
+%r = lshr %Op0, %Op1

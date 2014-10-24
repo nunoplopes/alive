@@ -120,9 +120,10 @@ class CnstUnaryOp(Constant):
 
 ################################
 class CnstBinaryOp(Constant):
-  And, Or, Xor, Add, Sub, Mul, Div, DivU, Rem, RemU, Shr, Shl, Last = range(13)
+  And, Or, Xor, Add, Sub, Mul, Div, DivU, Rem, RemU, AShr, LShr, Shl,\
+  Last = range(14)
 
-  opnames = ['&', '|', '^', '+', '-', '*', '/', '/u', '%', '%u', '>>', '<<']
+  opnames = ['&', '|', '^', '+', '-', '*', '/', '/u', '%', '%u','>>','u>>','<<']
 
   def __init__(self, op, v1, v2):
     assert 0 <= op < self.Last
@@ -165,44 +166,53 @@ class CnstBinaryOp(Constant):
       self.DivU: lambda a,b: UDiv(a, b),
       self.Rem:  lambda a,b: SRem(a, b),
       self.RemU: lambda a,b: URem(a, b),
-      self.Shr:  lambda a,b: a >> b,
+      self.AShr: lambda a,b: a >> b,
+      self.LShr: lambda a,b: LShR(a, b),
       self.Shl:  lambda a,b: a << b,
     }[self.op](v1, v2)
 
 
 ################################
 class CnstFunction(Constant):
-  abs, ctlz, cttz, log2, lshr, max, trunc, umax, width, Last = range(10)
+  abs, sbits, ctlz, cttz, log2, lshr, max, sext, trunc, umax, width, zext,\
+  Last = range(13)
 
   opnames = {
     abs:   'abs',
+    sbits: 'ComputeNumSignBits',
     ctlz:  'countLeadingZeros',
     cttz:  'countTrailingZeros',
     log2:  'log2',
     lshr:  'lshr',
     max:   'max',
+    sext:  'sext',
     trunc: 'trunc',
     umax:  'umax',
     width: 'width',
+    zext:  'zext',
   }
   opids = {v:k for k,v in opnames.items()}
 
   num_args = {
     abs:   1,
+    sbits: 1,
     ctlz:  1,
     cttz:  1,
     log2:  1,
     lshr:  2,
     max:   2,
+    sext:  1,
     trunc: 1,
     umax:  2,
     width: 1,
+    zext:  1,
   }
 
   def __init__(self, op, args, type):
     assert 0 <= op < self.Last
     for a in args:
       assert isinstance(a, Value)
+    assert isinstance(type, IntType)
 
     self.op = op
     self.args = args
@@ -229,14 +239,17 @@ class CnstFunction(Constant):
   def getTypeConstraints(self):
     c = {
       self.abs:   lambda a: allTyEqual([a,self], Type.Int),
+      self.sbits: lambda a: allTyEqual([a], Type.Int),
       self.ctlz:  lambda a: allTyEqual([a], Type.Int),
       self.cttz:  lambda a: allTyEqual([a], Type.Int),
       self.log2:  lambda a: allTyEqual([a], Type.Int),
       self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.max:   lambda a,b: allTyEqual([a,b,self], Type.Int),
+      self.sext:  lambda a: [a.type < self.type],
       self.trunc: lambda a: [self.type < a.type],
       self.umax:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.width: lambda a: [],
+      self.zext:  lambda a: [self.type > a.type],
     }[self.op](*self.args)
 
     return mk_and([v.getTypeConstraints() for v in self.args] +\
@@ -246,12 +259,15 @@ class CnstFunction(Constant):
     args = [v.toSMT(poison, state, qvars)[1] for v in self.args]
     return [], {
       self.abs:   lambda a: If(a >= 0, a, -a),
+      self.sbits: lambda a: ComputeNumSignBits(a, self.type.getSize()),
       self.ctlz:  lambda a: ctlz(a, self.type.getSize()),
       self.cttz:  lambda a: cttz(a, self.type.getSize()),
       self.log2:  lambda a: bv_log2(a, self.type.getSize()),
       self.lshr:  lambda a,b: LShR(a,b),
       self.max:   lambda a,b: If(a > b, a, b),
+      self.sext:  lambda a: SignExt(self.type.getSize() - a.size(), a),
       self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
       self.umax:  lambda a,b: If(UGT(a,b), a, b),
       self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize()),
+      self.zext:  lambda a: ZeroExt(self.type.getSize() - a.size(), a),
     }[self.op](*args)

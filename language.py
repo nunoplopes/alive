@@ -302,15 +302,16 @@ class BinOp(Instr):
 
 ################################
 class ConversionOp(Instr):
-  Trunc, ZExt, SExt, Ptr2Int, Int2Ptr, Bitcast, Last = range(7)
+  Trunc, ZExt, SExt, ZExtOrTrunc, Ptr2Int, Int2Ptr, Bitcast, Last = range(8)
 
   opnames = {
-    Trunc:   'trunc',
-    ZExt:    'zext',
-    SExt:    'sext',
-    Ptr2Int: 'ptrtoint',
-    Int2Ptr: 'inttoptr',
-    Bitcast: 'bitcast',
+    Trunc:       'trunc',
+    ZExt:        'zext',
+    SExt:        'sext',
+    ZExtOrTrunc: 'ZExtOrTrunc',
+    Ptr2Int:     'ptrtoint',
+    Int2Ptr:     'inttoptr',
+    Bitcast:     'bitcast',
   }
   opids = {v:k for k, v in opnames.items()}
 
@@ -339,6 +340,7 @@ class ConversionOp(Instr):
     return op == ConversionOp.Trunc or\
            op == ConversionOp.ZExt or\
            op == ConversionOp.SExt or\
+           op == ConversionOp.ZExtOrTrunc or\
            op == ConversionOp.Int2Ptr
 
   @staticmethod
@@ -350,6 +352,7 @@ class ConversionOp(Instr):
     return op == ConversionOp.Trunc or\
            op == ConversionOp.ZExt or\
            op == ConversionOp.SExt or\
+           op == ConversionOp.ZExtOrTrunc or\
            op == ConversionOp.Ptr2Int
 
   @staticmethod
@@ -367,24 +370,26 @@ class ConversionOp(Instr):
 
   def toSMT(self, poison, state, qvars):
     return [], {
-      self.Trunc:   lambda v: Extract(self.type.getSize()-1, 0, v),
-      self.ZExt:    lambda v: ZeroExt(self.type.getSize() -
-                                      self.stype.getSize(), v),
-      self.SExt:    lambda v: SignExt(self.type.getSize() -
-                                      self.stype.getSize(), v),
-      self.Ptr2Int: lambda v: truncateOrZExt(v, self.type.getSize()),
-      self.Int2Ptr: lambda v: truncateOrZExt(v, self.type.getSize()),
-      self.Bitcast: lambda v: v,
+      self.Trunc:       lambda v: Extract(self.type.getSize()-1, 0, v),
+      self.ZExt:        lambda v: ZeroExt(self.type.getSize() -
+                                         self.stype.getSize(), v),
+      self.SExt:        lambda v: SignExt(self.type.getSize() -
+                                          self.stype.getSize(), v),
+      self.ZExtOrTrunc: lambda v: truncateOrZExt(v, self.type.getSize()),
+      self.Ptr2Int:     lambda v: truncateOrZExt(v, self.type.getSize()),
+      self.Int2Ptr:     lambda v: truncateOrZExt(v, self.type.getSize()),
+      self.Bitcast:     lambda v: v,
     }[self.op](state.eval(self.v, poison, qvars))
 
   def getTypeConstraints(self):
     cnstr = {
-      self.Trunc:   lambda src,tgt: src > tgt,
-      self.ZExt:    lambda src,tgt: src < tgt,
-      self.SExt:    lambda src,tgt: src < tgt,
-      self.Ptr2Int: lambda src,tgt: BoolVal(True),
-      self.Int2Ptr: lambda src,tgt: BoolVal(True),
-      self.Bitcast: lambda src,tgt: src.getSize() == tgt.getSize(),
+      self.Trunc:       lambda src,tgt: src > tgt,
+      self.ZExt:        lambda src,tgt: src < tgt,
+      self.SExt:        lambda src,tgt: src < tgt,
+      self.ZExtOrTrunc: lambda src,tgt: BoolVal(True),
+      self.Ptr2Int:     lambda src,tgt: BoolVal(True),
+      self.Int2Ptr:     lambda src,tgt: BoolVal(True),
+      self.Bitcast:     lambda src,tgt: src.getSize() == tgt.getSize(),
     } [self.op](self.stype, self.type)
 
     return And(self.stype == self.v.type,

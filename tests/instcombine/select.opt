@@ -1,90 +1,516 @@
+Name: Select:420
+Pre: isPowerOf2(C1) && C1 == C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%F = xor %X, C2
+%r = select %c, %X, %F
+  =>
+%r = and %X, ~C1
+
+
+Name: Select:423
+Pre: isPowerOf2(C1) && C1 == ~C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%F = and %X, C2
+%r = select %c, %X, %F
+  =>
+%F = and %X, C2
+%r = %F
+
+
+Name: Select:427
+Pre: isPowerOf2(C1) && C1 == C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = xor %X, C2
+%r = select %c, %T, %X
+  =>
+%r = or %X, C1
+
+
+Name: Select:430
+Pre: isPowerOf2(C1) && C1 == ~C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = and %X, C2
+%r = select %c, %T, %X
+  =>
+%r = %X
+
+
+Name: Select:433
+Pre: isPowerOf2(C1) && C1 == C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = or %X, C2
+%r = select %c, %T, %X
+  =>
+%T = or %X, C2
+%r = %T
+
+
+Name: Select:465
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+%and = and %X, C1
+%c = icmp eq %and, 0
+%F = or i11 %Y, C2
+%r = select %c, %Y, %F
+  =>
+%and = and %X, C1
+%v = ZExtOrTrunc %and
+%v2 = shl %v, log2(C2)-log2(C1)
+%r = or %v2, %Y
+
+
+Name: Select:465-2
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+%and = and %X, C1
+%c = icmp ne %and, 0
+%F = or i11 %Y, C2
+%r = select %c, %Y, %F
+  =>
+%and = and %X, C1
+%v = ZExtOrTrunc %and
+%v2 = shl %v, log2(C2)-log2(C1)
+%v3 = xor %v2, C2
+%r = or %v3, %Y
+
+
+Name: Select:465-3
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+%and = and %X, C1
+%c = icmp eq %and, 0
+%F = or i11 %Y, C2
+%r = select %c, %Y, %F
+  =>
+%and = and %X, C1
+%v = lshr %and, log2(C1)-log2(C2)
+%v2 =ZExtOrTrunc %v
+%r = or %v2, %Y
+
+
+Name: Select:465-4
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+%and = and %X, C1
+%c = icmp ne %and, 0
+%F = or i11 %Y, C2
+%r = select %c, %Y, %F
+  =>
+%and = and %X, C1
+%v = lshr %and, log2(C1)-log2(C2)
+%v2 =ZExtOrTrunc %v
+%v3 = xor %v2, C2
+%r = or %v3, %Y
+
+
+
+Name: Select:465-5
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = or i11 %Y, C2
+%r = select %c, %T, %Y
+  =>
+%and = and %X, C1
+%v = ZExtOrTrunc %and
+%v2 = shl %v, log2(C2)-log2(C1)
+%v3 = xor %v2, C2
+%r = or %v3, %Y
+
+
+Name: Select:465-6
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
+%and = and %X, C1
+%c = icmp ne %and, 0
+%T = or i11 %Y, C2
+%r = select %c, %T, %Y
+  =>
+%and = and %X, C1
+%v = ZExtOrTrunc %and
+%v2 = shl %v, log2(C2)-log2(C1)
+%r = or %v2, %Y
+
+
+Name: Select:465-7
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = or i11 %Y, C2
+%r = select %c, %T, %Y
+  =>
+%and = and %X, C1
+%v = lshr %and, log2(C1)-log2(C2)
+%v2 = ZExtOrTrunc %v
+%v3 = xor %v2, C2
+%r = or %v3, %Y
+
+
+Name: Select:465-8
+Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
+%and = and %X, C1
+%c = icmp ne %and, 0
+%T = or i11 %Y, C2
+%r = select %c, %T, %Y
+  =>
+%and = and %X, C1
+%v = lshr %and, log2(C1)-log2(C2)
+%v2 = ZExtOrTrunc %v
+%r = or %v2, %Y
+
+
+Name: Select:485
+Pre: isSignBit(C)
+%c = icmp slt i32 %x, C
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:485-2
+%c = icmp ult i32 %x, 0
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:489
+Pre: C == (1<<(width(%x)-1))-1
+%c = icmp sgt i32 %x, C
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:489-2
+%c = icmp ugt i32 %x, -1
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:510
+Pre: C2 == C+1 && C != (1<<(width(%X)-1))-1
+%c = icmp sgt %X, C
+%r = select %c, %X, C2
+  =>
+%c2 = icmp slt %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:511
+Pre: C2 == C-1 && !isSignBit(C)
+%c = icmp slt %X, C
+%r = select %c, %X, C2
+  =>
+%c2 = icmp sgt %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:523
+Pre: (C2 == sext(C+1)) && C != (1<<(width(%x)-1))-1
+%c = icmp sgt %x, C
+%X = sext %x to i15
+%r = select %c, %X, C2
+  =>
+%X = sext %x
+%c2 = icmp slt %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:524
+Pre: (C2 == sext(C-1)) && !isSignBit(C)
+%c = icmp slt %x, C
+%X = sext %x to i15
+%r = select %c, %X, C2
+  =>
+%X = sext %x
+%c2 = icmp sgt %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:525
+Pre: (C2 == sext(C+1)) && C != -1
+%c = icmp ugt %x, C
+%X = sext %x to i15
+%r = select %c, %X, C2
+  =>
+%X = sext %x
+%c2 = icmp ult %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:526
+Pre: (C2 == sext(C-1)) && C != 0
+%c = icmp ult %x, C
+%X = sext %x to i15
+%r = select %c, %X, C2
+  =>
+%X = sext %x
+%c2 = icmp ugt %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:537
+Pre: (C2 == zext(C+1)) && C != -1
+%c = icmp ugt %x, C
+%X = zext %x to i15
+%r = select %c, %X, C2
+  =>
+%X = zext %x
+%c2 = icmp ult %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:538
+Pre: (C2 == zext(C-1)) && C != 0
+%c = icmp ult %x, C
+%X = zext %x to i15
+%r = select %c, %X, C2
+  =>
+%X = zext %x
+%c2 = icmp ugt %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:575
+%c = icmp sgt %X, -1
+%r = select %c, C1, C2
+  =>
+%s = ashr %X, width(%X)-1
+%a = and %s, C2-C1
+%r = add %a, C1
+
+
+Name: Select:575
+%c = icmp sgt %X, -1
+%r = select %c, C1, -1
+  =>
+%s = ashr %X, width(%X)-1
+%r = or %s, C1
+
+
+Name: Select:576
+%c = icmp slt %X, 0
+%r = select %c, C2, C1
+  =>
+%s = ashr %X, width(%X)-1
+%a = and %s, C2-C1
+%r = add %a, C1
+
+
+Name: Select:576
+%c = icmp slt %X, 0
+%r = select %c, -1, C1
+  =>
+%s = ashr %X, width(%X)-1
+%r = or %s, C1
+
+
+Name: Select:637
+%c = icmp eq %X, C
+%r = select %c, %X, %Y
+  =>
+%c = icmp eq %X, C
+%r = select %c, C, %Y
+
+
+Name: Select:641
+%c = icmp ne %X, C
+%r = select %c, %Y, %X
+  =>
+%c = icmp ne %X, C
+%r = select %c, %Y, C
+
+
+Name: Select:699
+; FIXME: need pattern recognition for max, min, abs templates
+%c = icmp uge %A, %B
+%umax = select %c, %A, %B
+%c2 = icmp uge %umax, %B
+%umax2 = select %c2, %umax, %B
+  =>
+%c = icmp uge %A, %B
+%umax2 = select %c, %A, %B
+
+
+Name: Select:700
+%c = icmp slt %A, %B
+%smin = select %c, %A, %B
+%c2 = icmp slt %smin, %B
+%smin2 = select %c2, %smin, %B
+  =>
+%c = icmp slt %A, %B
+%smin2 = select %c, %A, %B
+
+
+Name: Select:704
+%c = icmp slt %A, %B
+%smin = select %c, %A, %B
+%c2 = icmp sge %smin, %A
+%smax = select %c2, %smin, %A
+  =>
+%smax = %A
+
+
+Name: Select:705
+%c = icmp sge %A, %B
+%umax = select %c, %A, %B
+%c2 = icmp slt %umax, %A
+%umin = select %c2, %umax, %A
+  =>
+%umin = %A
+
+
+Name: Select:719
+Pre: C1 < C2
+%c = icmp slt %A, C1
+%smin = select %c, %A, C1
+%c2 = icmp slt %smin, C2
+%smin2 = select %c2, %smin, C2
+  =>
+%c = icmp slt %A, C1
+%smin2 = select %c, %A, C1
+
+
+Name: Select:720
+Pre: C1 u> C2
+%c = icmp uge %A, C1
+%umax = select %c, %A, C1
+%c2 = icmp uge %umax, C2
+%umax2 = select %c2, %umax, C2
+  =>
+%c = icmp uge %A, C1
+%umax2 = select %c, %A, C1
+
+
+Name: Select:727
+Pre: C1 > C2
+%c = icmp slt %A, C1
+%smin = select %c, %A, C1
+%c2 = icmp slt %smin, C2
+%smin2 = select %c2, %smin, C2
+  =>
+%c3 = icmp slt %A, C2
+%smin2 = select %c3, %A, C2
+
+
+Name: Select:728
+Pre: C1 u< C2
+%c = icmp uge %A, C1
+%umax = select %c, %A, C1
+%c2 = icmp uge %umax, C2
+%umax2 = select %c2, %umax, C2
+  =>
+%c3 = icmp uge %A, C2
+%umax2 = select %c3, %A, C2
+
+
+Name: Select:740
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = icmp sgt %abs, -1
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %abs, %minus2
+  =>
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c, %A, %minus
+
+
+Name: Select:741
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %minus, %A
+%c2 = icmp sgt %abs, -1
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %minus2, %abs
+  =>
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c, %minus, %A
+
+
+Name: Select:746
+%c = icmp slt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = icmp sgt %abs, 0
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %abs, %minus2
+  =>
+%c3 = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c3, %A, %minus
+
+
+Name: Select:747
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = icmp slt %abs, 0
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %abs, %minus2
+  =>
+%c3 = icmp slt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c3, %A, %minus
+
+
 Name: Select:762
-; FIXME: missing support for CreateZExtOrTrunc
-; FIXME: missing a few cases..
-Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
+; FIXME: slow
+Pre: isPowerOf2(C) && isPowerOf2(C2-C3) && log2(C) < width(C2)
 %lhs = and %Op, C
 %c = icmp eq %lhs, 0
 %s = select %c, C2, C3
   =>
 %lhs = and %Op, C
-%v = shl %lhs, log2(umax(C2,C3)) - log2(C)
-%s = xor %v, umax(C2, C3)
+%v0 = ZExtOrTrunc %lhs to i11
+%v = shl %v0, max(0, log2(C2-C3) - log2(C))
+%v2 = lshr %v, max(0, log2(C) - log2(C2-C3))
+%x = xor %v2, C2-C3
+%s = add %x, C3
 
 
-Name: Select:762
-Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) < log2(C)
-%lhs = and %Op, C
-%c = icmp eq %lhs, 0
-%s = select %c, C2, C3
-  =>
-%lhs = and %Op, C
-%v = lshr %lhs, log2(C) - log2(umax(C2,C3))
-%s = xor %v, umax(C2, C3)
-
-
-Name: Select:762
-Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) == log2(C)
-%lhs = and %Op, C
-%c = icmp eq %lhs, 0
-%s = select %c, C2, C3
-  =>
-%lhs = and %Op, C
-%s = xor %lhs, umax(C2, C3)
-
-
-Name: Select:762
-Pre: isPowerOf2(C) && isPowerOf2(C3) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
-%lhs = and %Op, C
-%c = icmp eq %lhs, 0
-%s = select %c, C2, C3
-  =>
-%lhs = and %Op, C
-%s = shl %lhs, log2(umax(C2,C3)) - log2(C)
-
-
-Name: Select:762
-Pre: isPowerOf2(C) && isPowerOf2(C2) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
+Name: Select:762-2
+Pre: isPowerOf2(C) && isPowerOf2(C2-C3) && log2(C) < width(C2)
 %lhs = and %Op, C
 %c = icmp ne %lhs, 0
 %s = select %c, C2, C3
   =>
 %lhs = and %Op, C
-%s = shl %lhs, log2(umax(C2,C3)) - log2(C)
+%v0 = ZExtOrTrunc %lhs to i11
+%v = shl %v0, max(0, log2(C2-C3) - log2(C))
+%v2 = lshr %v, max(0, log2(C) - log2(C2-C3))
+%s = add %v2, C3
 
 
-Name: Select:762
-Pre: isPowerOf2(C) && isPowerOf2(C3) && (C2 == 0 || C3 == 0) && log2(C) < width(C2) && log2(umax(C2,C3)) > log2(C)
+Name: Select:762-3
+Pre: isPowerOf2(C) && isPowerOf2(C3-C2) && log2(C) < width(C2)
+%lhs = and %Op, C
+%c = icmp eq %lhs, 0
+%s = select %c, C2, C3
+  =>
+%lhs = and %Op, C
+%v0 = ZExtOrTrunc %lhs to i11
+%v = shl %v0, max(0, log2(C3-C2) - log2(C))
+%v2 = lshr %v, max(0, log2(C) - log2(C3-C2))
+%s = add %v2, C2
+
+
+Name: Select:762-4
+Pre: isPowerOf2(C) && isPowerOf2(C3-C2) && log2(C) < width(C2)
 %lhs = and %Op, C
 %c = icmp ne %lhs, 0
 %s = select %c, C2, C3
   =>
 %lhs = and %Op, C
-%v = shl %lhs, log2(umax(C2,C3)) - log2(C)
-%s = xor %v, umax(C2, C3)
-
-
-Name: Select:762
-Pre: C2 != 0 && C3 != 0 && isPowerOf2(C2-C3) && isPowerOf2(C) && log2(C) < width(C2) && log2(C2-C3) > log2(C)
-%lhs = and %Op, C
-%c = icmp eq %lhs, 0
-%s = select %c, C2, C3
-  =>
-%lhs = and %Op, C
-%v = shl %lhs, log2(C2-C3) - log2(C)
-%x = xor %v, C2-C3
-%s = add %x, C3
-
-
-Name: Select:762
-Pre: C2 != 0 && C3 != 0 && isPowerOf2(C2-C3) && isPowerOf2(C) && log2(C) < width(C2) && log2(C2-C3) < log2(C)
-%lhs = and %Op, C
-%c = icmp eq %lhs, 0
-%s = select %c, C2, C3
-  =>
-%lhs = and %Op, C
-%v = lshr %lhs, log2(C)-log2(C2-C3)
-%x = xor %v, C2-C3
-%s = add %x, C3
+%v0 = ZExtOrTrunc %lhs to i11
+%v = shl %v0, max(0, log2(C3-C2) - log2(C))
+%v2 = lshr %v, max(0, log2(C) - log2(C3-C2))
+%x = xor %v2, C3-C2
+%s = add %x, C2
 
 
 Name: Select:846
