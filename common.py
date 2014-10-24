@@ -140,23 +140,21 @@ def no_overflow_umul(a, b):
 
 
 def bv_log2(v, bitwidth):
-  size = v.size()
   def rec(h, l):
     if h <= l:
       return BitVecVal(l, bitwidth)
     mid = l+int((h-l)/2)
     return If(Extract(h,mid+1,v) != 0, rec(h, mid+1), rec(mid, l))
-  return rec(size-1, 0)
+  return rec(v.size()-1, 0)
 
 """
 linear version of log2
-def bv_log2(v):
-  size = v.size()
+def bv_log2(v, bitwidth):
   def rec(i):
     if i == 0:
-      return BitVecVal(0, size)
-    return If(Extract(i,i,v) == BitVecVal(1, 1), BitVecVal(i, size), rec(i-1))
-  return rec(size-1)
+      return BitVecVal(0, bitwidth)
+    return If(Extract(i,i,v) == BitVecVal(1,1), BitVecVal(i,bitwidth), rec(i-1))
+  return rec(v.size()-1)
 """
 
 
