@@ -133,10 +133,11 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  isPower2, isPower2OrZ, isSignBit, known, maskZero, NSWAdd, NSWMul, NUWMul,\
-  NUWShl, OneUse, Last = range(11)
+  eqptrs, isPower2, isPower2OrZ, isSignBit, known, maskZero,\
+  NSWAdd, NSWMul, NUWMul, NUWShl, OneUse, Last = range(12)
 
   opnames = {
+    eqptrs:      'equivalentAddressValues',
     isPower2:    'isPowerOf2',
     isPower2OrZ: 'isPowerOf2OrZero',
     isSignBit:   'isSignBit',
@@ -151,6 +152,7 @@ class LLVMBoolPred(BoolPred):
   opids = {v:k for k, v in opnames.items()}
 
   num_args = {
+    eqptrs:      2,
     isPower2:    1,
     isPower2OrZ: 1,
     isSignBit:   1,
@@ -188,6 +190,7 @@ class LLVMBoolPred(BoolPred):
       raise ParseError('Unknown boolean predicate')
 
   arg_types = {
+    eqptrs:      ['var', 'var'],
     isPower2:    ['any'],
     isPower2OrZ: ['any'],
     isSignBit:   ['const'],
@@ -218,6 +221,7 @@ class LLVMBoolPred(BoolPred):
     assert False
 
   argConstraints = {
+    eqptrs:      lambda a,b: allTyEqual([a,b], Type.Ptr),
     isPower2:    lambda a: allTyEqual([a], Type.Int),
     isPower2OrZ: lambda a: allTyEqual([a], Type.Int),
     isSignBit:   lambda a: allTyEqual([a], Type.Int),
@@ -238,6 +242,7 @@ class LLVMBoolPred(BoolPred):
   def toSMT(self, state):
     args = [v.toSMT([], state, [])[1] for v in self.args]
     return {
+      self.eqptrs:      lambda a,b: a == b,
       self.isPower2:    lambda a: And(a != 0, a & (a-1) == 0),
       self.isPower2OrZ: lambda a: a & (a-1) == 0,
       self.isSignBit:   lambda a: a == (1 << (a.sort().size()-1)),

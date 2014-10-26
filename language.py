@@ -599,7 +599,8 @@ class Alloca(Instr):
     size = num_elems * block_size
 
     if size == 0:
-      return BoolVal(True), ptr
+      qvars.append(ptr)
+      return [BoolVal(True)], ptr
 
     defined = [ULT(ptr, ptr + (size >> 3)),
                ptr != 0,

@@ -1,0 +1,161 @@
+; FIXME: there's a bug in gep typing that prevents this from working
+;Name: LoadStoreAlloca:181
+;%p = alloca Ty, C
+;  =>
+;%a = alloca [C x Ty]
+;%p = getelementptr inbounds %a, 0, 0
+
+
+; FIXME: does not expose this as undef behavior
+;Name: LoadStoreAlloca:209
+;%p = alloca Ty, undef
+;  =>
+;%p = null
+
+
+Name: LoadStoreAlloca:221
+%p = alloca Ty, 0
+%p2 = alloca Ty, 0
+  =>
+%p = alloca Ty, 0
+%p2 = %p
+
+
+Name: LoadStoreAlloca:234
+; FIXME. use Ty1/Ty2
+%p = alloca i5
+%p2 = alloca i7, 0
+  =>
+%p2 = alloca i7, 0
+%p = alloca i5
+
+
+Name: LoadStoreAlloca:256
+%p = alloca i3, 0
+%p2 = alloca i7, 0
+  =>
+%p = alloca i3, 0
+%p2 = bitcast %p
+
+
+Name: LoadStoreAlloca:419
+Pre: equivalentAddressValues(%p1, %p2)
+store %x, %p1
+%y = load %p2
+  =>
+%y = bitcast %x
+
+
+Name: LoadStoreAlloca:423
+%p = getelementptr i5* null, %idxs
+%y = load i5* %p
+  =>
+%y = undef
+store undef, i7* null
+
+
+Name: LoadStoreAlloca:438
+%y = load i5* null
+  =>
+%y = undef
+store undef, i7* null
+
+
+Name: LoadStoreAlloca:438-2
+%y = load i5* undef
+  =>
+%y = undef
+store undef, i7* null
+
+
+;Nme: LoadStoreAlloca:464
+;Pre: isSafeToLoadUnconditionally(%p1) && isSafeToLoadUnconditionally(%p2)
+;%p = select %c, %p1, %p2
+;%y = load %p
+;  =>
+;%v1 = load %p1
+;%v2 = load %p2
+;%y = select %c, %v1, %v2
+
+
+Name: LoadStoreAlloca:472
+%p = select %c, null, %p1
+%y = load %p
+  =>
+%y = load %p1
+
+
+Name: LoadStoreAlloca:482
+%p = select %c, %p1, null
+%y = load %p
+  =>
+%y = load %p1
+
+
+Name: LoadStoreAlloca:567
+%p = bitcast %p0
+store %x, %p
+  =>
+%x2 = bitcast %x
+store %x2, %p0
+
+
+;Nme: LoadStoreAlloca:572
+;%p = bitcast %p0
+;store %x, %p
+;  =>
+;%x2 = inttoptr %x
+;store %x2, %p0
+
+
+;Nme: LoadStoreAlloca:572
+;%p = bitcast %p0
+;store %x, %p
+;  =>
+;%x2 = ptrtoint %x
+;store %x2, %p0
+
+
+Name: LoadStoreAlloca:646
+Pre: hasOneUse(%Ptr)
+%Ptr = alloca
+store %x, %Ptr
+  =>
+skip
+
+
+Name: LoadStoreAlloca:651
+Pre: hasOneUse(%ptr) && hasOneUse(%a)
+%a = alloca i5
+%ptr = getelementptr %a, %idx
+store %x, i5* %ptr
+  =>
+skip
+
+
+Name: LoadStoreAlloca:671
+Pre: equivalentAddressValues(%p1, %p2)
+store %x, %p1
+store %y, %p2
+  =>
+store %y, %p2
+
+
+Name: LoadStoreAlloca:686
+Pre: equivalentAddressValues(%p1, %p2)
+%x = load %p1
+store %x, %p2
+  =>
+skip
+
+
+Name: LoadStoreAlloca:702
+store %x, i7* null
+  =>
+store undef, i7* null
+
+
+Name: LoadStoreAlloca:712
+store undef, i3* %p
+  =>
+skip
