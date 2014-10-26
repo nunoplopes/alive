@@ -25,6 +25,68 @@ Pre: isPowerOf2(C)
 %r = lshr %Op0, %a
 
 
+Name: InstCombineShift: 228
+Pre: zext(C1+C2) >= width(C1)
+%Op0 = shl %X, C1
+%r = shl %Op0, C2
+  =>
+%r = 0
+
+
+Name: InstCombineShift: 234
+Pre: zext(C1+C2) < width(C2)
+%Op0 = shl i33 %X, C1
+%r = shl %Op0, C2
+  =>
+%r = shl %X, C1+C2
+
+
+Name: InstCombineShift: 239
+%Op0 = shl %X, C
+%r = lshr %Op0, C
+  =>
+%r = and %X, -1 u>> C
+
+
+Name: InstCombineShift: 252
+Pre: C1 > C2 && MaskedValueIsZero(%X, (-1 u>> (width(C2)-C2)) << (width(C1)-C1))
+%Op0 = shl i27 %X, C1
+%r = lshr %Op0, C2
+  =>
+%r = shl %X, C1-C2
+
+
+Name: InstCombineShift: 270
+Pre: zext(C1+C2) >= width(C1)
+%Op0 = lshr %X, C1
+%r = lshr %Op0, C2
+  =>
+%r = 0
+
+
+Name: InstCombineShift: 274
+Pre: zext(C1+C2) < width(C1)
+%Op0 = lshr i33 %X, C1
+%r = lshr %Op0, C2
+  =>
+%r = lshr %X, C1+C2
+
+
+Name: InstCombineShift: 279
+%Op0 = lshr %X, C
+%r = shl %Op0, C
+  =>
+%r = and %X, -1 << C
+
+
+Name: InstCombineShift: 292
+Pre: C1 > C2 && MaskedValueIsZero(%X, (-1 u>> (width(C2)-C2))<<(C1-C2))
+%Op0 = lshr i31 %X, C1
+%r = shl %Op0, C2
+  =>
+%r = lshr %X, C1-C2
+
+
 Name: InstCombineShift: 351
 %Op0 = mul i7 %X, C1
 %r = shl %Op0, C2
@@ -289,11 +351,61 @@ Pre: C1 < C2
 %r = and %s, -1 u>> C2
 
 
+Name: InstCombineShift: 628
+Pre: C1 < C2
+%Op0 = shl nsw %X, C1
+%r = ashr i33 %Op0, C2
+  =>
+%r = ashr %X, C2-C1
 
 
+Name: InstCombineShift: 628-2
+Pre: C1 < C2
+%Op0 = shl nsw %X, C1
+%r = ashr exact i33 %Op0, C2
+  =>
+%r = ashr exact %X, C2-C1
 
 
+Name: InstCombineShift: 646
+Pre: C1 > C2
+%Op0 = lshr exact %X, C1
+%r = shl i33 %Op0, C2
+  =>
+%r = lshr exact %X, C1-C2
 
+
+Name: InstCombineShift: 646-2
+Pre: C1 > C2
+%Op0 = ashr exact %X, C1
+%r = shl i33 %Op0, C2
+  =>
+%r = ashr exact %X, C1-C2
+
+
+Name: InstCombineShift: 661
+Pre: C1 > C2
+%Op0 = shl nuw %X, C1
+%r = lshr i33 %Op0, C2
+  =>
+%r = shl nuw %X, C1-C2
+
+
+Name: InstCombineShift: 670
+Pre: C1 > C2
+%Op0 = shl %X, C1
+%r = lshr i33 %Op0, C2
+  =>
+%s = shl %X, C1-C2
+%r = and %s, -1 u>> C2
+
+
+Name: InstCombineShift: 676
+Pre: C1 > C2
+%Op0 = shl nsw %X, C1
+%r = ashr i33 %Op0, C2
+  =>
+%r = shl nsw %X, C1-C2
 
 
 Name: InstCombineShift: 708
