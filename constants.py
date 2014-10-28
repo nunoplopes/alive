@@ -174,12 +174,14 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  abs, sbits, ctlz, cttz, log2, lshr, max, sext, trunc, umax, width, zext,\
-  Last = range(13)
+  abs, sbits, obits, zbits, ctlz, cttz, log2, lshr, max, sext, trunc, umax,\
+  width, zext, Last = range(15)
 
   opnames = {
     abs:   'abs',
     sbits: 'ComputeNumSignBits',
+    obits: 'computeKnownOneBits',
+    zbits: 'computeKnownZeroBits',
     ctlz:  'countLeadingZeros',
     cttz:  'countTrailingZeros',
     log2:  'log2',
@@ -196,6 +198,8 @@ class CnstFunction(Constant):
   num_args = {
     abs:   1,
     sbits: 1,
+    obits: 1,
+    zbits: 1,
     ctlz:  1,
     cttz:  1,
     log2:  1,
@@ -240,6 +244,8 @@ class CnstFunction(Constant):
     c = {
       self.abs:   lambda a: allTyEqual([a,self], Type.Int),
       self.sbits: lambda a: allTyEqual([a], Type.Int),
+      self.obits: lambda a: allTyEqual([a,self], Type.Int),
+      self.zbits: lambda a: allTyEqual([a,self], Type.Int),
       self.ctlz:  lambda a: allTyEqual([a], Type.Int),
       self.cttz:  lambda a: allTyEqual([a], Type.Int),
       self.log2:  lambda a: allTyEqual([a], Type.Int),
@@ -260,6 +266,8 @@ class CnstFunction(Constant):
     return [], {
       self.abs:   lambda a: If(a >= 0, a, -a),
       self.sbits: lambda a: ComputeNumSignBits(a, self.type.getSize()),
+      self.obits: lambda a: a,
+      self.zbits: lambda a: ~a,
       self.ctlz:  lambda a: ctlz(a, self.type.getSize()),
       self.cttz:  lambda a: cttz(a, self.type.getSize()),
       self.log2:  lambda a: bv_log2(a, self.type.getSize()),

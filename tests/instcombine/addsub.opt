@@ -1,11 +1,42 @@
-Name: AddSub:922
+Name: AddSub:1040
+Pre: C2 == ~C1
+%Y = or %Z, C2
+%X = xor %Y, C1
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+  =>
+%and = and %Z, C1
+%r = sub %RHS, %and
+
+
+Name: AddSub:1043
+%Y = and %Z, C1
+%X = xor %Y, C1
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+  =>
+%or = or %Z, ~C1
+%r = sub %RHS, %or
+
+
+Name: AddSub:1063
+Pre: countTrailingZeros(C1) == 0 && C1 == C2+1
+%Y = and %Z, C2
+%LHS = xor %Y, C1
+%r = add %LHS, %RHS
+  =>
+%or = or %Z, ~C2
+%r = sub %RHS, %or
+
+
+Name: AddSub:1088
 Pre: isSignBit(C)
 %a = add %x, C
   =>
 %a = xor %x, C
 
 
-Name: AddSub:937
+Name: AddSub:1098
 %ax = zext i1 %a
 %c = add %ax, %b
   =>
@@ -13,29 +44,84 @@ Name: AddSub:937
 %c = select %a, %b1, %b
 
 
-Name: AddSub:941, 980
+Name: AddSub:1111
+Pre: C1 == -C2 && isPowerOf2(C2) && !MaskedValueIsZero(C2, -1 << (width(C1)-(width(C1) - log2(C2) - 1)))
+%LHS = xor %Y, C2
+%r = add %LHS, C1
+  =>
+%ShAmt = width(C1) - (width(C1) - log2(C2) - 1)
+%shl = shl %Y, %ShAmt
+%r = ashr %shl, %ShAmt
+
+
+Name: AddSub:1126-1
+Pre: C2 == -C1 && isPowerOf2(C1) && MaskedValueIsZero(%Y, -1 << (log2(C1) + 1))
+%LHS = xor %Y, C2
+%r = add %LHS, C1
+  =>
+%ShAmt = width(C1) - log2(C1) - 1
+%shl = shl %Y, %ShAmt
+%r = ashr %shl, %ShAmt
+
+
+Name: AddSub:1126-2
+Pre: C2 == -C1 && isPowerOf2(C2) && MaskedValueIsZero(%Y, -1 << (log2(C2) + 1))
+%LHS = xor %Y, C2
+%r = add %LHS, C1
+  =>
+%ShAmt = width(C2) - log2(C2) - 1
+%shl = shl %Y, %ShAmt
+%r = ashr %shl, %ShAmt
+
+
+Name: AddSub:1131
+Pre: isPowerOf2(C2+1) && (C2 | computeKnownZeroBits(%Y)) == -1
+%LHS = xor %Y, C2
+%r = add %LHS, C1
+  =>
+%r = sub C1+C2, %Y
+
+
+Name: AddSub:1142
 Pre: isSignBit(C1)
 %b = xor %a, C1
 %d = add %b, C2
   =>
-%sc = xor C1, C2
-%d = add %a, %sc
+%d = add %a, C1^C2
 
 
-Name: AddSub:994
+Name: AddSub:1152
+%r = add i1 %x, %y
+  =>
+%r = xor %x, %y
+
+
+Name: AddSub:1156
 %a = add %b, %b
   =>
 %a = shl %b, 1
 
 
-Name: AddSub:1003
+Name: AddSub:1156-2
+%a = add nsw %b, %b
+  =>
+%a = shl nsw %b, 1
+
+
+Name: AddSub:1156-3
+%a = add nuw %b, %b
+  =>
+%a = shl nuw %b, 1
+
+
+Name: AddSub:1164
 %na = sub 0, %a
 %c = add %na, %b
   =>
 %c = sub %b, %a
 
 
-Name: AddSub:1004
+Name: AddSub:1165
 %na = sub 0, %a
 %nb = sub 0, %b
 %c = add %na, %nb
@@ -44,21 +130,28 @@ Name: AddSub:1004
 %c = sub 0, %ab
 
 
-Name: AddSub:1050
+Name: AddSub:1176
 %nb = sub 0, %b
 %c = add %a, %nb
   =>
 %c = sub %a, %b
 
 
-Name: AddSub:1074
+Name: AddSub:1184
+Pre: (computeKnownZeroBits(%x) | computeKnownZeroBits(%y)) == -1
+%r = add %x, %y
+  =>
+%r = or %x, %y
+
+
+Name: AddSub:1202
 %nx = xor %x, -1
 %r = add %nx, C
   =>
 %r = sub C-1, %x
 
 
-Name: AddSub:1080
+Name: AddSub:1206
 Pre: ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
 %xc2 = and %x, C2
 %r = add %xc2, C1
@@ -67,7 +160,7 @@ Pre: ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
 %r = and %xc1, C2
 
 
-Name: AddSub:1108
+Name: AddSub:1251
 %na = sub %n, %a
 %s = select %x, 0, %na
 %r = add %s, %a
@@ -75,17 +168,34 @@ Name: AddSub:1108
 %r = select %x, %a, %n
 
 
-Name: AddSub:1149
+Name: AddSub:1255
+%na = sub %n, %a
+%s = select %x, %na, 0
+%r = add %s, %a
+  =>
+%r = select %x, %n, %a
+
+
+Name: AddSub:1265
+Pre: WillNotOverflowSignedAdd(%x,trunc(C)) && (C & (-1 << (width(%x) - 1))) == 0
+%sx = sext %x
+%c = add %sx, C
+  =>
+%xy = add nsw %x, trunc(C)
+%c = sext %xy
+
+
+Name: AddSub:1278
 Pre: WillNotOverflowSignedAdd(%x,%y)
 %sx = sext %x
 %sy = sext %y
 %c = add %sx, %sy
   =>
-%xy = add %x, %y
+%xy = add nsw %x, %y
 %c = sext %xy
 
 
-Name: AddSub:1166
+Name: AddSub:1295
 %aab = and %a, %b
 %aob = xor %a, %b
 %c = add %aab, %aob
@@ -93,170 +203,216 @@ Name: AddSub:1166
 %c = or %a, %b
 
 
-Name: AddSub:1364
+Name: AddSub:1309
+%lhs = and %a, %b
+%rhs = or %a, %b
+%c = add %lhs, %rhs
+  =>
+%c = add %a, %b
+
+Name: AddSub:1309-2
+%lhs = and %a, %b
+%rhs = or %a, %b
+%c = add nsw %lhs, %rhs
+  =>
+%c = add nsw %a, %b
+
+
+Name: AddSub:1309-3
+%lhs = and %a, %b
+%rhs = or %a, %b
+%c = add nuw %lhs, %rhs
+  =>
+%c = add nuw %a, %b
+
+
+Name: AddSub:1334
+Pre: WillNotOverflowSignedAdd(%lhs, %rhs)
+%r = add %lhs, %rhs
+  =>
+%r = add nsw %lhs, %rhs
+
+
+Name: AddSub:1338
+Pre: WillNotOverflowUnsignedAdd(%lhs, %rhs)
+%r = add %lhs, %rhs
+  =>
+%r = add nuw %lhs, %rhs
+
+
+; TODO: GEP stuff
+
+
+Name: AddSub:1539
 %na = sub 0, %a
 %r = sub %x, %na
   =>
 %r = add %x, %a
 
 
-Name: AddSub:1371
+Name: AddSub:1539-2
+%r = sub %x, C
+  =>
+%r = add %x, -C
+
+
+Name: AddSub:1546
+%na = sub nsw 0, %a
+%r = sub nsw %x, %na
+  =>
+%r = add nsw %x, %a
+
+
+Name: AddSub:1549
+Pre: C != 1 << (width(C)-1)
+%r = sub nsw %x, C
+  =>
+%r = add nsw %x, -C
+
+
+Name: AddSub:1556
 %r = sub i1 %x, %y
   =>
 %r = xor %x, %y
 
 
-Name: AddSub:1375
+Name: AddSub:1560
 %r = sub -1, %a
   =>
 %r = xor %a, -1
 
 
-Name: AddSub:1381
+Name: AddSub:1564
 %nx = xor %x, -1
 %r = sub C, %nx
   =>
 %r = add %x, C+1
 
 
-Name: AddSub:1386
-Pre: C == width(%a) - 1
+Name: AddSub:1574
+%rhs = add %X, C2
+%r = sub C, %rhs
+  =>
+%r = sub C-C2, %X
 
+
+Name: AddSub:1582
+%rhs = zext i1 %X
+%r = sub 0, %rhs
+  =>
+%r = sext %X
+
+
+Name: AddSub:1587
+%rhs = sext i1 %X
+%r = sub 0, %rhs
+  =>
+%r = zext %X
+
+
+Name: AddSub:1599
+Pre: C == width(%a) - 1
 %a = lshr %x, C
 %r = sub 0, %a
   =>
 %r = ashr %x, C
 
 
-Name: AddSub:1400, FoldOpIntoSelect
-; symmetric over which argument is constant
-
-%1 = select %c, C1, %f
-%r = sub C0, %1
+Name: AddSub:1604
+Pre: C == width(%a) - 1
+%a = ashr %x, C
+%r = sub 0, %a
   =>
-%f2 = sub C0, %f
-%r = select %c, C0 - C1, %f2
+%r = lshr %x, C
 
 
-Name: AddSub:1405
-%a = add %x, C2
-%r = sub C, %a
+Name: AddSub:1614
+%Op1 = add %X, %Y
+%r = sub %X, %Op1
   =>
-%r = sub C - C2, %x
+%r = sub 0, %Y
 
 
-Name: AddSub:1413
-%x = zext i1 %b
-%r = sub 0, %x
+Name: AddSub:1619
+%Op0 = sub %X, %Y
+%r = sub %Op0, %X
   =>
-%r = sext i1 %b
+%r = sub 0, %Y
 
 
-Name: AddSub:1413
-%x = sext i1 %b
-%r = sub 0, %x
+Name: AddSub:1624
+%Op0 = or %A, %B
+%Op1 = xor %A, %B
+%r = sub %Op0, %Op1
   =>
-%r = zext i1 %b
+%r = and %A, %B
 
 
-Name: AddSub:1431
-%xy = sub %x, %y
-%r = sub %xy, %x
-=>
-%r = sub 0, %y
-
-
-Name: AddSub:1441
-%yz = sub %y, %z
-%r = sub %x, %yz
+Name: AddSub:1638
+%Op1 = sub %Y, %Z
+%r = sub %X, %Op1
   =>
-%zy = sub %z, %y
-%r = add %x, %zy
+%s = sub %Z, %Y
+%r = add %X, %s
 
 
-Name: AddSub:1447
-%xy = and %x, %y
-%r = sub %x, %xy
+Name: AddSub:1643
+%Op1 = and %X, %Y
+%r = sub %X, %Op1
   =>
-%ny = xor %y, -1
-%r = and %x, %ny
+%not = xor %Y, -1
+%r = and %X, %not
 
 
-Name: AddSub:1453
-Pre: C != 1 && !isSignBit(C)
-; single-typed, because it takes so long
-%1 = sdiv i8 %x, C
-%r = sub 0, %1
+Name: AddSub:1650
+Pre: C != 1 && C != 1 << (width(C)-1)
+%Op1 = sdiv i9 %X, C
+%r = sub 0, %Op1
   =>
-%r = sdiv %x, -C
+%r = sdiv %X, -C
 
 
-Name: AddSub:1458
-; Slow
-%1 = shl %x, %y
-%r = sub 0, %1
+Name: AddSub:1655
+%Op1 = shl C, %Y
+%r = sub 0, %Op1
   =>
-%nx = sub 0, %x
-%r = shl %nx, %y
+%r = shl -C, %Y
 
 
-Name: AddSub:1462
-
-%1 = mul %x, C
-%r = sub %x, %1
+Name: AddSub:1655-2
+%neg = sub 0, %X
+%Op1 = shl %neg, %Y
+%r = sub 0, %Op1
   =>
-%r = mul %x, 1 - C
+%r = shl %X, %Y
 
 
-Name: AddSub:1468
-; Slow
-%1 = shl %x, C
-%r = sub %x, %1
+Name: AddSub:1660
+%neg = sub 0, %B
+%Op1 = mul %A, %neg
+%r = sub %X, %Op1
   =>
-%r = mul %x, 1 - (1<<C)
+%m = mul %A, %B
+%r = add %X, %m
 
 
-Name: AddSub:1475
-; X - A*-B -> X + A*B
-; X - -A*B -> X + A*B
-; flexible order
-
-%nb = sub 0, %b
-%1 = mul %a, %nb
-%r = sub %x, %1
+Name: AddSub:1667
+%Op1 = mul %A, C
+%r = sub %X, %Op1
   =>
-%ab = mul %a, %b
-%r = add %x, %ab
+%m = mul %A, -C
+%r = add %X, %m
 
 
-Name: AddSub:1484
-; X - A*CI -> X + A*-C1
-; also commute *
-
-%1 = mul %a,C
-%r = sub %x, %1
+Name: AddSub:1693
+Pre: WillNotOverflowSignedSub(%A, %B)
+%r = sub %A, %B
   =>
-%2 = mul %a, -C
-%r = add %x, %2
+%r = sub nsw %A, %B
 
 
-Name: AddSub:1492
-; X*C - X -> X * (C-1)
-
-%0 = mul %x, C
-%r = sub %0, %x
+Name: AddSub:1697
+Pre: WillNotOverflowUnsignedSub(%A, %B)
+%r = sub %A, %B
   =>
-%r = mul %x, C-1
-
-
-Name: AddSub:1492, 1497
-; X*C1 - X*C2 -> X * (C1-C2)
-
-%0 = mul %x, C1
-%1 = mul %x, C2
-%r = sub %0, %1
-  =>
-%r = mul %x, C1-C2
-
-
-; Skipping 1503, GEP
+%r = sub nuw %A, %B

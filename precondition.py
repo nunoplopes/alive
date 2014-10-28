@@ -134,7 +134,8 @@ class BinaryBoolPred(BoolPred):
 ################################
 class LLVMBoolPred(BoolPred):
   eqptrs, isPower2, isPower2OrZ, isSignBit, known, maskZero,\
-  NSWAdd, NSWMul, NUWMul, NUWShl, OneUse, Last = range(12)
+  NSWAdd, NUWAdd, NSWSub, NUWSub, NSWMul, NUWMul, NUWShl, OneUse,\
+  Last = range(15)
 
   opnames = {
     eqptrs:      'equivalentAddressValues',
@@ -144,6 +145,9 @@ class LLVMBoolPred(BoolPred):
     known:       'Known',
     maskZero:    'MaskedValueIsZero',
     NSWAdd:      'WillNotOverflowSignedAdd',
+    NUWAdd:      'WillNotOverflowUnsignedAdd',
+    NSWSub:      'WillNotOverflowSignedSub',
+    NUWSub:      'WillNotOverflowUnsignedSub',
     NSWMul:      'WillNotOverflowSignedMul',
     NUWMul:      'WillNotOverflowUnsignedMul',
     NUWShl:      'WillNotOverflowUnsignedShl',
@@ -159,6 +163,9 @@ class LLVMBoolPred(BoolPred):
     known:       2,
     maskZero:    2,
     NSWAdd:      2,
+    NUWAdd:      2,
+    NSWSub:      2,
+    NUWSub:      2,
     NSWMul:      2,
     NUWMul:      2,
     NUWShl:      2,
@@ -197,6 +204,9 @@ class LLVMBoolPred(BoolPred):
     known:       ['any', 'const'],
     maskZero:    ['input', 'const'],
     NSWAdd:      ['input', 'input'],
+    NUWAdd:      ['input', 'input'],
+    NSWSub:      ['input', 'input'],
+    NUWSub:      ['input', 'input'],
     NSWMul:      ['const', 'const'],
     NUWMul:      ['const', 'const'],
     NUWShl:      ['const', 'const'],
@@ -228,6 +238,9 @@ class LLVMBoolPred(BoolPred):
     known:       lambda a,b: allTyEqual([a,b], Type.Int),
     maskZero:    lambda a,b: allTyEqual([a,b], Type.Int),
     NSWAdd:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWAdd:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWSub:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWSub:      lambda a,b: allTyEqual([a,b], Type.Int),
     NSWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
     NUWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
     NUWShl:      lambda a,b: allTyEqual([a,b], Type.Int),
@@ -249,6 +262,9 @@ class LLVMBoolPred(BoolPred):
       self.known:       lambda a,b: a == b,
       self.maskZero:    lambda a,b: a & b == 0,
       self.NSWAdd:      lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
+      self.NUWAdd:      lambda a,b: ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1, a+b),
+      self.NSWSub:      lambda a,b: SignExt(1,a)-SignExt(1,b) == SignExt(1, a-b),
+      self.NUWSub:      lambda a,b: ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1, a-b),
       self.NSWMul:      lambda a,b: no_overflow_smul(a, b),
       self.NUWMul:      lambda a,b: no_overflow_umul(a, b),
       self.NUWShl:      lambda a,b: LShR(a << b, b) == a,
