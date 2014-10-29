@@ -105,9 +105,12 @@ class CopyOperand(Instr):
     return And(self.type == self.v.type,
                self.type.getTypeConstraints())
 
-  def setRepresentative(self, context):
-    self._utype = context.repForName(self.getCName())
-    self._utype.unify(self.v.utype())
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel())
+    manager.unify(self.getLabel(), self.v.getLabel())
+#     self._utype = context.repForName(self.getCName())
+#     self._utype.unify(self.v.utype())
 
   def toInstruction(self):
     return self.v.toOperand()
@@ -327,9 +330,12 @@ class BinOp(Instr):
 
     return gen
 
-  def setRepresentative(self, context):
-    self._utype = unified(context.repForName(self.getCName()),
-      self.v1.utype(), self.v2.utype())
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel())
+    manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
+#     self._utype = unified(context.repForName(self.getCName()),
+#       self.v1.utype(), self.v2.utype())
 
 ################################
 class ConversionOp(Instr):
@@ -457,12 +463,14 @@ class ConversionOp(Instr):
       CVariable('""'),
       CVariable('I'))
 
-  def setRepresentative(self, context):
-    self._utype = context.repForName(self.getCName())
-    if self.type.defined:
-      self._utype.unify(context.newRep(self.type.size))
-    if self.stype.defined:
-      self.v.utype().unify(context.newRep(self.stype.size))
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel())
+#     self._utype = context.repForName(self.getCName())
+#     if self.type.defined:
+#       self._utype.unify(context.newRep(self.type.size))
+#     if self.stype.defined:
+#       self.v.utype().unify(context.newRep(self.stype.size))
 
 
 ################################
@@ -597,11 +605,14 @@ class Icmp(Instr):
     else:
       return mICmp
 
-  def setRepresentative(self, context):
-    self._utype = context.repForSize(1, self.getCName())
-    self.v1.utype().unify(self.v2.utype())
-    if isinstance(self.stype, IntType) and self.stype.defined:
-      self.v1.utype().unify(context.newRep(self.stype.size))
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel())
+    manager.unify(self.v1.getLabel(), self.v2.getLabel())
+#     self._utype = context.repForSize(1, self.getCName())
+#     self.v1.utype().unify(self.v2.utype())
+#     if isinstance(self.stype, IntType) and self.stype.defined:
+#       self.v1.utype().unify(context.newRep(self.stype.size))
 
   def toInstruction(self):
     if self.op == Icmp.Var:
@@ -652,13 +663,20 @@ class Select(Instr):
 
     return context.match(name, 'm_Select', self.c, self.v1, self.v2)
 
-  def setRepresentative(self, context):
-    self._utype = context.repForName(self.getCName())
-    self._utype.unify(self.v1.utype())
-    self._utype.unify(self.v2.utype())
-    self.c.utype().unify(context.newRep(1))
-    if isinstance(self.type, IntType) and self.type.defined:
-      self._utype.unify(context.newRep(self.type.size))
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getCName())
+    manager.unify(self.getCName(), self.v1.getLabel(), self.v2.getLabel())
+    #FIXME: self.c is i1
+    #FIXME: explicit types
+
+#   def setRepresentative(self, context):
+#     self._utype = context.repForName(self.getCName())
+#     self._utype.unify(self.v1.utype())
+#     self._utype.unify(self.v2.utype())
+#     self.c.utype().unify(context.newRep(1))
+#     if isinstance(self.type, IntType) and self.type.defined:
+#       self._utype.unify(context.newRep(self.type.size))
 
   def toInstruction(self):
     return CFunctionCall('SelectInst::Create',

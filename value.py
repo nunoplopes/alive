@@ -493,6 +493,9 @@ class Value:
 
   def getCName(self):
     return self._mungeCName(self.getName())
+  
+  def getLabel(self):
+    return self.getCName()
 
   def toOperand(self):
     return CVariable(self.getCName())
@@ -501,7 +504,7 @@ class Value:
     return self.toAPInt()
 
   def toCType(self):
-    return CVariable(self.utype().label()).arr('getType',[])
+    return CVariable(self._manager.rep_for(self.getLabel())).arr('getType',[])
 
   def isConst(self):
     return False
@@ -635,8 +638,10 @@ class Input(Value):
   def utype(self):
     return self._utype
 
-  def setRepresentative(self, context):
-    self._utype = context.repForName(self.getCName())
+  def setRepresentative(self, manager):
+    #self._utype = context.repForName(self.getCName())
+    self._manager = manager
+    manager.add_label(self.getLabel())
 
   def toAPInt(self):
     name = self.getName()

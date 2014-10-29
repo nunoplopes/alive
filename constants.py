@@ -28,6 +28,9 @@ class Constant(Value):
   def getCName(self):
     raise AliveError('Called getCName on constant {}'.format(self.getUniqueName()))
 
+  def getLabel(self):
+    return self.id
+
   def toAPInt(self):
     return CTest('<APInt>')
 
@@ -81,11 +84,13 @@ class ConstantVal(Constant):
   def toAPIntOrLit(self):
     return CVariable(str(self.val))
 
-  def setRepresentative(self, context):
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel(), anon=True)
     # TODO: handle non-integers?
-    if self.type.defined:
-      self._utype = context.newRep(self.type.size)
-    self._utype = context.newRep()
+#     if self.type.defined:
+#       self._utype = context.newRep(self.type.size)
+#     self._utype = context.newRep()
 
 ################################
 class UndefVal(Constant):
@@ -148,9 +153,12 @@ class CnstUnaryOp(Constant):
   def toAPInt(self):
     return CUnaryExpr(self.opnames[self.op], self.v.toAPInt())
 
-  def setRepresentative(self, context):
-    self.v.setRepresentative(context)
-    self._utype = self.v.utype()
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel())
+    manager.unify(self.getLabel(), self.v.getLabel())
+#     self.v.setRepresentative(context)
+#     self._utype = self.v.utype()
 
 
 ################################
@@ -217,10 +225,13 @@ class CnstBinaryOp(Constant):
 
     return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPInt())
 
-  def setRepresentative(self, context):
-    self.v1.setRepresentative(context)
-    self.v2.setRepresentative(context)
-    self._utype = unified(self.v1.utype(), self.v2.utype())
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel(), anon=True)
+    self.v1.setRepresentative(manager)
+    self.v2.setRepresentative(manager)
+    #manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
+#     self._utype = unified(self.v1.utype(), self.v2.utype())
 
 ################################
 class CnstFunction(Constant):
@@ -318,19 +329,22 @@ class CnstFunction(Constant):
 
     return self.toAPInt()
 
-  def setRepresentative(self, context):
+  def setRepresentative(self, manager):
+    self._manager = manager
+    manager.add_label(self.getLabel(), anon=True)
+
     for arg in self.args:
-      arg.setRepresentative(context)
+      arg.setRepresentative(manager)
 
     if self.op == self.abs:
-      self._utype = self.args[0].utype()
+      manager.unify(self.getLabel(), self.args[0].getLabel())
 
     elif self.op == self.lshr or self.op == self.umax:
-      self._utype = unified_iter(arg.utype() for arg in self.args)
+      manager.unify(self.getLabel(), self.args[0].getLabel(), self.args[1].getLabel())
 
     elif self.op == self.trunc or self.op == self.width:
-      self._utype = UType('##' + self.getName()) # FIXME
+      pass
 
     else:
-      raise AliveError(self.opnames[self.op] + ' not implemented')
+      raise AliveError('setRepresentative not implemented for' + self.opnames[self.op])
       

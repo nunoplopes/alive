@@ -80,39 +80,89 @@ class GenContext(object):
     self.seen_cmps.add(cmp_name)
     return True
 
-class UnifyContext(object):
-  def __init__(self):
-    self.names = {}
-    self.sizes = {}
-    self.preferred = True
-
-  def newRep(self, size = None):
-    if size == None:
-      return UType('##ANONYMOUS')
-
-    if not size in self.sizes:
-      self.sizes[size] = UType('##i' + str(size))
-
-    return self.sizes[size]
-
-  def repForName(self, name):
-    if not name in self.names:
-      self.names[name] = UType(name, self.preferred)
-    return self.names[name]
-
-  def repForSize(self, size, name):
-    if not size in self.sizes:
-      self.sizes[size] = UType(name, self.preferred)
-
-    if name in self.names:
-      self.sizes[size].unify(self.names[name])
-    else:
-      self.names[name] = self.sizes[size]
-
-    return self.sizes[size]
-
-    
+class TypeUnifier(object):
+  ''' Simple disjoint subset structure.
   
+  Maps each type to a representative. Types which have unified have the same
+  representative. Also tracks named and explicit types.
+  '''
+  
+  def __init__(self):
+    self.reps = {} # invariant: following reps should eventually reach None
+    #self.names = {}
+    #self.sizes = {}
+    self.preferred = set()
+    self.in_source = True
+
+  def add_label(self, label, anon = False):
+    if not label in self.reps:
+      self.reps[label] = None
+      if self.in_source and not anon:
+        self.preferred.add(label)
+
+  def rep_for(self, label):
+    assert label in self.reps
+    rep = self.reps[label]
+    if rep == None:
+      return label
+
+    rep = self.rep_for(rep)
+    self.reps[label] = rep
+    return rep
+
+  def unify(self, *labels):
+    it = iter(labels)
+    lab1 = it.next()
+    rep1 = self.rep_for(lab1)
+
+    for lab2 in it:
+      rep2 = self.rep_for(lab2)
+      if rep1 == rep2:
+        continue
+
+      if rep2 in self.preferred and not rep1 in self.preferred:
+        self.reps[rep1] = rep2
+        rep1 = rep2
+      else:
+        self.reps[rep2] = rep1
+  
+  def all_reps(self):
+    return [l for l in self.reps if self.reps[l] == None]
+  
+  def disjoint(self, lab1, lab2):
+    return self.rep_for(lab1) != self.rep_for(lab2)
+
+# class UnifyContext(object):
+#   def __init__(self):
+#     self.names = {}
+#     self.sizes = {}
+#     self.preferred = True
+# 
+#   def newRep(self, size = None):
+#     if size == None:
+#       return UType('##ANONYMOUS')
+# 
+#     if not size in self.sizes:
+#       self.sizes[size] = UType('##i' + str(size))
+# 
+#     return self.sizes[size]
+# 
+#   def repForName(self, name):
+#     if not name in self.names:
+#       self.names[name] = UType(name, self.preferred)
+#     return self.names[name]
+# 
+#   def repForSize(self, size, name):
+#     if not size in self.sizes:
+#       self.sizes[size] = UType(name, self.preferred)
+# 
+#     if name in self.names:
+#       self.sizes[size].unify(self.names[name])
+#     else:
+#       self.names[name] = self.sizes[size]
+# 
+#     return self.sizes[size]
+# 
 
 test = '''
 %C = icmp eq %X, %Y
@@ -147,46 +197,59 @@ for n,p,s,t,us,ut in opts:
     
     matches.append(v.getPatternMatch(context))
 
-  # make sure the root type is called 'I'
-  # TODO: rethink handling of preferences
-  ucontext = UnifyContext()
-  for v in s.values():
-    v.setRepresentative(ucontext)
-  ucontext.repForName('I').unify(root.utype())
-  ucontext.preferred = False
-
-
   # declare variables to be matched in condition
   decl_seg = iter_seq(line + decl for decl in context.decls)
+
+  # determine the type constraints implied by the source
+  unifier = TypeUnifier()
+  for v in s.values():
+    v.setRepresentative(unifier)
+  
+  # make sure the root is labeled I
+  unifier.add_label('I')
+  unifier.unify('I', root.getLabel())
+  
+  unifier.is_source = False
   
   # add non-trivial preconditions
   if not isinstance(p, TruePred):
-    p.setRepresentative(ucontext)
+    p.setRepresentative(unifier)
     matches.append(p.getPatternMatch())
+
+  # gather types which are not unified by the source
+  disjoint = unifier.all_reps()
 
   # check for type unification implied by target, but not by source
   # for each variable (input?) in both source and target
-  both = [k for k in s.iterkeys() if k in t]
-  #print 'both=', both
-  diff = [(k1,k2) for (k1,k2) in combinations(both, 2) if not s[k1].utype().rep() is s[k2].utype().rep()]
-  #print 'diff=', diff
+#   both = [k for k in s.iterkeys() if k in t]
+#   print 'both=', both
+#   diff = [(k1,k2) for (k1,k2) in combinations(both, 2) if unifier.disjoint(s[k1].getLabel(), s[k2].getLabel())]
+#   print 'diff=', diff
 
+  # now add type equalities implied by the target
   for k,v in t.iteritems():
-    v.setRepresentative(ucontext)
-    if k in s:
-      if not v.utype().rep() is s[k].utype().rep():
-        print 'not unified:', k
-        v.utype().unify(s[k].utype())
+    v.setRepresentative(unifier)
+#       if not v.utype().rep() is s[k].utype().rep():
+#         print 'not unified:', k
+#         v.utype().unify(s[k].utype())
 
-  need_match = [(k1,k2) for (k1,k2) in diff if t[k1].utype().rep() is t[k2].utype().rep()]
-  #print 'need_match=', need_match
+  # check each pairing of types disjoint in the source to see if they have unified
+  for (l1,l2) in combinations(disjoint, 2):
+    if not unifier.disjoint(l1,l2):
+      m = CBinExpr('==',
+        CVariable(l1).arr('getType', []),
+        CVariable(l2).arr('getType', []))
+      matches.append(m)
 
-  for (k1,k2) in need_match:
-    m = CBinExpr('==',
-      s[k1].toOperand().arr('getType', []),
-      s[k2].toOperand().arr('getType', []))
-    # can't use .toCType(), because these are now unified
-    matches.append(m)
+#   need_match = [(k1,k2) for (k1,k2) in diff if t[k1].utype().rep() is t[k2].utype().rep()]
+#   print 'need_match=', need_match
+# 
+#   for (k1,k2) in need_match:
+#     m = CBinExpr('==',
+#       s[k1].toOperand().arr('getType', []),
+#       s[k2].toOperand().arr('getType', []))
+#     # can't use .toCType(), because these are now unified
+#     matches.append(m)
 
   gen = []
   for (k,v) in t.iteritems():
