@@ -1,0 +1,7 @@
+; issue 11: may vs must analysis
+; ERROR: Mismatch in values
+Pre: C >= 0 && !WillNotOverflowSignedAdd(%a,C)
+%0 = add %a, C
+%r = icmp sge %a, %0
+  =>
+%r = true

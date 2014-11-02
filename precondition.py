@@ -35,7 +35,7 @@ class TruePred(BoolPred):
     return BoolVal(True)
 
   def toSMT(self, state):
-    return BoolVal(True)
+    return [], []
 
 
 ################################
@@ -51,7 +51,8 @@ class PredNot(BoolPred):
     return self.v.getTypeConstraints()
 
   def toSMT(self, state):
-    return Not(self.v.toSMT(state))
+    d, v = self.v.toSMT(state)
+    return d, [mk_not(mk_and(v))]
 
 
 ################################
@@ -67,7 +68,13 @@ class PredAnd(BoolPred):
     return mk_and(v.getTypeConstraints() for v in self.args)
 
   def toSMT(self, state):
-    return And([v.toSMT(state) for v in self.args])
+    d = []
+    r = []
+    for v in self.args:
+      d2, v = v.toSMT(state)
+      d += d2
+      r += v
+    return d, r
 
 
 ################################
@@ -83,7 +90,13 @@ class PredOr(BoolPred):
     return mk_and(v.getTypeConstraints() for v in self.args)
 
   def toSMT(self, state):
-    return Or([v.toSMT(state) for v in self.args])
+    d = []
+    r = []
+    for v in self.args:
+      d2, v = v.toSMT(state)
+      d += d2
+      r += v
+    return d, [mk_or(r)]
 
 
 ################################
@@ -118,7 +131,7 @@ class BinaryBoolPred(BoolPred):
   def toSMT(self, state):
     pre1, v1 = self.v1.toSMT([], state, [])
     pre2, v2 = self.v2.toSMT([], state, [])
-    c = {
+    return pre1 + pre2, [{
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
       self.SLT: lambda a,b: a < b,
@@ -129,8 +142,7 @@ class BinaryBoolPred(BoolPred):
       self.ULE: lambda a,b: ULE(a, b),
       self.UGT: lambda a,b: UGT(a, b),
       self.UGE: lambda a,b: UGE(a, b),
-    }[self.op](v1, v2)
-    return mk_and(pre1 + pre2 + [c])
+    }[self.op](v1, v2)]
 
 
 ################################
@@ -254,21 +266,40 @@ class LLVMBoolPred(BoolPred):
     c += [v.getTypeConstraints() for v in self.args]
     return mk_and(c)
 
+  def _mkMayAnalysis(self, d, vars, expr):
+    # If all vars are constant, then analysis is precise.
+    if all(str(v)[0] == 'C' for v in vars):
+      return d, [expr]
+    c = BitVec('ana_%s' % self, 1)
+    return d + [Implies(c == 1, expr)], [c == 1]
+
   def toSMT(self, state):
-    args = [v.toSMT([], state, [])[1] for v in self.args]
+    d = []
+    args = []
+    for v in self.args:
+      d2, a = v.toSMT([], state, [])
+      d += d2
+      args.append(a)
+
     return {
-      self.eqptrs:      lambda a,b: a == b,
-      self.isPower2:    lambda a: And(a != 0, a & (a-1) == 0),
-      self.isPower2OrZ: lambda a: a & (a-1) == 0,
-      self.isSignBit:   lambda a: a == (1 << (a.sort().size()-1)),
-      self.known:       lambda a,b: a == b,
-      self.maskZero:    lambda a,b: a & b == 0,
-      self.NSWAdd:      lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
-      self.NUWAdd:      lambda a,b: ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1, a+b),
-      self.NSWSub:      lambda a,b: SignExt(1,a)-SignExt(1,b) == SignExt(1, a-b),
-      self.NUWSub:      lambda a,b: ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1, a-b),
-      self.NSWMul:      lambda a,b: no_overflow_smul(a, b),
-      self.NUWMul:      lambda a,b: no_overflow_umul(a, b),
-      self.NUWShl:      lambda a,b: LShR(a << b, b) == a,
-      self.OneUse:      lambda a: get_users_var(self.args[0].getUniqueName()) == 1,
+      self.eqptrs:      lambda a,b: self._mkMayAnalysis(d, [a,b], a == b),
+      self.isPower2:    lambda a: self._mkMayAnalysis(d, [a],
+                          And(a != 0, a & (a-1) == 0)),
+      self.isPower2OrZ: lambda a: self._mkMayAnalysis(d, [a], a & (a-1) == 0),
+      self.isSignBit:   lambda a: (d, [a == (1 << (a.sort().size()-1))]),
+      self.known:       lambda a,b: (d, [a == b]),
+      self.maskZero:    lambda a,b: self._mkMayAnalysis(d, [a], a & b == 0),
+      self.NSWAdd:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          SignExt(1,a) + SignExt(1,b) == SignExt(1, a+b)),
+      self.NUWAdd:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1, a+b)),
+      self.NSWSub:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          SignExt(1,a)-SignExt(1,b) == SignExt(1, a-b)),
+      self.NUWSub:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1, a-b)),
+      self.NSWMul:      lambda a,b: (d, [no_overflow_smul(a, b)]),
+      self.NUWMul:      lambda a,b: (d, [no_overflow_umul(a, b)]),
+      self.NUWShl:      lambda a,b: (d, [LShR(a << b, b) == a]),
+      self.OneUse:      lambda a: (d,
+                          [get_users_var(self.args[0].getUniqueName()) == 1]),
     }[self.op](*args)

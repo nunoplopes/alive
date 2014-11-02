@@ -112,10 +112,11 @@ class CnstUnaryOp(Constant):
                    self.type.getTypeConstraints()])
 
   def toSMT(self, poison, state, qvars):
-    return [], {
+    d, v = self.v.toSMT(poison, state, qvars)
+    return d, {
       self.Not: lambda a: ~a,
       self.Neg: lambda a: -a,
-    }[self.op](self.v.toSMT(poison, state, qvars)[1])
+    }[self.op](v)
 
 
 ################################
@@ -153,9 +154,9 @@ class CnstBinaryOp(Constant):
                    self.type.getTypeConstraints()])
 
   def toSMT(self, poison, state, qvars):
-    v1 = self.v1.toSMT(poison, state, qvars)[1]
-    v2 = self.v2.toSMT(poison, state, qvars)[1]
-    return [], {
+    pre1, v1 = self.v1.toSMT(poison, state, qvars)
+    pre2, v2 = self.v2.toSMT(poison, state, qvars)
+    return pre1 + pre2, {
       self.And:  lambda a,b: a & b,
       self.Or:   lambda a,b: a | b,
       self.Xor:  lambda a,b: a ^ b,
@@ -262,20 +263,31 @@ class CnstFunction(Constant):
                   [self.type.getTypeConstraints()] + c)
 
   def toSMT(self, poison, state, qvars):
-    args = [v.toSMT(poison, state, qvars)[1] for v in self.args]
-    return [], {
-      self.abs:   lambda a: If(a >= 0, a, -a),
-      self.sbits: lambda a: ComputeNumSignBits(a, self.type.getSize()),
-      self.obits: lambda a: a,
-      self.zbits: lambda a: ~a,
-      self.ctlz:  lambda a: ctlz(a, self.type.getSize()),
-      self.cttz:  lambda a: cttz(a, self.type.getSize()),
-      self.log2:  lambda a: bv_log2(a, self.type.getSize()),
-      self.lshr:  lambda a,b: LShR(a,b),
-      self.max:   lambda a,b: If(a > b, a, b),
-      self.sext:  lambda a: SignExt(self.type.getSize() - a.size(), a),
-      self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
-      self.umax:  lambda a,b: If(UGT(a,b), a, b),
-      self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize()),
-      self.zext:  lambda a: ZeroExt(self.type.getSize() - a.size(), a),
+    size = self.type.getSize()
+    d = []
+    args = []
+    for v in self.args:
+      d2, a = v.toSMT(poison, state, qvars)
+      d += d2
+      args.append(a)
+
+    return {
+      self.abs:   lambda a: (d, If(a >= 0, a, -a)),
+      self.sbits: lambda a:
+        (lambda b: (d + [ULE(b, ComputeNumSignBits(a, size))], b))
+          (ComputeNumSignBits(BitVec('ana_' + self.getName(), size), size)),
+      self.obits: lambda a: (lambda b: (d + [b & ~a == 0], b))
+                              (BitVec('ana_' + self.getName(), size)),
+      self.zbits: lambda a: (lambda b: (d + [b & a == 0], b))
+                              (BitVec('ana_' + self.getName(), size)),
+      self.ctlz:  lambda a: (d, ctlz(a, size)),
+      self.cttz:  lambda a: (d, cttz(a, size)),
+      self.log2:  lambda a: (d, bv_log2(a, size)),
+      self.lshr:  lambda a,b: (d, LShR(a, b)),
+      self.max:   lambda a,b: (d, If(a > b, a, b)),
+      self.sext:  lambda a: (d, SignExt(size - a.size(), a)),
+      self.trunc: lambda a: (d, Extract(size-1, 0, a)),
+      self.umax:  lambda a,b: (d, If(UGT(a,b), a, b)),
+      self.width: lambda a: ([], BitVecVal(a.size(), size)),
+      self.zext:  lambda a: (d, ZeroExt(size - a.size(), a)),
     }[self.op](*args)

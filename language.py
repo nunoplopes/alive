@@ -70,7 +70,7 @@ class State:
 
   def getAllocaConstraints(self):
     ptrs = [ptr for (ptr, mem, qvars, info) in self.ptrs]
-    return mk_distinct(ptrs)
+    return [mk_distinct(ptrs)]
 
   def eval(self, v, poison, qvars):
     (smt, d, p, q) = self.vars[v.getUniqueName()]

@@ -279,7 +279,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
     input_vars = []
     for k,v in get_smt_vars(q).iteritems():
       if k[0] == '%' or k[0] == 'C' or k.startswith('icmp_') or\
-         k.startswith('alloca') or k.startswith('mem_'):
+         k.startswith('alloca') or k.startswith('mem_') or k.startswith('ana_'):
         input_vars.append(v)
       elif k.startswith('f_'):
         if k.endswith('_src'):
@@ -340,10 +340,9 @@ gbl_prev_flags = []
 def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
   srcv = toSMT(src, ident_src, True)
   tgtv = toSMT(tgt, ident_tgt, False)
-  pre  = pre.toSMT(srcv)
-  extra_cnstrs = [pre,
-                  srcv.getAllocaConstraints(),
-                  tgtv.getAllocaConstraints()]
+  pre_d, pre = pre.toSMT(srcv)
+  extra_cnstrs = pre_d + pre +\
+                 srcv.getAllocaConstraints() + tgtv.getAllocaConstraints()
 
   # 1) check preconditions of BBs
   tgtbbs = tgtv.bb_pres
