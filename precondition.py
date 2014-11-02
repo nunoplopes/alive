@@ -20,9 +20,10 @@ class BoolPred:
       a = getattr(self, attr)
       if isinstance(a, (Type, Value, BoolPred)):
         a.fixupTypes(types)
-      if isinstance(a, tuple) and all(isinstance(v, (Type,Value,BoolPred)) for v in a):
+      if isinstance(a, tuple):
         for v in a:
-          v.fixupTypes(types)
+          if isinstance(a, (Type, Value, BoolPred)):
+            v.fixupTypes(types)
 
 
 ################################
@@ -115,9 +116,9 @@ class BinaryBoolPred(BoolPred):
                    self.v2.getTypeConstraints()])
 
   def toSMT(self, state):
-    v1 = self.v1.toSMT([], state, [])[1]
-    v2 = self.v2.toSMT([], state, [])[1]
-    return {
+    pre1, v1 = self.v1.toSMT([], state, [])
+    pre2, v2 = self.v2.toSMT([], state, [])
+    c = {
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
       self.SLT: lambda a,b: a < b,
@@ -129,6 +130,7 @@ class BinaryBoolPred(BoolPred):
       self.UGT: lambda a,b: UGT(a, b),
       self.UGE: lambda a,b: UGE(a, b),
     }[self.op](v1, v2)
+    return mk_and(pre1 + pre2 + [c])
 
 
 ################################
