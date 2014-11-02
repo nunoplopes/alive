@@ -182,13 +182,16 @@ def cttz(v, output_width):
 
 def ComputeNumSignBits(v, bitwidth):
   size = v.size()
+  size1 = size - 1
+  sign = Extract(size1, size1, v)
+
   def rec(i):
-    if i == size:
-      return BitVecVal(0, bitwidth)
-    return If(Extract(size-1,i,v) == BitVecVal((1<<(size-i))-1, size-i),
-              BitVecVal(size-i, bitwidth),
-              rec(i+1))
-  return rec(0)
+    if i < 0:
+      return BitVecVal(size, bitwidth)
+    return If(Extract(i,i,v) == sign,
+              rec(i-1),
+              BitVecVal(size1-i, bitwidth))
+  return rec(size - 2)
 
 
 ##########################
