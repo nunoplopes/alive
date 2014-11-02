@@ -22,7 +22,7 @@ class BoolPred:
         a.fixupTypes(types)
       if isinstance(a, tuple):
         for v in a:
-          if isinstance(a, (Type, Value, BoolPred)):
+          if isinstance(v, (Type, Value, BoolPred)):
             v.fixupTypes(types)
 
 
