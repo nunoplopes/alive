@@ -1,0 +1,26 @@
+Building ALIVE C++ tool
+=======================
+
+
+(1) ./configure --with-llvmsrc=<path to llvm-3.4.1>  --with-llvmobj=<path to llvm-3.4.1 build>
+
+
+(2) make ENABLE_OPTIMIZED= 0/1 (depending on whether you have debug build or a release build of llvm)
+
+
+Running ALIVE
+=============
+
+Lets say you have a Debug+Asserts build
+
+
+(1) cd testcases
+
+(2) ../Debug+Asserts/bin/ALIVE add3.ll 
+
+
+It reproduces add3.ll.alive.bc 
+
+(3) To see to transformed IR code.
+
+llvm-dis add3.ll.alive.ll  

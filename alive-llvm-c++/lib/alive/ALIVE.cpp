@@ -22,7 +22,7 @@ namespace{
   struct ALIVE: public FunctionPass {
     static char ID;
     ALIVE(): FunctionPass(ID) {
-      initializeALIVEPass(*PassRegistry::getPassRegistry());
+      //      initializeALIVEPass(*PassRegistry::getPassRegistry());
     }
 
     virtual bool runOnFunction(Function &F);
@@ -32,11 +32,12 @@ namespace{
 
 char ALIVE::ID = 0;
 
-
+#if 0
 INITIALIZE_PASS_BEGIN(ALIVE, "alive", "ALIVE C++ code gen pass for InstCombine",
                 false, false)
 INITIALIZE_PASS_END(ALIVE, "alive", "ALIVE C++ code gen pass for InstCombine",
                 false, false)
+#endif
 
 #include "alive.inc"
 
@@ -65,8 +66,8 @@ bool ALIVE:: runOnFunction(Function &F){
   return true;
 }
 
-char & llvm::ALIVEPassID = ALIVE::ID;
-FunctionPass *llvm:: createALIVEPass(){
+//char & llvm::ALIVEPassID = ALIVE::ID;
+FunctionPass * createALIVEPass(){
   return new ALIVE();
 }
 
