@@ -139,6 +139,11 @@ def no_overflow_umul(a, b):
   return m == BitVecVal(0, size)
 
 
+def isShiftedMask(a):
+  v = (a - 1) | a
+  return [v != 0, ((v + 1) & v) == 0]
+
+
 def bv_log2(v, bitwidth):
   def rec(h, l):
     if h <= l:

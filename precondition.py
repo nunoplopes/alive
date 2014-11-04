@@ -95,7 +95,7 @@ class PredOr(BoolPred):
     for v in self.args:
       d2, v = v.toSMT(state)
       d += d2
-      r += v
+      r.append(mk_and(v))
     return d, [mk_or(r)]
 
 
@@ -147,14 +147,15 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  eqptrs, isPower2, isPower2OrZ, isSignBit, known, maskZero,\
+  eqptrs, isPower2, isPower2OrZ, isShiftedMask, isSignBit, known, maskZero,\
   NSWAdd, NUWAdd, NSWSub, NUWSub, NSWMul, NUWMul, NUWShl, OneUse,\
-  Last = range(15)
+  Last = range(16)
 
   opnames = {
     eqptrs:      'equivalentAddressValues',
     isPower2:    'isPowerOf2',
     isPower2OrZ: 'isPowerOf2OrZero',
+    isShiftedMask: 'isShiftedMask',
     isSignBit:   'isSignBit',
     known:       'Known',
     maskZero:    'MaskedValueIsZero',
@@ -173,6 +174,7 @@ class LLVMBoolPred(BoolPred):
     eqptrs:      2,
     isPower2:    1,
     isPower2OrZ: 1,
+    isShiftedMask: 1,
     isSignBit:   1,
     known:       2,
     maskZero:    2,
@@ -214,6 +216,7 @@ class LLVMBoolPred(BoolPred):
     eqptrs:      ['var', 'var'],
     isPower2:    ['any'],
     isPower2OrZ: ['any'],
+    isShiftedMask: ['const'],
     isSignBit:   ['const'],
     known:       ['any', 'const'],
     maskZero:    ['input', 'const'],
@@ -248,6 +251,7 @@ class LLVMBoolPred(BoolPred):
     eqptrs:      lambda a,b: allTyEqual([a,b], Type.Ptr),
     isPower2:    lambda a: allTyEqual([a], Type.Int),
     isPower2OrZ: lambda a: allTyEqual([a], Type.Int),
+    isShiftedMask: lambda a: allTyEqual([a], Type.Int),
     isSignBit:   lambda a: allTyEqual([a], Type.Int),
     known:       lambda a,b: allTyEqual([a,b], Type.Int),
     maskZero:    lambda a,b: allTyEqual([a,b], Type.Int),
@@ -286,6 +290,7 @@ class LLVMBoolPred(BoolPred):
       self.isPower2:    lambda a: self._mkMayAnalysis(d, [a],
                           And(a != 0, a & (a-1) == 0)),
       self.isPower2OrZ: lambda a: self._mkMayAnalysis(d, [a], a & (a-1) == 0),
+      self.isShiftedMask: lambda a: (d, isShiftedMask(a)),
       self.isSignBit:   lambda a: (d, [a == (1 << (a.sort().size()-1))]),
       self.known:       lambda a,b: (d, [a == b]),
       self.maskZero:    lambda a,b: self._mkMayAnalysis(d, [a], a & b == 0),
