@@ -323,7 +323,7 @@ class CnstFunction(Constant):
 
   def toAPIntOrLit(self):
     if self.op == self.width:
-      return self.args[0].toCType().arr('getBitWidth',[])
+      return self.args[0].toCType().arr('getPrimitiveSizeInBits',[])
 
     return self.toAPInt()
 
