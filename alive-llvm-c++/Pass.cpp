@@ -24,55 +24,25 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
-#include "souper/SMTLIB2/Solver.h"
-#include "souper/Tool/GetSolverFromArgs.h"
-#include "souper/Tool/CandidateMapUtils.h"
 
-using namespace souper;
 using namespace llvm;
 
 namespace {
-std::unique_ptr<Solver> S;
 unsigned ReplaceCount;
 
-static cl::opt<bool> DebugSouperPass("souper-debug", cl::Hidden,
-                                     cl::init(false), cl::desc("Debug Souper"));
-
-static cl::opt<unsigned> DebugLevel("souper-debug-level", cl::Hidden,
-     cl::init(1),
-     cl::desc("Control the verbose level of debug output (default=1). "
-     "The larger the number is, the more fine-grained debug "
-     "information will be printed."));
-
-static cl::opt<bool> ProfileSouperOpts("souper-profile-opts", cl::init(false),
-                                       cl::desc("Profile Souper optimizations"));
-
-static cl::opt<bool> IgnoreSolverErrors("souper-ignore-solver-errors",
-                                        cl::init(false),
-                                        cl::desc("Ignore solver errors"));
-
-static cl::opt<unsigned> FirstReplace("souper-first-opt", cl::Hidden,
+static cl::opt<unsigned> FirstReplace("first-opt", cl::Hidden,
     cl::init(0),
-    cl::desc("First Souper optimization to perform (default=0)"));
+    cl::desc("First optimization to perform (default=0)"));
 
-static cl::opt<unsigned> LastReplace("souper-last-opt", cl::Hidden,
+static cl::opt<unsigned> LastReplace("last-opt", cl::Hidden,
     cl::init(std::numeric_limits<unsigned>::max()),
-    cl::desc("Last Souper optimization to perform (default=infinite)"));
+    cl::desc("Last optimization to perform (default=infinite)"));
 
-static bool dumpAllReplacements() {
-  return DebugSouperPass && (DebugLevel > 1);
-}
-
-struct SouperPass : public FunctionPass {
+struct AlivePass : public FunctionPass {
   static char ID;
 
 public:
-  SouperPass() : FunctionPass(ID) {
-    if (!S) {
-      S = GetSolverFromArgs();
-      if (!S)
-        report_fatal_error("Souper requires a solver to be specified");
-    }
+  AlivePass() : FunctionPass(ID) {
   }
 
   void getAnalysisUsage(AnalysisUsage &Info) const {
@@ -87,8 +57,6 @@ public:
 
     LoopInfo *LI = &getAnalysis<LoopInfo>();
 
-    FunctionCandidateSet CS = ExtractCandidatesFromPass(&F, LI, IC, EBC);
-
     std::string FunctionName;
     if (F.hasLocalLinkage()) {
       FunctionName =
@@ -97,111 +65,51 @@ public:
       FunctionName = F.getName();
     }
 
-    if (dumpAllReplacements()) {
-      errs() << "\n";
-      errs() << "; Listing all replacements for " << FunctionName << "\n";
-    }
+    ExprBuilder EB(Opts, F.getParent(), LI, IC, EBC);
 
-    for (auto &B : CS.Blocks) {
-      for (auto &R : B->Replacements) {
-        if (dumpAllReplacements()) {
-          Instruction *I = R.Origin.getInstruction();
-          errs() << "\n; *****";
-          errs() << "\n; For LLVM instruction:\n;";
-          I->print(errs());
-          errs() << "\n; Generating replacement:\n";
-          PrintContext Printer;
-          PrintReplacementLHS(errs(), R.PCs, R.Mapping.LHS, Printer);
+    for (auto &BB : F) {
+      std::unique_ptr<BlockCandidateSet> BCS(new BlockCandidateSet);
+      for (auto &I : BB) {
+        if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
+          BasicBlock::iterator BI = I;
+
+
+          // RUN ALIVE OPTIMIZATIONS FROM HERE
+
+
+          ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
+          changed = true;
         }
-        AddToCandidateMap(CandMap, R);
+        if (ReplaceCount < std::numeric_limits<unsigned>::max())
+          ++ReplaceCount;
       }
-    }
-
-    if (DebugSouperPass) {
-      errs() << "\n";
-      errs() << "; Listing applied replacements for " << FunctionName << "\n";
-      errs() << "; Using solver: " << S->getName() << '\n';
-    }
-
-    for (auto &Cand : CandMap) {
-      if (std::error_code EC =
-              S->infer(Cand.PCs, Cand.Mapping.LHS, Cand.Mapping.RHS,
-                       &Cand.Origin, IC)) {
-        if (EC == std::errc::timed_out)
-          continue;
-        if (IgnoreSolverErrors) {
-          llvm::errs() << "Unable to query solver: " + EC.message() + "\n";
-          continue;
-        } else {
-          report_fatal_error("Unable to query solver: " + EC.message() + "\n");
-        }
-      }
-      if (!Cand.Mapping.RHS)
-        continue;
-      Instruction *I = Cand.Origin.getInstruction();
-
-      Constant *CI = ConstantInt::get(I->getType(), Cand.Mapping.RHS->Val);
-      if (DebugSouperPass) {
-        errs() << "\n";
-        errs() << "; Replacing \"";
-        I->print(errs());
-        errs() << "\"\n; from \"";
-        I->getDebugLoc().print(I->getContext(), errs());
-        errs() << "\"\n; with \"";
-        CI->print(errs());
-        errs() << "\" in:\n";
-        PrintReplacement(errs(), Cand.PCs, Cand.Mapping);
-      }
-      if (ReplaceCount >= FirstReplace && ReplaceCount <= LastReplace) {
-        BasicBlock::iterator BI = I;
-        ReplaceInstWithValue(I->getParent()->getInstList(), BI, CI);
-        if (ProfileSouperOpts) {
-          std::string Str;
-          llvm::raw_string_ostream Loc(Str);
-          I->getDebugLoc().print(I->getContext(), Loc);
-          PrintContext Printer;
-          addProfileCode (F.getContext(), F.getParent(),
-              GetReplacementLHSString(Cand.PCs, Cand.Mapping.LHS, Printer), 
-              Loc.str(), BI);
-        }
-        changed = true;
-      } else {
-        if (DebugSouperPass)
-          errs() << "Skipping this replacement (number " << ReplaceCount <<
-            ")\n";
-      }
-      if (ReplaceCount < std::numeric_limits<unsigned>::max())
-        ++ReplaceCount;
     }
 
     return changed;
   }
 };
 
-char SouperPass::ID = 0;
+char AlivePass::ID = 0;
 }
 
 namespace llvm {
-void initializeSouperPassPass(llvm::PassRegistry &);
+void initializeAlivePassPass(llvm::PassRegistry &);
 }
 
-INITIALIZE_PASS_BEGIN(SouperPass, "souper", "Souper super-optimizer pass",
-                      false, false)
+INITIALIZE_PASS_BEGIN(AlivePass, "Alive", "Alive pass", false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopInfo)
-INITIALIZE_PASS_END(SouperPass, "souper", "Souper super-optimizer pass", false,
-                    false)
+INITIALIZE_PASS_END(AlivePass, "Alive", "Alive pass", false, false)
 
 static struct Register {
   Register() {
-    initializeSouperPassPass(*llvm::PassRegistry::getPassRegistry());
+    initializeAlivePassPass(*llvm::PassRegistry::getPassRegistry());
   }
 } X;
 
-static void registerSouperPass(
+static void registerAlivePass(
     const llvm::PassManagerBuilder &Builder, llvm::PassManagerBase &PM) {
-  PM.add(new SouperPass);
+  PM.add(new AlivePass);
 }
 
 static llvm::RegisterStandardPasses
-RegisterSouperOptimizer(llvm::PassManagerBuilder::EP_Peephole,
-                        registerSouperPass);
+RegisterAlive(llvm::PassManagerBuilder::EP_Peephole, registerAlivePass);
