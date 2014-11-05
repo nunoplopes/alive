@@ -17,6 +17,7 @@
 using namespace llvm;
 using namespace llvm::PatternMatch;
 
+STATISTIC(NumXforms, "total rules fired");
 
 namespace{
   struct ALIVE: public FunctionPass {
@@ -56,6 +57,7 @@ bool ALIVE:: runOnFunction(Function &F){
         Instruction *I = BBI++;
         bool newI = seen.insert((Instruction*) I);
         if (newI && runOnInstruction(I)) {
+          ++NumXforms;
           more = true;
           break;
         }
