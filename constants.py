@@ -111,6 +111,15 @@ class UndefVal(Constant):
     qvars += [v]
     return [], v
 
+  def setRepresentative(self, context):
+    # FIXME: handle defined types
+    self._utype = context.newRep()
+
+  def toAPInt(self):
+    raise AliveError("Can't represent undef as APInt")
+
+  def toOperand(self):
+    return CFunctionCall('UndefValue::get', self.toCType())
 
 ################################
 class CnstUnaryOp(Constant):
@@ -325,7 +334,7 @@ class CnstFunction(Constant):
 
   def toAPIntOrLit(self):
     if self.op == self.width:
-      return self.args[0].toCType().arr('getBitWidth',[])
+      return self.args[0].toCType().arr('getPrimitiveSizeInBits',[])
 
     return self.toAPInt()
 

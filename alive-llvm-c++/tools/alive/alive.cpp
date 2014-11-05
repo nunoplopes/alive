@@ -33,6 +33,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include <algorithm>
 #include <memory>
+#include "ALIVE.h"
 using namespace llvm;
 
 static cl::opt<std::string>

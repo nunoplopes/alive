@@ -6,6 +6,7 @@ from codegen import *
 from itertools import combinations
 
 HAS_SPECIFIC_INT = False
+DO_STATS = True
 
 class GenContext(object):
   def __init__(self):
@@ -25,6 +26,9 @@ class GenContext(object):
   def _arg_expr(self, value, bound, extras):
     if isinstance(value, CExpression):
       return value
+
+    if isinstance(value, UndefVal):
+      return CFunctionCall('m_Undef')
 
     if isinstance(value, ConstantVal):
       if value.val == 0:
@@ -178,8 +182,18 @@ test = '''
 #opts = parse_opt_file(test)
 opts = parse_opt_file(sys.stdin.read())
 
+# gather names of testcases
+if DO_STATS:
+  rule = 1
+  for opt in opts:
+    n = opt[0]
+    #FIXME: sanitize name
+    print 'STATISTIC(Rule{0}, "{0}. {1}");'.format(rule, n)
+    rule += 1
+
 print 'bool runOnInstruction(Instruction* I) {'
 
+rule = 1
 for n,p,s,t,us,ut in opts:
   # transform the last instruction in the source
   context = GenContext()
@@ -252,6 +266,9 @@ for n,p,s,t,us,ut in opts:
 #     matches.append(m)
 
   gen = []
+  if DO_STATS:
+    gen.append(CUnaryExpr('++', CVariable('Rule' + str(rule))))
+
   for (k,v) in t.iteritems():
     if isinstance(v, Instr) and not k in s:
       gen.extend(v.toConstruct())
@@ -266,6 +283,7 @@ for n,p,s,t,us,ut in opts:
 
   code = nest(2, line + '{ // ' + n + nest(2, decl_seg + line + line + cond.format()) + line + '}')
   code.pprint()
+  rule += 1
 
 print
 print '  return false;'
