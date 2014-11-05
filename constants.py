@@ -106,6 +106,15 @@ class UndefVal(Constant):
     qvars += [v]
     return [], v
 
+  def setRepresentative(self, context):
+    # FIXME: handle defined types
+    self._utype = context.newRep()
+
+  def toAPInt(self):
+    raise AliveError("Can't represent undef as APInt")
+
+  def toOperand(self):
+    return CFunctionCall('UndefValue::get', self.toCType())
 
 ################################
 class CnstUnaryOp(Constant):

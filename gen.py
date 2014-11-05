@@ -26,6 +26,9 @@ class GenContext(object):
     if isinstance(value, CExpression):
       return value
 
+    if isinstance(value, UndefVal):
+      return CFunctionCall('m_Undef')
+
     if isinstance(value, ConstantVal):
       if value.val == 0:
         return CFunctionCall('m_Zero')
