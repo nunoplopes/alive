@@ -590,7 +590,10 @@ class Icmp(Instr):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel(), self.type)
+    if manager.in_source:
+      manager.add_label(self.getLabel(), IntType())
+    else:
+      manager.add_label(self.getLabel(), self.type)
     manager.unify(self.v1.getLabel(), self.v2.getLabel())
 #     self._utype = context.repForSize(1, self.getCName())
 #     self.v1.utype().unify(self.v2.utype())
@@ -649,7 +652,9 @@ class Select(Instr):
   def setRepresentative(self, manager):
     self._manager = manager
     manager.add_label(self.getLabel(), self.type)
-    manager.unify(self.getCName(), self.v1.getLabel(), self.v2.getLabel())
+    manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
+    if not manager.in_source:
+      manager.add_label(self.c.getLabel(), IntType(1))
     #FIXME: self.c is i1
     #FIXME: explicit types
 

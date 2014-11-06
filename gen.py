@@ -195,7 +195,7 @@ for n,p,s,t,us,ut in opts:
     v.setRepresentative(unifier)
   
   # make sure the root is labeled I
-  unifier.add_label('I', root.type)
+  unifier.add_label('I', UnknownType())
   unifier.unify('I', root.getLabel())
   
   unifier.in_source = False
