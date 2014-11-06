@@ -106,8 +106,6 @@ class CopyOperand(Instr):
     self._manager = manager
     manager.add_label(self.getLabel(), self.type)
     manager.unify(self.getLabel(), self.v.getLabel())
-#     self._utype = context.repForName(self.getCName())
-#     self._utype.unify(self.v.utype())
 
   def toInstruction(self):
     return self.v.toOperand()
@@ -316,8 +314,6 @@ class BinOp(Instr):
     self._manager = manager
     manager.add_label(self.getLabel(), self.type)
     manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
-#     self._utype = unified(context.repForName(self.getCName()),
-#       self.v1.utype(), self.v2.utype())
 
 ################################
 class ConversionOp(Instr):
@@ -449,11 +445,6 @@ class ConversionOp(Instr):
     self._manager = manager
     manager.add_label(self.getLabel(), self.type)
     manager.add_label(self.v.getLabel(), self.stype)
-#     self._utype = context.repForName(self.getCName())
-#     if self.type.defined:
-#       self._utype.unify(context.newRep(self.type.size))
-#     if self.stype.defined:
-#       self.v.utype().unify(context.newRep(self.stype.size))
 
 
 ################################
@@ -595,10 +586,6 @@ class Icmp(Instr):
     else:
       manager.add_label(self.getLabel(), self.type)
     manager.unify(self.v1.getLabel(), self.v2.getLabel())
-#     self._utype = context.repForSize(1, self.getCName())
-#     self.v1.utype().unify(self.v2.utype())
-#     if isinstance(self.stype, IntType) and self.stype.defined:
-#       self.v1.utype().unify(context.newRep(self.stype.size))
 
   def toInstruction(self):
     if self.op == Icmp.Var:
@@ -655,16 +642,8 @@ class Select(Instr):
     manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
     if not manager.in_source:
       manager.add_label(self.c.getLabel(), IntType(1))
-    #FIXME: self.c is i1
     #FIXME: explicit types
 
-#   def setRepresentative(self, context):
-#     self._utype = context.repForName(self.getCName())
-#     self._utype.unify(self.v1.utype())
-#     self._utype.unify(self.v2.utype())
-#     self.c.utype().unify(context.newRep(1))
-#     if isinstance(self.type, IntType) and self.type.defined:
-#       self._utype.unify(context.newRep(self.type.size))
 
   def toInstruction(self):
     return CFunctionCall('SelectInst::Create',

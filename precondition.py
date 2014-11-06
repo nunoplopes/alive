@@ -300,4 +300,3 @@ class LLVMBoolPred(BoolPred):
 
     if self.op in {self.maskZero, self.NSWAdd}:
       manager.unify(self.args[0].getLabel(), self.args[1].getLabel())
-      # NOTE: WillNotOverflowSignedAdd must only return true if the types are the same

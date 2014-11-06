@@ -221,7 +221,6 @@ for n,p,s,t,us,ut in opts:
   for sz in unifier.sizes:
     # gather reps for this size's types
     reps = {unifier.rep_for(l) for l in unifier.sizes[sz]}
-    print '// size', sz, 'reps', reps
     for rep in reps:
       if not rep in unifier.preferred:
         continue
@@ -238,7 +237,6 @@ for n,p,s,t,us,ut in opts:
   for nm in unifier.names:
     # gather reps for this name
     reps = {unifier.rep_for(l) for l in unifier.names[nm]}
-    print '// name', nm, 'reps', reps
     for (r1,r2) in iter_pairs(reps):
       m = CBinExpr('==',
         CVariable(r1).arr('getType', []),
@@ -249,9 +247,9 @@ for n,p,s,t,us,ut in opts:
 
   #assert all(rep in unifier.preferred for rep in unifier.all_reps())
 
-  non_preferred = [rep for rep in unifier.all_reps() if not rep in unifier.preferred]
-  if non_preferred:
-    print >> sys.stderr, 'WARNING: Non-preferred reps in <{0}>: {1}'.format(n, non_preferred)
+  #non_preferred = [rep for rep in unifier.all_reps() if not rep in unifier.preferred]
+  #if non_preferred:
+  #  print >> sys.stderr, 'WARNING: Non-preferred reps in <{0}>: {1}'.format(n, non_preferred)
 
   # add non-trivial preconditions
   if not isinstance(p, TruePred):

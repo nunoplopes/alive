@@ -85,9 +85,6 @@ class ConstantVal(Constant):
     self._manager = manager
     manager.add_label(self.getLabel(), self.type, anon=True)
     # TODO: handle non-integers?
-#     if self.type.defined:
-#       self._utype = context.newRep(self.type.size)
-#     self._utype = context.newRep()
 
 ################################
 class UndefVal(Constant):
@@ -165,8 +162,6 @@ class CnstUnaryOp(Constant):
     self.v.setRepresentative(manager)
     manager.add_label(self.getLabel(), self.type, anon=True)
     manager.unify(self.getLabel(), self.v.getLabel())
-#     self.v.setRepresentative(context)
-#     self._utype = self.v.utype()
 
 
 ################################
@@ -239,7 +234,6 @@ class CnstBinaryOp(Constant):
     self.v2.setRepresentative(manager)
     manager.add_label(self.getLabel(), self.type, anon=True)
     manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
-#     self._utype = unified(self.v1.utype(), self.v2.utype())
 
 ################################
 class CnstFunction(Constant):
