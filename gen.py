@@ -197,18 +197,14 @@ for n,p,s,t,us,ut in opts:
   # make sure the root is labeled I
   unifier.add_label('I', UnknownType())
   unifier.unify('I', root.getLabel())
-  
-  unifier.in_source = False
-  
-  # add non-trivial preconditions
-  if not isinstance(p, TruePred):
-    p.setRepresentative(unifier)
-    matches.append(p.getPatternMatch())
 
   # gather types which are not unified by the source
   disjoint = unifier.all_reps()
 
-  # now add type equalities implied by the target
+  unifier.in_source = False
+
+  # now add type equalities implied by the precondition and target
+  p.setRepresentative(unifier)
   for k,v in t.iteritems():
     v.setRepresentative(unifier)
 
@@ -256,6 +252,10 @@ for n,p,s,t,us,ut in opts:
   non_preferred = [rep for rep in unifier.all_reps() if not rep in unifier.preferred]
   if non_preferred:
     print >> sys.stderr, 'WARNING: Non-preferred reps in <{0}>: {1}'.format(n, non_preferred)
+
+  # add non-trivial preconditions
+  if not isinstance(p, TruePred):
+    matches.append(p.getPatternMatch())
 
 
   gen = []
