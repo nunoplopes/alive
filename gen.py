@@ -136,50 +136,6 @@ class TypeUnifier(object):
   def disjoint(self, lab1, lab2):
     return self.rep_for(lab1) != self.rep_for(lab2)
 
-# class UnifyContext(object):
-#   def __init__(self):
-#     self.names = {}
-#     self.sizes = {}
-#     self.preferred = True
-# 
-#   def newRep(self, size = None):
-#     if size == None:
-#       return UType('##ANONYMOUS')
-# 
-#     if not size in self.sizes:
-#       self.sizes[size] = UType('##i' + str(size))
-# 
-#     return self.sizes[size]
-# 
-#   def repForName(self, name):
-#     if not name in self.names:
-#       self.names[name] = UType(name, self.preferred)
-#     return self.names[name]
-# 
-#   def repForSize(self, size, name):
-#     if not size in self.sizes:
-#       self.sizes[size] = UType(name, self.preferred)
-# 
-#     if name in self.names:
-#       self.sizes[size].unify(self.names[name])
-#     else:
-#       self.names[name] = self.sizes[size]
-# 
-#     return self.sizes[size]
-# 
-
-test = '''
-%C = icmp eq %X, %Y
-%11 = select %C, %C, %V
-%1 = zext %11
-%0 = add %b.c_d, %1
-%r = add %0, C2
-=>
-%r = add %b.c_d,  C2
-'''
-
-#opts = parse_opt_file(open('tests/instcombine/andorxor.opt').read())
-#opts = parse_opt_file(test)
 opts = parse_opt_file(sys.stdin.read())
 
 # gather names of testcases
@@ -223,7 +179,7 @@ for n,p,s,t,us,ut in opts:
   unifier.add_label('I')
   unifier.unify('I', root.getLabel())
   
-  unifier.is_source = False
+  unifier.in_source = False
   
   # add non-trivial preconditions
   if not isinstance(p, TruePred):
@@ -233,19 +189,10 @@ for n,p,s,t,us,ut in opts:
   # gather types which are not unified by the source
   disjoint = unifier.all_reps()
 
-  # check for type unification implied by target, but not by source
-  # for each variable (input?) in both source and target
-#   both = [k for k in s.iterkeys() if k in t]
-#   print 'both=', both
-#   diff = [(k1,k2) for (k1,k2) in combinations(both, 2) if unifier.disjoint(s[k1].getLabel(), s[k2].getLabel())]
-#   print 'diff=', diff
 
   # now add type equalities implied by the target
   for k,v in t.iteritems():
     v.setRepresentative(unifier)
-#       if not v.utype().rep() is s[k].utype().rep():
-#         print 'not unified:', k
-#         v.utype().unify(s[k].utype())
 
   # check each pairing of types disjoint in the source to see if they have unified
   for (l1,l2) in combinations(disjoint, 2):
@@ -255,15 +202,12 @@ for n,p,s,t,us,ut in opts:
         CVariable(l2).arr('getType', []))
       matches.append(m)
 
-#   need_match = [(k1,k2) for (k1,k2) in diff if t[k1].utype().rep() is t[k2].utype().rep()]
-#   print 'need_match=', need_match
-# 
-#   for (k1,k2) in need_match:
-#     m = CBinExpr('==',
-#       s[k1].toOperand().arr('getType', []),
-#       s[k2].toOperand().arr('getType', []))
-#     # can't use .toCType(), because these are now unified
-#     matches.append(m)
+  #assert all(rep in unifier.preferred for rep in unifier.all_reps())
+
+  non_preferred = [rep for rep in unifier.all_reps() if not rep in unifier.preferred]
+  if non_preferred:
+    print >> sys.stderr, 'WARNING: Non-preferred reps in <{0}>: {1}'.format(n, non_preferred)
+
 
   gen = []
   if DO_STATS:

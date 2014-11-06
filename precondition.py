@@ -179,10 +179,11 @@ class BinaryBoolPred(BoolPred):
   def getPatternMatch(self):
     return self.gens[self.op](self.v1.toAPInt(), self.v2.toAPIntOrLit())
 
-  def setRepresentative(self, context):
-    self.v1.setRepresentative(context)
-    self.v2.setRepresentative(context)
-    self.v1.utype().unify(self.v2.utype())
+  def setRepresentative(self, manager):
+    self.v1.setRepresentative(manager)
+    self.v2.setRepresentative(manager)
+    # unify both sides, but not ourself because we have no type
+    manager.unify(self.v1.getLabel(), self.v2.getLabel())
 
 ################################
 class LLVMBoolPred(BoolPred):
@@ -293,7 +294,8 @@ class LLVMBoolPred(BoolPred):
 
     return CFunctionCall(self.opnames[self.op], *args)
 
-  def setRepresentative(self, context):
-    pass
+  def setRepresentative(self, manager):
+    for arg in self.args:
+      arg.setRepresentative(manager)
     # TODO: should NSWAdd or maskZero unify their args?
     # Instcombine suggests that NSWAdd does not (see AddSub:1149)

@@ -77,9 +77,6 @@ class State:
 
 ################################
 class Instr(Value):
-  def utype(self):
-    return self._utype
-
   def toConstruct(self):
     return [CDefinition(CVariable('Value'), CVariable(self.getCName()), self.toInstruction(), True)]
 

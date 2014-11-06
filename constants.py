@@ -37,9 +37,6 @@ class Constant(Value):
   def toOperand(self):
     return CFunctionCall('ConstantInt::get', self.toCType(), self.toAPIntOrLit())
 
-  def utype(self):
-    return self._utype
-
 ################################
 class ConstantVal(Constant):
   def __init__(self, val, type):
@@ -111,9 +108,10 @@ class UndefVal(Constant):
     qvars += [v]
     return [], v
 
-  def setRepresentative(self, context):
+  def setRepresentative(self, manager):
     # FIXME: handle defined types
-    self._utype = context.newRep()
+    self._manager = manager
+    manager.add_label(self.getLabel(), anon=True)
 
   def toAPInt(self):
     raise AliveError("Can't represent undef as APInt")
@@ -164,7 +162,8 @@ class CnstUnaryOp(Constant):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel())
+    self.v.setRepresentative(manager)
+    manager.add_label(self.getLabel(), anon=True)
     manager.unify(self.getLabel(), self.v.getLabel())
 #     self.v.setRepresentative(context)
 #     self._utype = self.v.utype()
@@ -236,10 +235,10 @@ class CnstBinaryOp(Constant):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel(), anon=True)
     self.v1.setRepresentative(manager)
     self.v2.setRepresentative(manager)
-    #manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
+    manager.add_label(self.getLabel(), anon=True)
+    manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
 #     self._utype = unified(self.v1.utype(), self.v2.utype())
 
 ################################
