@@ -198,13 +198,13 @@ for n,p,s,t,us,ut in opts:
   unifier.add_label('I', UnknownType())
   unifier.unify('I', root.getLabel())
 
-  # gather types which are not unified by the source
+  # gather types which are not unified by the source or precondition
+  p.setRepresentative(unifier)
   disjoint = unifier.all_reps()
 
   unifier.in_source = False
 
-  # now add type equalities implied by the precondition and target
-  p.setRepresentative(unifier)
+  # now add type equalities implied by the target
   for k,v in t.iteritems():
     v.setRepresentative(unifier)
 
