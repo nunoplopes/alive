@@ -295,7 +295,8 @@ class BinOp(Instr):
     match = context.match(name, self.matcher[self.op], self.v1, self.v2)
 
     for flag in self.flags:
-      match = CBinExpr('&&', match, CVariable(name).arr(self.flag_method[flag], []))
+      # TODO: find better way to match flags
+      match = CBinExpr('&&', match, CFunctionCall(self.flag_method[flag], CVariable(name)))
 
     return match
 
@@ -316,7 +317,7 @@ class BinOp(Instr):
   }
 
   def toConstruct(self):
-    gen = [CDefinition(CVariable('Value'), CVariable(self.getCName()), 
+    gen = [CDefinition(CVariable('BinaryOperator'), CVariable(self.getCName()),
       CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
         self.v1.toOperand(), self.v2.toOperand(), CVariable('""'), CVariable('I')),
       True)]

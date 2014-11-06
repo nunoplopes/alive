@@ -40,6 +40,28 @@ INITIALIZE_PASS_END(ALIVE, "alive", "ALIVE C++ code gen pass for InstCombine",
                 false, false)
 #endif
 
+bool hasNoSignedWrap(Value *I) {
+  if (OverflowingBinaryOperator *op = dyn_cast<OverflowingBinaryOperator>(I)) {
+    return op->hasNoSignedWrap();
+  }
+  return false;
+}
+
+bool hasNoUnsignedWrap(Value *I) {
+  if (OverflowingBinaryOperator *op = dyn_cast<OverflowingBinaryOperator>(I)) {
+    return op->hasNoUnsignedWrap();
+  }
+  return false;
+}
+
+bool isExact(Value *I) {
+  if (PossiblyExactOperator *op = dyn_cast<PossiblyExactOperator>(I)) {
+    return op->isExact();
+  }
+  return false;
+}
+
+
 #include "alive.inc"
 
 bool ALIVE:: runOnFunction(Function &F){
