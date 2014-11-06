@@ -285,7 +285,7 @@ class LLVMBoolPred(BoolPred):
       if self.arg_types[self.op][i] == 'const':
         args.append(self.args[i].toAPInt())
       elif self.arg_types[self.op][i] == 'input':
-        args.append(CVariable(self.args[i].getCName()))
+        args.append(self.args[i].toOperand())
       else:
         assert False
 
@@ -297,5 +297,7 @@ class LLVMBoolPred(BoolPred):
   def setRepresentative(self, manager):
     for arg in self.args:
       arg.setRepresentative(manager)
-    # TODO: should NSWAdd or maskZero unify their args?
-    # Instcombine suggests that NSWAdd does not (see AddSub:1149)
+
+    if self.op in {self.maskZero, self.NSWAdd}:
+      manager.unify(self.args[0].getLabel(), self.args[1].getLabel())
+      # NOTE: WillNotOverflowSignedAdd must only return true if the types are the same

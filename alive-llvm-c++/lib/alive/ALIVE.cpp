@@ -61,6 +61,13 @@ bool isExact(Value *I) {
   return false;
 }
 
+bool MaskedValueIsZero(Value *V, const APInt &Mask) {
+  return false;
+}
+
+bool WillNotOverflowSignedAdd(Value *op1, Value *op2) {
+  return false;
+}
 
 #include "alive.inc"
 
