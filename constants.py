@@ -55,8 +55,8 @@ class ConstantVal(Constant):
       return And(c, self.type >= bits)
     return c
 
-  def toSMT(self, poison, state, qvars):
-    return [], BitVecVal(self.val, self.type.getSize())
+  def toSMT(self, defined, poison, state, qvars):
+    return BitVecVal(self.val, self.type.getSize())
 
 
 ################################
@@ -73,10 +73,10 @@ class UndefVal(Constant):
     # overload Constant's method
     return self.type.getTypeConstraints()
 
-  def toSMT(self, poison, state, qvars):
+  def toSMT(self, defined, poison, state, qvars):
     v = BitVec('undef' + self.id, self.type.getSize())
     qvars += [v]
-    return [], v
+    return v
 
 
 ################################
@@ -111,9 +111,9 @@ class CnstUnaryOp(Constant):
                    self.v.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, poison, state, qvars):
-    d, v = self.v.toSMT(poison, state, qvars)
-    return d, {
+  def toSMT(self, defined, poison, state, qvars):
+    v = self.v.toSMT(defined, poison, state, qvars)
+    return {
       self.Not: lambda a: ~a,
       self.Neg: lambda a: -a,
     }[self.op](v)
@@ -153,10 +153,10 @@ class CnstBinaryOp(Constant):
                    self.v2.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, poison, state, qvars):
-    pre1, v1 = self.v1.toSMT(poison, state, qvars)
-    pre2, v2 = self.v2.toSMT(poison, state, qvars)
-    return pre1 + pre2, {
+  def toSMT(self, defined, poison, state, qvars):
+    v1 = self.v1.toSMT(defined, poison, state, qvars)
+    v2 = self.v2.toSMT(defined, poison, state, qvars)
+    return {
       self.And:  lambda a,b: a & b,
       self.Or:   lambda a,b: a | b,
       self.Xor:  lambda a,b: a ^ b,
@@ -262,32 +262,35 @@ class CnstFunction(Constant):
     return mk_and([v.getTypeConstraints() for v in self.args] +\
                   [self.type.getTypeConstraints()] + c)
 
-  def toSMT(self, poison, state, qvars):
+  def toSMT(self, defined, poison, state, qvars):
     size = self.type.getSize()
-    d = []
     args = []
     for v in self.args:
-      d2, a = v.toSMT(poison, state, qvars)
-      d += d2
+      a = v.toSMT(defined, poison, state, qvars)
       args.append(a)
 
-    return {
-      self.abs:   lambda a: (d, If(a >= 0, a, -a)),
+    d, v = {
+      self.abs:   lambda a: ([], If(a >= 0, a, -a)),
       self.sbits: lambda a:
-        (lambda b: (d + [ULE(b, ComputeNumSignBits(a, size))], b))
+        (lambda b: ([ULE(b, ComputeNumSignBits(a, size))], b))
           (ComputeNumSignBits(BitVec('ana_' + self.getName(), size), size)),
-      self.obits: lambda a: (lambda b: (d + [b & ~a == 0], b))
+      self.obits: lambda a: (lambda b: ([b & ~a == 0], b))
                               (BitVec('ana_' + self.getName(), size)),
-      self.zbits: lambda a: (lambda b: (d + [b & a == 0], b))
+      self.zbits: lambda a: (lambda b: ([b & a == 0], b))
                               (BitVec('ana_' + self.getName(), size)),
-      self.ctlz:  lambda a: (d, ctlz(a, size)),
-      self.cttz:  lambda a: (d, cttz(a, size)),
-      self.log2:  lambda a: (d, bv_log2(a, size)),
-      self.lshr:  lambda a,b: (d, LShR(a, b)),
-      self.max:   lambda a,b: (d, If(a > b, a, b)),
-      self.sext:  lambda a: (d, SignExt(size - a.size(), a)),
-      self.trunc: lambda a: (d, Extract(size-1, 0, a)),
-      self.umax:  lambda a,b: (d, If(UGT(a,b), a, b)),
-      self.width: lambda a: ([], BitVecVal(a.size(), size)),
-      self.zext:  lambda a: (d, ZeroExt(size - a.size(), a)),
+      self.ctlz:  lambda a: ([], ctlz(a, size)),
+      self.cttz:  lambda a: ([], cttz(a, size)),
+      self.log2:  lambda a: ([], bv_log2(a, size)),
+      self.lshr:  lambda a,b: ([], LShR(a, b)),
+      self.max:   lambda a,b: ([], If(a > b, a, b)),
+      self.sext:  lambda a: ([], SignExt(size - a.size(), a)),
+      self.trunc: lambda a: ([], Extract(size-1, 0, a)),
+      self.umax:  lambda a,b: ([], If(UGT(a,b), a, b)),
+      self.width: lambda a: (None, BitVecVal(a.size(), size)),
+      self.zext:  lambda a: ([], ZeroExt(size - a.size(), a)),
     }[self.op](*args)
+    if d is None:
+      del defined[:]
+    else:
+      defined += d
+    return v

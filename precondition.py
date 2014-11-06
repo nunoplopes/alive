@@ -129,9 +129,10 @@ class BinaryBoolPred(BoolPred):
                    self.v2.getTypeConstraints()])
 
   def toSMT(self, state):
-    pre1, v1 = self.v1.toSMT([], state, [])
-    pre2, v2 = self.v2.toSMT([], state, [])
-    return pre1 + pre2, [{
+    defined = []
+    v1 = self.v1.toSMT(defined, [], state, [])
+    v2 = self.v2.toSMT(defined, [], state, [])
+    return defined, [{
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
       self.SLT: lambda a,b: a < b,
@@ -147,9 +148,9 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  eqptrs, isPower2, isPower2OrZ, isShiftedMask, isSignBit, known, maskZero,\
+  eqptrs, isPower2, isPower2OrZ, isShiftedMask, isSignBit, maskZero,\
   NSWAdd, NUWAdd, NSWSub, NUWSub, NSWMul, NUWMul, NUWShl, OneUse,\
-  Last = range(16)
+  Last = range(15)
 
   opnames = {
     eqptrs:      'equivalentAddressValues',
@@ -157,7 +158,6 @@ class LLVMBoolPred(BoolPred):
     isPower2OrZ: 'isPowerOf2OrZero',
     isShiftedMask: 'isShiftedMask',
     isSignBit:   'isSignBit',
-    known:       'Known',
     maskZero:    'MaskedValueIsZero',
     NSWAdd:      'WillNotOverflowSignedAdd',
     NUWAdd:      'WillNotOverflowUnsignedAdd',
@@ -176,7 +176,6 @@ class LLVMBoolPred(BoolPred):
     isPower2OrZ: 1,
     isShiftedMask: 1,
     isSignBit:   1,
-    known:       2,
     maskZero:    2,
     NSWAdd:      2,
     NUWAdd:      2,
@@ -218,7 +217,6 @@ class LLVMBoolPred(BoolPred):
     isPower2OrZ: ['any'],
     isShiftedMask: ['const'],
     isSignBit:   ['const'],
-    known:       ['any', 'const'],
     maskZero:    ['input', 'const'],
     NSWAdd:      ['input', 'input'],
     NUWAdd:      ['input', 'input'],
@@ -253,7 +251,6 @@ class LLVMBoolPred(BoolPred):
     isPower2OrZ: lambda a: allTyEqual([a], Type.Int),
     isShiftedMask: lambda a: allTyEqual([a], Type.Int),
     isSignBit:   lambda a: allTyEqual([a], Type.Int),
-    known:       lambda a,b: allTyEqual([a,b], Type.Int),
     maskZero:    lambda a,b: allTyEqual([a,b], Type.Int),
     NSWAdd:      lambda a,b: allTyEqual([a,b], Type.Int),
     NUWAdd:      lambda a,b: allTyEqual([a,b], Type.Int),
@@ -281,8 +278,7 @@ class LLVMBoolPred(BoolPred):
     d = []
     args = []
     for v in self.args:
-      d2, a = v.toSMT([], state, [])
-      d += d2
+      a = v.toSMT(d, [], state, [])
       args.append(a)
 
     return {
@@ -292,7 +288,6 @@ class LLVMBoolPred(BoolPred):
       self.isPower2OrZ: lambda a: self._mkMayAnalysis(d, [a], a & (a-1) == 0),
       self.isShiftedMask: lambda a: (d, isShiftedMask(a)),
       self.isSignBit:   lambda a: (d, [a == (1 << (a.sort().size()-1))]),
-      self.known:       lambda a,b: (d, [a == b]),
       self.maskZero:    lambda a,b: self._mkMayAnalysis(d, [a], a & b == 0),
       self.NSWAdd:      lambda a,b: self._mkMayAnalysis(d, [a,b],
                           SignExt(1,a) + SignExt(1,b) == SignExt(1, a+b)),

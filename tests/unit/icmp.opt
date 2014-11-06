@@ -13,17 +13,17 @@ Name: icmp + zext
 
 
 Name: known branch
-Pre: Known(%3, true)
+entry:
 %0 = udiv %a, %b
 %1 = icmp ne 0, %0
 %2 = icmp ne 1, %0
 %3 = and %1, %2
+br %3, label %true, label %false
+true:
 %4 = icmp eq 0, %b
+false:
  =>
-%0 = udiv %a, %b
-%1 = icmp ne 0, %0
-%2 = icmp ne 1, %0
-%3 = and %1, %2
+true:
 %4 = false
 
 
