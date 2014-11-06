@@ -581,7 +581,7 @@ class Input(Value):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel())
+    manager.add_label(self.getLabel(), self.type)
 
   def toAPInt(self):
     name = self.getName()

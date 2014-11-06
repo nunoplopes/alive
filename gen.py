@@ -93,16 +93,28 @@ class TypeUnifier(object):
   
   def __init__(self):
     self.reps = {} # invariant: following reps should eventually reach None
-    #self.names = {}
-    #self.sizes = {}
+    self.names = {}
+    self.sizes = {}
     self.preferred = set()
     self.in_source = True
 
-  def add_label(self, label, anon = False):
+  def add_label(self, label, ty, anon = False):
     if not label in self.reps:
       self.reps[label] = None
       if self.in_source and not anon:
         self.preferred.add(label)
+
+    if isinstance(ty, IntType) and ty.defined:
+      if not ty.size in self.sizes:
+        self.sizes[ty.size] = set()
+
+      self.sizes[ty.size].add(label)
+
+    if isinstance(ty, NamedType):
+      if not ty.name in self.names:
+        self.names[ty.name] = set()
+
+      self.names[ty.name].add(label)
 
   def rep_for(self, label):
     assert label in self.reps
@@ -129,12 +141,19 @@ class TypeUnifier(object):
         rep1 = rep2
       else:
         self.reps[rep2] = rep1
-  
+
   def all_reps(self):
     return [l for l in self.reps if self.reps[l] == None]
   
   def disjoint(self, lab1, lab2):
     return self.rep_for(lab1) != self.rep_for(lab2)
+
+def iter_pairs(iterable):
+  it = iter(iterable)
+  prev = it.next()
+  for next in it:
+    yield (prev,next)
+    prev = next
 
 opts = parse_opt_file(sys.stdin.read())
 
@@ -176,7 +195,7 @@ for n,p,s,t,us,ut in opts:
     v.setRepresentative(unifier)
   
   # make sure the root is labeled I
-  unifier.add_label('I')
+  unifier.add_label('I', root.type)
   unifier.unify('I', root.getLabel())
   
   unifier.in_source = False
@@ -189,18 +208,48 @@ for n,p,s,t,us,ut in opts:
   # gather types which are not unified by the source
   disjoint = unifier.all_reps()
 
-
   # now add type equalities implied by the target
   for k,v in t.iteritems():
     v.setRepresentative(unifier)
 
   # check each pairing of types disjoint in the source to see if they have unified
+  # NOTE: a set of n disjoint sets that all unify will produce n(n-1)/2 checks,
+  #       but only n-1 are required. This is unlikely to be a problem in practice
   for (l1,l2) in combinations(disjoint, 2):
     if not unifier.disjoint(l1,l2):
       m = CBinExpr('==',
         CVariable(l1).arr('getType', []),
         CVariable(l2).arr('getType', []))
       matches.append(m)
+
+  for sz in unifier.sizes:
+    # gather reps for this size's types
+    reps = {unifier.rep_for(l) for l in unifier.sizes[sz]}
+    print '// size', sz, 'reps', reps
+    for rep in reps:
+      if not rep in unifier.preferred:
+        continue
+        # NOTE: this will miss weird cases such as a constant expression with an 
+        #       explicit type that isn't used anywhere else (eg. zext i4 0)
+
+      m = CBinExpr('==',
+        CVariable(rep).arr('getType', []).arr('getPrimitiveSizeInBits', []),
+        CVariable(str(sz)))
+      matches.append(m)
+
+    unifier.unify(*reps)
+
+  for nm in unifier.names:
+    # gather reps for this name
+    reps = {unifier.rep_for(l) for l in unifier.names[nm]}
+    print '// name', nm, 'reps', reps
+    for (r1,r2) in iter_pairs(reps):
+      m = CBinExpr('==',
+        CVariable(r1).arr('getType', []),
+        CVariable(r2).arr('getType', []))
+      matches.append(m)
+
+    unifier.unify(*reps)
 
   #assert all(rep in unifier.preferred for rep in unifier.all_reps())
 

@@ -83,7 +83,7 @@ class ConstantVal(Constant):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel(), anon=True)
+    manager.add_label(self.getLabel(), self.type, anon=True)
     # TODO: handle non-integers?
 #     if self.type.defined:
 #       self._utype = context.newRep(self.type.size)
@@ -111,7 +111,7 @@ class UndefVal(Constant):
   def setRepresentative(self, manager):
     # FIXME: handle defined types
     self._manager = manager
-    manager.add_label(self.getLabel(), anon=True)
+    manager.add_label(self.getLabel(), self.type, anon=True)
 
   def toAPInt(self):
     raise AliveError("Can't represent undef as APInt")
@@ -163,7 +163,7 @@ class CnstUnaryOp(Constant):
   def setRepresentative(self, manager):
     self._manager = manager
     self.v.setRepresentative(manager)
-    manager.add_label(self.getLabel(), anon=True)
+    manager.add_label(self.getLabel(), self.type, anon=True)
     manager.unify(self.getLabel(), self.v.getLabel())
 #     self.v.setRepresentative(context)
 #     self._utype = self.v.utype()
@@ -237,7 +237,7 @@ class CnstBinaryOp(Constant):
     self._manager = manager
     self.v1.setRepresentative(manager)
     self.v2.setRepresentative(manager)
-    manager.add_label(self.getLabel(), anon=True)
+    manager.add_label(self.getLabel(), self.type, anon=True)
     manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
 #     self._utype = unified(self.v1.utype(), self.v2.utype())
 
@@ -339,7 +339,7 @@ class CnstFunction(Constant):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel(), anon=True)
+    manager.add_label(self.getLabel(), self.type, anon=True)
 
     for arg in self.args:
       arg.setRepresentative(manager)

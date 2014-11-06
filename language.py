@@ -104,7 +104,7 @@ class CopyOperand(Instr):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel())
+    manager.add_label(self.getLabel(), self.type)
     manager.unify(self.getLabel(), self.v.getLabel())
 #     self._utype = context.repForName(self.getCName())
 #     self._utype.unify(self.v.utype())
@@ -314,7 +314,7 @@ class BinOp(Instr):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel())
+    manager.add_label(self.getLabel(), self.type)
     manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
 #     self._utype = unified(context.repForName(self.getCName()),
 #       self.v1.utype(), self.v2.utype())
@@ -447,7 +447,8 @@ class ConversionOp(Instr):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel())
+    manager.add_label(self.getLabel(), self.type)
+    manager.add_label(self.v.getLabel(), self.stype)
 #     self._utype = context.repForName(self.getCName())
 #     if self.type.defined:
 #       self._utype.unify(context.newRep(self.type.size))
@@ -589,7 +590,7 @@ class Icmp(Instr):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getLabel())
+    manager.add_label(self.getLabel(), self.type)
     manager.unify(self.v1.getLabel(), self.v2.getLabel())
 #     self._utype = context.repForSize(1, self.getCName())
 #     self.v1.utype().unify(self.v2.utype())
@@ -647,7 +648,7 @@ class Select(Instr):
 
   def setRepresentative(self, manager):
     self._manager = manager
-    manager.add_label(self.getCName())
+    manager.add_label(self.getLabel(), self.type)
     manager.unify(self.getCName(), self.v1.getLabel(), self.v2.getLabel())
     #FIXME: self.c is i1
     #FIXME: explicit types
