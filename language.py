@@ -267,22 +267,6 @@ class BinOp(Instr):
                self.type == self.v2.type,
                self.type.getTypeConstraints())
 
-  matcher = {
-    Add:  'm_Add',
-    Sub:  'm_Sub',
-    Mul:  'm_Mul',
-    UDiv: 'm_UDiv',
-    SDiv: 'm_SDiv',
-    URem: 'm_URem',
-    SRem: 'm_SRem',
-    Shl:  'm_Shl',
-    AShr: 'm_AShr',
-    LShr: 'm_LShr',
-    And:  'm_And',
-    Or:   'm_Or',
-    Xor:  'm_Xor',
-  }
-
   flag_method = {
     'nsw':   'hasNoSignedWrap',
     'nuw':   'hasNoUnsignedWrap',
@@ -292,7 +276,7 @@ class BinOp(Instr):
   def getPatternMatch(self, context, name = None):
     if name == None: name = self.getCName()
 
-    match = context.match(name, self.matcher[self.op], self.v1, self.v2)
+    match = context.match(name, 'm_' + self.caps[self.op], self.v1, self.v2)
 
     for flag in self.flags:
       # TODO: find better way to match flags
