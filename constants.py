@@ -222,6 +222,10 @@ class CnstBinaryOp(Constant):
   def toAPInt(self):
     if self.op == self.Shr:
       return self.v1.toAPInt().dot('ashr', [self.v2.toAPIntOrLit()])
+    if self.op == self.Div:
+      return self.v1.toAPInt().dot('sdiv', [self.v2.toAPInt()])
+    if self.op == self.Rem:
+      return self.v1.toAPInt().dot('srem', [self.v2.toAPInt()])
 
     if self.op in {self.Add, self.Sub, self.Shl}:
       return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPIntOrLit())
