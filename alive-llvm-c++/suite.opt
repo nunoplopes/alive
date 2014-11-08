@@ -1,0 +1,3043 @@
+Name: constant fold add
+%x = add C1, C2
+=>
+%x = C1+C2
+
+Name: constant fold sub
+%x = sub C1, C2
+=>
+%x = C1-C2
+
+Name: constant fold mul
+%x = mul C1, C2
+=>
+%x = C1*C2
+
+Name: constant fold sdiv
+%x = sdiv C1, C2
+=>
+%x = C1/C2
+
+Name: constant fold shl
+%x = shl C1, C2
+=>
+%x = C1 << C2
+
+Name: constant fold ashr
+%x = ashr C1, C2
+=>
+%x = C1 >> C2
+
+Name: constant fold lshr
+%x = shl C1, C2
+=>
+%x = lshr(C1, C2)
+
+Name: constant fold and
+%x = shl C1, C2
+=>
+%x = C1 & C2
+
+Name: constant fold or
+%x = shl C1, C2
+=>
+%x = C1 | C2
+
+Name: constant fold xor
+%x = shl C1, C2
+=>
+%x = C1 ^ C2
+
+
+Name: canonicalize add nsw
+%x = add nsw C, %a
+=>
+%x = add nsw %a, C
+
+Name: canonicalize add nuw
+%x = add nuw C, %a
+=>
+%x = add nuw %a, C
+
+Name: canonicalize add
+%x = add C, %a
+=>
+%x = add %a, C
+
+Name: canonicalize mul nsw
+%x = mul nsw C, %a
+=>
+%x = mul nsw %a, C
+
+Name: canonicalize mul nuw
+%x = mul nuw C, %a
+=>
+%x = mul nuw %a, C
+
+Name: canonicalize mul
+%x = mul C, %a
+=>
+%x = mul %a, C
+
+
+Name: combine adds
+%x = add %a, C1
+%y = add %x, C2
+=>
+%y = add %a, C1+C2
+
+Name: combine subs
+%x = sub %a, C1
+%y = sub %x, C2
+=>
+%y = sub %a, C1+C2
+
+Name: combine muls
+%x = mul %a, C1
+%y = mul %x, C2
+=>
+%y = mul %a, C1*C2
+
+Name: combine shls
+Pre: C1+C2 u< width(%a)
+%x = shl %a, C1
+%y = shl %x, C2
+=>
+%y = shl %a, C1+C2
+
+Name: combine ashrs
+Pre: C1+C2 u< width(%a)
+%x = ashr %a, C1
+%y = ashr %x, C2
+=>
+%y = ashr %a, C1+C2
+
+Name: combine lshrs
+Pre: C1+C2 u< width(%a)
+%x = lshr %a, C1
+%y = lshr %x, C2
+=>
+%y = lshr %a, C1+C2
+
+Name: combine ands
+%x = and %a, C1
+%y = and %x, C2
+=>
+%y = and %a, C1 & C2
+
+Name: combine ors
+%x = or %a, C1
+%y = or %x, C2
+=>
+%y = or %a, C1|C2
+
+Name: combine xors
+%x = xor %a, C1
+%y = xor %x, C2
+=>
+%y = xor %a, C1^C2
+
+
+Name: AddSub:1040
+Pre: C2 == ~C1
+%Y = or %Z, C2
+%X = xor %Y, C1
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+  =>
+%and = and %Z, C1
+%r = sub %RHS, %and
+
+
+Name: AddSub:1043
+%Y = and %Z, C1
+%X = xor %Y, C1
+%LHS = add %X, 1
+%r = add %LHS, %RHS
+  =>
+%or = or %Z, ~C1
+%r = sub %RHS, %or
+
+
+
+Name: AddSub:1088
+Pre: isSignBit(C)
+%a = add %x, C
+  =>
+%a = xor %x, C
+
+
+Name: AddSub:1098
+%ax = zext i1 %a
+%c = add %ax, %b
+  =>
+%b1 = add %b, 1
+%c = select %a, %b1, %b
+
+
+Name: AddSub:1142
+Pre: isSignBit(C1)
+%b = xor %a, C1
+%d = add %b, C2
+  =>
+%d = add %a, C1^C2
+
+
+Name: AddSub:1152
+%r = add i1 %x, %y
+  =>
+%r = xor %x, %y
+
+
+Name: AddSub:1156-2
+%a = add nsw %b, %b
+  =>
+%a = shl nsw %b, 1
+
+
+Name: AddSub:1156-3
+%a = add nuw %b, %b
+  =>
+%a = shl nuw %b, 1
+
+Name: AddSub:1156
+%a = add %b, %b
+  =>
+%a = shl %b, 1
+
+
+
+Name: AddSub:1164
+%na = sub 0, %a
+%c = add %na, %b
+  =>
+%c = sub %b, %a
+
+
+Name: AddSub:1165
+%na = sub 0, %a
+%nb = sub 0, %b
+%c = add %na, %nb
+  =>
+%ab = add %a, %b
+%c = sub 0, %ab
+
+
+Name: AddSub:1176
+%nb = sub 0, %b
+%c = add %a, %nb
+  =>
+%c = sub %a, %b
+
+
+Name: AddSub:1202
+%nx = xor %x, -1
+%r = add %nx, C
+  =>
+%r = sub C-1, %x
+
+
+Name: AddSub:1206
+Pre: ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
+%xc2 = and %x, C2
+%r = add %xc2, C1
+  =>
+%xc1 = add %x, C1
+%r = and %xc1, C2
+
+
+Name: AddSub:1251
+%na = sub %n, %a
+%s = select %x, 0, %na
+%r = add %s, %a
+  =>
+%r = select %x, %a, %n
+
+
+Name: AddSub:1255
+%na = sub %n, %a
+%s = select %x, %na, 0
+%r = add %s, %a
+  =>
+%r = select %x, %n, %a
+
+
+Name: AddSub:1265
+Pre: WillNotOverflowSignedAdd(%x,trunc(C)) && (C & (-1 << (width(%x) - 1))) == 0
+%sx = sext %x
+%c = add %sx, C
+  =>
+%xy = add nsw %x, trunc(C)
+%c = sext %xy
+
+
+Name: AddSub:1278
+Pre: WillNotOverflowSignedAdd(%x,%y)
+%sx = sext %x
+%sy = sext %y
+%c = add %sx, %sy
+  =>
+%xy = add nsw %x, %y
+%c = sext %xy
+
+
+Name: AddSub:1295
+%aab = and %a, %b
+%aob = xor %a, %b
+%c = add %aab, %aob
+  =>
+%c = or %a, %b
+
+
+Name: AddSub:1309-2
+%lhs = and %a, %b
+%rhs = or %a, %b
+%c = add nsw %lhs, %rhs
+  =>
+%c = add nsw %a, %b
+
+Name: AddSub:1309-3
+%lhs = and %a, %b
+%rhs = or %a, %b
+%c = add nuw %lhs, %rhs
+  =>
+%c = add nuw %a, %b
+
+Name: AddSub:1309
+%lhs = and %a, %b
+%rhs = or %a, %b
+%c = add %lhs, %rhs
+  =>
+%c = add %a, %b
+
+
+
+Name: AddSub:1334
+Pre: WillNotOverflowSignedAdd(%lhs, %rhs)
+%r = add %lhs, %rhs
+  =>
+%r = add nsw %lhs, %rhs
+
+
+; TODO: GEP stuff
+
+
+Name: AddSub:1546
+%na = sub nsw 0, %a
+%r = sub nsw %x, %na
+  =>
+%r = add nsw %x, %a
+
+Name: AddSub:1539
+%na = sub 0, %a
+%r = sub %x, %na
+  =>
+%r = add %x, %a
+
+
+Name: AddSub:1539-2
+%r = sub %x, C
+  =>
+%r = add %x, -C
+
+
+
+Name: AddSub:1549
+Pre: C != 1 << (width(C)-1)
+%r = sub nsw %x, C
+  =>
+%r = add nsw %x, -C
+
+
+Name: AddSub:1556
+%r = sub i1 %x, %y
+  =>
+%r = xor %x, %y
+
+
+Name: AddSub:1560
+%r = sub -1, %a
+  =>
+%r = xor %a, -1
+
+
+Name: AddSub:1564
+%nx = xor %x, -1
+%r = sub C, %nx
+  =>
+%r = add %x, C+1
+
+
+Name: AddSub:1574
+%rhs = add %X, C2
+%r = sub C, %rhs
+  =>
+%r = sub C-C2, %X
+
+
+Name: AddSub:1582
+%rhs = zext i1 %X
+%r = sub 0, %rhs
+  =>
+%r = sext %X
+
+
+Name: AddSub:1587
+%rhs = sext i1 %X
+%r = sub 0, %rhs
+  =>
+%r = zext %X
+
+
+Name: AddSub:1599
+Pre: C == width(%a) - 1
+%a = lshr %x, C
+%r = sub 0, %a
+  =>
+%r = ashr %x, C
+
+
+Name: AddSub:1604
+Pre: C == width(%a) - 1
+%a = ashr %x, C
+%r = sub 0, %a
+  =>
+%r = lshr %x, C
+
+
+Name: AddSub:1614
+%Op1 = add %X, %Y
+%r = sub %X, %Op1
+  =>
+%r = sub 0, %Y
+
+
+Name: AddSub:1619
+%Op0 = sub %X, %Y
+%r = sub %Op0, %X
+  =>
+%r = sub 0, %Y
+
+
+Name: AddSub:1624
+%Op0 = or %A, %B
+%Op1 = xor %A, %B
+%r = sub %Op0, %Op1
+  =>
+%r = and %A, %B
+
+
+Name: AddSub:1638
+%Op1 = sub %Y, %Z
+%r = sub %X, %Op1
+  =>
+%s = sub %Z, %Y
+%r = add %X, %s
+
+
+Name: AddSub:1643
+%Op1 = and %X, %Y
+%r = sub %X, %Op1
+  =>
+%not = xor %Y, -1
+%r = and %X, %not
+
+
+Name: AddSub:1650
+Pre: C != 1 && C != 1 << (width(C)-1)
+%Op1 = sdiv %X, C
+%r = sub 0, %Op1
+  =>
+%r = sdiv %X, -C
+
+
+Name: AddSub:1655
+%Op1 = shl C, %Y
+%r = sub 0, %Op1
+  =>
+%r = shl -C, %Y
+
+
+Name: AddSub:1655-2
+%neg = sub 0, %X
+%Op1 = shl %neg, %Y
+%r = sub 0, %Op1
+  =>
+%r = shl %X, %Y
+
+
+Name: AddSub:1660
+%neg = sub 0, %B
+%Op1 = mul %A, %neg
+%r = sub %X, %Op1
+  =>
+%m = mul %A, %B
+%r = add %X, %m
+
+
+Name: AddSub:1667
+%Op1 = mul %A, C
+%r = sub %X, %Op1
+  =>
+%m = mul %A, -C
+%r = add %X, %m
+
+
+Name: AndOrXor:144
+;Pre: C1&C2 != C1  -- only for profitability
+%op = or %X, C1
+%r = and %op, C2
+  =>
+%o = or %X, C1&C2
+%r = and %o, C2
+
+
+Name: AndOrXor:151
+Pre: (C1 & C2) == C1
+; && (C1 & C2) != 0  -- only for profitability
+%op = or %X, C1
+%r = and %op, C2
+  =>
+%a = and %X, C2^(C1&C2)
+%r = or %a, C1
+
+
+Name: AndOrXor:185
+Pre: isPowerOf2(C2) && C1 & (C2-1) == 0 && C2 & C1 == 0
+%op = add %X, C1
+%r = and %op, C2
+  =>
+%r = and %X, C2
+
+
+Name: AndOrXor:190
+Pre: isPowerOf2(C2) && C1 & (C2-1) == 0 && C2 & C1 != 0
+%op = add %X, C1
+%r = and %op, C2
+  =>
+%a = and %X, C2
+%r = xor %a, C2
+
+
+Name: AndOrXor:206
+Pre: C2 & (-1 << C1) == (-1 << C1)
+%op = shl %X, C1
+%r = and %op, C2
+  =>
+%op = shl %X, C1
+%r = %op
+
+
+Name: AndOrXor:210
+Pre: C2 & (-1 << C1) != (-1 << C1) && C2 & (-1 << C1) != C2
+%op = shl %X, C1
+%r = and %op, C2
+  =>
+%op = shl %X, C1
+%r = and %op, C2 & (-1 << C1)
+
+
+Name: AndOrXor:226
+Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
+%op = lshr %X, C1
+%r = and %op, C2
+  =>
+%op = lshr %X, C1
+%r = %op
+
+
+Name: AndOrXor:230
+Pre: C2 & lshr(-1, C1) != lshr(-1, C1)
+; && C2 & lshr(-1, C1) != C2 -- profitability only
+%op = lshr %X, C1
+%r = and %op, C2
+  =>
+%op = lshr %X, C1
+%r = and %op, C2 & lshr(-1, C1)
+
+
+
+Name: AndOrXor:270
+Pre: C1 <= C2 && C1 == C2
+%c1 = icmp sge %X, C1
+%c2 = icmp slt %X, C2
+%r = and %c1, %c2
+  =>
+%r = false
+
+
+Name: AndOrXor:273
+Pre: C1 <= C2 && C1 == 1 << (width(C1)-1)
+%c1 = icmp sge %X, C1
+%c2 = icmp slt %X, C2
+%r = and %c1, %c2
+  =>
+%r = icmp slt %X, C2
+
+
+Name: AndOrXor:280
+Pre: C1 <= C2
+%c1 = icmp sge %X, C1
+%c2 = icmp slt %X, C2
+%r = and %c1, %c2
+  =>
+%a = add %X, -C1
+%r = icmp ult %a, -C1+C2
+
+
+Name: AndOrXor:287
+Pre: C1 <= C2 && C1 == C2
+%c1 = icmp slt %X, C1
+%c2 = icmp sge %X, C2
+%r = or %c1, %c2
+  =>
+%r = true
+
+
+Name: AndOrXor:290
+Pre: C1 <= C2 && C1 != C2 && C1 == 1<< (width(C1)-1)
+%c1 = icmp slt %X, C1
+%c2 = icmp sge %X, C2
+%r = or %c1, %c2
+  =>
+%r = icmp sgt %X, (C2-1)
+
+
+Name: AndOrXor:298
+Pre: C1 <= C2 && C1 != C2
+%c1 = icmp slt %X, C1
+%c2 = icmp sge %X, C2
+%r = or %c1, %c2
+  =>
+%a = add %X, -C1
+%r = icmp ugt %a, -C1+(C2-1)
+
+
+
+
+
+Name: AndOrXor:516
+%r = icmp slt %X, 0
+  =>
+%a = and %X, 1 << (width(%X)-1)
+%r = icmp ne %a, 0
+
+
+Name: AndOrXor:523
+%r = icmp sgt %X, -1
+  =>
+%a = and %X, 1 << (width(%X)-1)
+%r = icmp eq %a, 0
+
+
+Name: AndOrXor:530
+Pre: isPowerOf2(C)
+%r = icmp ult %X, C
+  =>
+%a = and %X, -C
+%r = icmp eq %a, 0
+
+
+Name: AndOrXor:537
+Pre: isPowerOf2(C+1)
+%r = icmp ugt %X, C
+  =>
+%a = and %X, ~C
+%r = icmp ne %a, 0
+
+
+Name: AndOrXor:698
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = icmp eq %a1, 0
+%op1 = icmp eq %a2, 0
+%r = and %op0, %op1
+  =>
+%or = or %b, %d
+%a3 = and %a, %or
+%r = icmp eq %a3, 0
+
+
+Name: AndOrXor:709
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = icmp eq %a1, %b
+%op1 = icmp eq %a2, %d
+%r = and %op0, %op1
+  =>
+%or = or %b, %d
+%a3 = and %a, %or
+%r = icmp eq %a3, %or
+
+
+Name: AndOrXor:716
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = icmp eq %a1, %a
+%op1 = icmp eq %a2, %a
+%r = and %op0, %op1
+  =>
+%a4 = and %b, %d
+%a3 = and %a, %a4
+%r = icmp eq %a3, %a
+
+
+Name: AndOrXor:732-1
+Pre: C1 & C2 == C1
+%a1 = and %a, C1
+%a2 = and %a, C2
+%op0 = icmp ne %a1, 0
+%op1 = icmp ne %a2, 0
+%r = and %op0, %op1
+  =>
+%a1 = and %a, C1
+%r = icmp ne %a1, 0
+
+
+Name: AndOrXor:732-2
+Pre: C1 & C2 == C1
+%a1 = and %a, C1
+%a2 = and %a, C2
+%op0 = icmp ne %a1, C1
+%op1 = icmp ne %a2, C2
+%r = and %op0, %op1
+  =>
+%a1 = and %a, C1
+%r = icmp ne %a1, C1
+
+
+Name: AndOrXor:745
+Pre: C1 | C2 == C1
+%a1 = and %a, C1
+%a2 = and %a, C2
+%op0 = icmp ne %a1, %a
+%op1 = icmp ne %a2, %a
+%r = and %op0, %op1
+  =>
+%a1 = and %a, C1
+%r = icmp ne %a1, %a
+
+
+Name: AndOrXor:757
+Pre: (C1 & C3) & (C2 ^ C4) == 0 && C1 & C2 == C2 && C3 & C4 == C4
+%a1 = and %a, C1
+%a2 = and %a, C3
+%op0 = icmp eq %a1, C2
+%op1 = icmp eq %a2, C4
+%r = and %op0, %op1
+  =>
+%a3 = and %a, C1|C3
+%r = icmp eq %a3, C2|C4
+
+
+Name: AndOrXor:794
+; FIXME: missing the remaining cases
+%op0 = icmp sgt %a, %b
+%op1 = icmp ne %a, %b
+%r = and %op0, %op1
+  =>
+%r = icmp sgt %a, %b
+
+
+Name: AndOrXor:819
+Pre: isPowerOf2(C)
+%op0 = icmp ult %a, C
+%op1 = icmp ult %b, C
+%r = and %op0, %op1
+  =>
+%o = or %a, %b
+%r = icmp ult %o, C
+
+
+Name: AndOrXor:827
+%op0 = icmp eq %a, 0
+%op1 = icmp eq %b, 0
+%r = and %op0, %op1
+  =>
+%o = or %a, %b
+%r = icmp eq %o, 0
+
+
+
+Name: AndOrXor:887-1
+; FIXME: missing the remaining combinations: [su][lg]t
+Pre: C1 != C2
+%op0 = icmp eq %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:887-2
+%op0 = icmp eq %a, C1
+%op1 = icmp ne %a, C1
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:922
+Pre: C1 u< C2
+%op0 = icmp eq %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp eq %a, C1
+%r = %op0
+
+
+Name: AndOrXor:923
+Pre: C1 u< C2
+%op0 = icmp eq %a, C1
+%op1 = icmp ult %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp eq %a, C1
+%r = %op0
+
+
+Name: AndOrXor:924
+Pre: C1 < C2
+%op0 = icmp eq %a, C1
+%op1 = icmp slt %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp eq %a, C1
+%r = %op0
+
+
+Name: AndOrXor:931
+Pre: C1 u< C2 && C1 == C2-1
+%op0 = icmp ne %a, C1
+%op1 = icmp ult %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp ult %a, C1
+
+
+Name: AndOrXor:937
+Pre: C1 < C2 && C1 == C2-1
+%op0 = icmp ne %a, C1
+%op1 = icmp slt %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp slt %a, C1
+
+
+Name: AndOrXor:940
+Pre: C1 u< C2
+%op0 = icmp ne %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp eq %a, C2
+%r = %op1
+
+
+Name: AndOrXor:941
+Pre: C1 u< C2
+%op0 = icmp ne %a, C1
+%op1 = icmp ugt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp ugt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:942
+Pre: C1 < C2
+%op0 = icmp ne %a, C1
+%op1 = icmp sgt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp sgt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:949
+Pre: C1 u< C2 && C1 == C2-1
+%op0 = icmp ne %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%s = add %a, -C1
+%r = icmp ugt %s, 1
+
+
+Name: AndOrXor:961
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:962
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp ugt %a, C2
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:966
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp ult %a, C1
+%r = %op0
+
+
+Name: AndOrXor:967
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp ult %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp ult %a, C1
+%r = %op0
+
+
+Name: AndOrXor:978
+Pre: C1 < C2
+%op0 = icmp slt %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp slt %a, C1
+%r = %op0
+
+
+Name: AndOrXor:979
+Pre: C1 < C2
+%op0 = icmp slt %a, C1
+%op1 = icmp slt %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp slt %a, C1
+%r = %op0
+
+
+Name: AndOrXor:988
+Pre: C1 u< C2
+%op0 = icmp ugt %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp eq %a, C2
+%r = %op1
+
+
+Name: AndOrXor:989
+Pre: C1 u< C2
+%op0 = icmp ugt %a, C1
+%op1 = icmp ugt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp ugt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:994
+Pre: C1 u< C2 && C2 == C1+1
+%op0 = icmp ugt %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp ugt %a, C2
+
+
+Name: AndOrXor:1006
+Pre: C1 < C2
+%op0 = icmp sgt %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp eq %a, C2
+%r = %op1
+
+
+Name: AndOrXor:1007
+Pre: C1 < C2
+%op0 = icmp sgt %a, C1
+%op1 = icmp sgt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp sgt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:1012
+Pre: C1 < C2 && C2 == C1+1
+%op0 = icmp sgt %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp sgt %a, C2
+
+
+Name: AndOrXor:1140-1
+Pre: MaskedValueIsZero(%op0LHS, ~C)
+%op0 = xor %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newRHS = and %op0RHS, C
+%r = xor %op0LHS, %newRHS
+
+
+Name: AndOrXor:1140-2
+Pre: MaskedValueIsZero(%op0LHS, ~C)
+%op0 = or %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newRHS = and %op0RHS, C
+%r = or %op0LHS, %newRHS
+
+
+Name: AndOrXor:1146-1
+Pre: MaskedValueIsZero(%op0RHS, ~C)
+%op0 = xor %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newLHS = and %op0LHS, C
+%r = xor %newLHS, %op0RHS
+
+Name: AndOrXor:1146-2
+Pre: MaskedValueIsZero(%op0RHS, ~C)
+%op0 = or %op0LHS, %op0RHS
+%r = and %op0, C
+  =>
+%newLHS = and %op0LHS, C
+%r = or %newLHS, %op0RHS
+
+
+
+Name: AndOrXor:1191-1
+%op0 = shl 1, %op0RHS
+%r = and %op0, 1
+  =>
+%newICMP = icmp eq %op0RHS, 0
+%r = zext %newICMP
+
+
+Name: AndOrXor:1191-2
+%op0 = lshr 1, %op0RHS
+%r = and %op0, 1
+  =>
+%newICMP = icmp eq %op0RHS, 0
+%r = zext %newICMP
+
+
+Name: AndOrXor:1207
+%a = and %x, C1
+%op0 = trunc %a
+%r = and %op0, C2
+  =>
+%newcast = trunc %x
+%r = and %newcast, trunc(C1) & C2
+
+
+Name: AndOrXor:1230  ~A & ~B -> ~(A | B)
+%op0 = xor %notOp0, -1
+%op1 = xor %notOp1, -1
+%r = and %op0, %op1
+  =>
+%or = or %notOp0, %notOp1
+%r = xor %or, -1
+
+
+Name: AndOrXor:1241 (A|B) & ~(A&B) => A^B
+%op0 = or %A, %B
+%notOp1 = and %A, %B
+%op1 = xor %notOp1, -1
+%r = and %op0, %op1
+  =>
+%r = xor %A, %B
+
+
+Name: AndOrXor:1247 ~(A&B) & (A|B) => A^B
+%notOp0 = and %A, %B
+%op0 = xor %notOp0, -1
+%op1 = or %A, %B
+%r = and %op0, %op1
+  =>
+%r = xor %A, %B
+
+
+Name: AndOrXor:1253 A & (A^B) -> A & ~B
+; FIXME: need pre: !constant(%A) to avoid infinite loop when A == -1
+%op0 = xor %A, %B
+%r = and %op0, %A
+  =>
+%notB = xor %B, -1
+%r = and %A, %notB
+
+
+Name: AndOrXor:1280 (~A|B)&A -> A&B
+%nA = xor %A, -1
+%op0 = or %nA, %B
+%r = and %op0, %A
+  =>
+%r = and %A, %B
+
+
+Name: AndOrXor:1288 (A ^ B) & ((B ^ C) ^ A) -> (A ^ B) & ~C
+%op0 = xor %A, %B
+%x = xor %B, %C
+%op1 = xor %x, %A
+%r = and %op0, %op1
+  =>
+%op0 = xor %A, %B
+%negC = xor %C, -1
+%r = and %op0, %negC
+
+
+Name: AndOrXor:1294 (A | B) & ((~A) ^ B) -> (A & B)
+%op0 = or %A, %B
+%x = xor %A, -1
+%op1 = xor %x, %B
+%r = and %op0, %op1
+  =>
+%r = and %A, %B
+
+
+Name: AndOrXor:1346 (sext)
+%op0 = sext %x
+%op1 = sext %y
+%r = and %op0, %op1
+  =>
+%0 = and %x, %y
+%r = sext %0
+
+
+Name: AndOrXor:1346 (zext)
+%op0 = zext %x
+%op1 = zext %y
+%r = and %op0, %op1
+  =>
+%0 = and %x, %y
+%r = zext %0
+
+
+Name: AndOrXor:1346 (trunc)
+%op0 = trunc %x
+%op1 = trunc %y
+%r = and %op0, %op1
+  =>
+%0 = and %x, %y
+%r = trunc %0
+
+
+Name: AndOrXor:1388
+%op0 = sext i1 %a
+%r = and %op0, %b
+  =>
+%r = select %a, %b, 0
+
+
+Name: AndOrXor:1395
+%nop0 = sext i1 %a
+%op0 = xor %nop0, -1
+%r = and %op0, %b
+  =>
+%r = select %a, 0, %b
+
+
+Name: AndOrXor:1574
+%A = sext %Cond
+%D = xor %A, -1
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %B
+
+
+Name: AndOrXor:1577
+%A = sext %Cond
+%n = xor %Cond, -1
+%D = sext %n
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %B
+
+
+Name: AndOrXor:1581
+%A = sext %Cond
+%B = xor %A, -1
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %D
+
+
+Name: AndOrXor:1583
+%A = sext %Cond
+%n = xor %Cond, -1
+%B = sext %n
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %D
+
+
+Name: AndOrXor:1628-1
+Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C2 ^ -C1) && -C2 ^ -C1 == (C3-C2) ^ (C3-C1) && abs(C1-C2) u> C3
+%a1 = add %A, C1
+%a2 = add %A, C2
+%cmp1 = icmp ult %a1, C3
+%cmp2 = icmp ult %a2, C3
+%r = or %cmp1, %cmp2
+  =>
+%newand = and %A, ~(C1^C2)
+%newadd = add %newand, umax(C1, C2)
+%r = icmp ult %newadd, C3
+
+
+Name: AndOrXor:1628-2
+Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C2 ^ -C1) && -C2 ^ -C1 == (C3-C2) ^ (C3-C1) && abs(C1-C2) u> C3
+%a1 = add %A, C1
+%a2 = add %A, C2
+%cmp1 = icmp ule %a1, C3
+%cmp2 = icmp ule %a2, C3
+%r = or %cmp1, %cmp2
+  =>
+%newand = and %A, ~(C1^C2)
+%newadd = add %newand, umax(C1, C2)
+%r = icmp ule %newadd, C3
+
+
+Name: AndOrXor:1683-1
+; FIXME: parameterize over other icmp
+%op0 = icmp ugt %a, %b
+%op1 = icmp eq %a, %b
+%r = or %op0, %op1
+  =>
+%r = icmp uge %a, %b
+
+
+Name: AndOrXor:1683-2
+%op0 = icmp uge %a, %b
+%op1 = icmp ne %a, %b
+%r = or %op0, %op1
+  =>
+%r = true
+
+
+Name: AndOrXor:1704
+%cmp1 = icmp eq %B, 0
+%cmp2 = icmp ult %A, %B
+%r = or %cmp1, %cmp2
+  =>
+%b1 = add %B, -1
+%r = icmp uge %b1, %A
+
+
+Name: AndOrXor:1705
+%cmp1 = icmp eq %B, 0
+%cmp2 = icmp ugt %B, %A
+%r = or %cmp1, %cmp2
+  =>
+%b1 = add %B, -1
+%r = icmp uge %b1, %A
+
+
+Name: AndOrXor:1733
+%cmp1 = icmp ne %A, 0
+%cmp2 = icmp ne %B, 0
+%r = or %cmp1, %cmp2
+  =>
+%or = or %A, %B
+%r = icmp ne %or, 0
+
+
+Name: AndOrXor:1740
+Pre: C2+C3 == C1
+%add = add %X, C3
+%cmp1 = icmp ult %add, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%add = add %X, C3
+%r = icmp ule %add, C1
+
+
+Name: AndOrXor:1795
+Pre: C1 u< C2 && isPowerOf2(C1 ^ C2)
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%a = and %X, ~(C1 ^ C2)
+%r = icmp eq %a, C1
+
+
+Name: AndOrXor:1806
+Pre: C1 == C2-1
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%a = add %X, -C1
+%r = icmp ult %a, 2
+
+
+Name: AndOrXor:1818
+Pre: C1 u< C2
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ne %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1819
+Pre: C1 u< C2
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ult %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1820
+Pre: C1 < C2
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp slt %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1827
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ne %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1828
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp ugt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ne %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1829
+Pre: C1 < C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp sgt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ne %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1831
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1832
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1833
+Pre: C1 < C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1844
+Pre: C1 u< C2 && C2 == -1
+%cmp1 = icmp ult %X, C1
+%cmp2 = icmp ugt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ult %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1849
+Pre: C1 u< C2
+%cmp1 = icmp ult %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ne %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1850
+Pre: C1 u< C2
+%cmp1 = icmp ult %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ult %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1864
+Pre: C1 < C2 && C2 == 1 << (width(C2)-1)
+%cmp1 = icmp slt %X, C1
+%cmp2 = icmp sgt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp slt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1869
+Pre: C1 < C2
+%cmp1 = icmp slt %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ne %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1870
+Pre: C1 < C2
+%cmp1 = icmp slt %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp slt %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1879
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ugt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1880
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp ugt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ugt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1884
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1885
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1894
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp sgt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1895
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp sgt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp sgt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1899
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1900
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1979
+Pre: C1 ^ C2 == -1
+%or = or %A, %B
+%op0 = and %or, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%a = and %A, C1
+%r = or %a, %B
+
+
+Name: AndOrXor:2008
+Pre: C1 ^ C2 == -1
+%or = xor %A, %B
+%op0 = and %or, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%a = and %A, C1
+%r = xor %a, %B
+
+
+Name: AndOrXor:2052  (X & C1) | C2 --> (X | C2) & (C1|C2)
+Pre: C & C1 != 0 ; @@ why? it's just as correct without
+%op0 = and %x, C1
+%r = or %op0, C
+  =>
+%or = or %x, C
+%r = and %or, (C | C1)
+
+
+Name: AndOrXor:2063  (X ^ C1) | C2 --> (X | C2) ^ (C1 & ~C2)
+%op0 = xor %x, C1
+%r = or %op0, C
+  =>
+%or = or %x, C
+%r = xor %or, (C1 & ~C)
+
+
+Name: AndOrXor:2095   (X^C)|Y -> (X|Y)^C iff Y&C == 0
+Pre: MaskedValueIsZero(%op1, C1)
+%op0 = xor %A, C1
+%r = or %op0, %op1
+  =>
+%or = or %A, %op1
+%r = xor %or, C1
+
+
+Name: AndOrXor:2113   ((~A & B) | A) -> (A | B)
+%negA = xor %A, -1
+%op0 = and %negA, %B
+%r = or %op0, %A
+  =>
+%r = or %A, %B
+
+
+Name: AndOrXor:2118   ((A & B) | ~A) -> (~A | B)
+%negA = xor %A, -1
+%op0 = and %A, %B
+%r = or %op0, %negA
+  =>
+%negA = xor %A, -1
+%r = or %negA, %B
+
+
+Name: AndOrXor:2123   (A & (~B)) | (A ^ B) -> (A ^ B)
+%negB = xor %B, -1
+%op0 = and %A, %negB
+%op1 = xor %A, %B
+%r = or %op0, %op1
+  =>
+%r = xor %A, %B
+
+
+Name: AndOrXor:2142
+Pre: C1 & C2 == 0 && MaskedValueIsZero(%V2, ~C1)
+%A = or %B, %V2
+%op0 = and %A, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%A = or %B, %V2
+%r = and %A, (C1 | C2)
+
+
+Name: AndOrXor:2160
+Pre: C1 & C2 == 0 && C3 & ~C1 == 0 && C4 & ~C2 == 0
+%A = or %V1, C3
+%B = or %V1, C4
+%op0 = and %A, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%V2 = or %V1, (C3 | C4)
+%r = and %V2, (C1 | C2)
+
+
+Name: AndOrXor:2188
+%C = xor %D, -1
+%B = xor %A, -1
+%op0 = and %A, %C
+%op1 = and %B, %D
+%r = or %op0, %op1
+  =>
+%r = xor %A, %D
+
+
+Name: AndOrXor:2231  (A ^ B) | ((B ^ C) ^ A) -> (A ^ B) | C
+%op0 = xor %A, %B
+%x = xor %B, %C
+%op1 = xor %x, %A
+%r = or %op0, %op1
+  =>
+%op0 = xor %A, %B
+%r = or %op0, %C
+
+
+Name: AndOrXor:2243  ((B | C) & A) | B -> B | (A & C)
+%o = or %B, %C
+%op0 = and %o, %A
+%r = or %op0, %B
+  =>
+%a = and %A, %C
+%r = or %B, %a
+
+
+Name: AndOrXor:2247  (~A | ~B) == (~(A & B))
+%na = xor %A, -1
+%nb = xor %B, -1
+%r = or %na, %nb
+  =>
+%a = and %A, %B
+%r = xor %a, -1
+
+
+Name: AndOrXor:2263
+%op1 = xor %op0, %B
+%r = or %op0, %op1
+  =>
+%r = or %op0, %B
+
+
+Name: AndOrXor:2264
+%na = xor %A, -1
+%op1 = xor %na, %B
+%r = or %A, %op1
+  =>
+%nb = xor %B, -1
+%r = or %A, %nb
+
+
+Name: AndOrXor:2265
+%op0 = and %A, %B
+%op1 = xor %A, %B
+%r = or %op0, %op1
+  =>
+%r = or %A, %B
+
+
+Name: AndOrXor:2284
+%o = or %A, %B
+%op1 = xor %o, -1
+%r = or %A, %op1
+  =>
+%not = xor %B, -1
+%r = or %A, %not
+
+
+Name: AndOrXor:2285
+%o = xor %A, %B
+%op1 = xor %o, -1
+%r = or %A, %op1
+  =>
+%not = xor %B, -1
+%r = or %A, %not
+
+
+Name: AndOrXor:2297
+%op0 = and %A, %B
+%na = xor %A, -1
+%op1 = xor %na, %B
+%r = or %op0, %op1
+  =>
+%na = xor %A, -1
+%r = xor %na, %B
+
+
+Name: AndOrXor:2321-1
+; FIXME: generic over casts
+%op0 = zext %A
+%op1 = zext %B
+%r = or %op0, %op1
+  =>
+%or = or %A, %B
+%r = zext %or
+
+
+Name: AndOrXor:2321-2
+%op0 = sext %A
+%op1 = sext %B
+%r = or %op0, %op1
+  =>
+%or = or %A, %B
+%r = sext %or
+
+
+Name: AndOrXor:2321-3
+%op0 = trunc %A
+%op1 = trunc %B
+%r = or %op0, %op1
+  =>
+%or = or %A, %B
+%r = trunc %or
+
+
+Name: AndOrXor:2356
+%op0 = sext i1 %A
+%r = or %op0, %op1
+  =>
+%r = select %A, -1, %op1
+
+
+Name: AndOrXor:2367
+%op0 = or %A, C1
+%r = or %op0, %op1
+  =>
+%i = or %A, %op1
+%r = or %i, C1
+
+
+Name: AndOrXor:2375
+%op0 = select %x, %A, %B
+%op1 = select %x, %C, %D
+%r = or %op0, %op1
+  =>
+%t = or %A, %C
+%f = or %B, %D
+%r = select %x, %t, %f
+
+
+Name: AndOrXor:2416
+%x = xor %nx, -1
+%op0 = and %x, %y
+%r = xor %op0, -1
+  =>
+%ny = xor %y, -1
+%r = or %nx, %ny
+
+
+Name: AndOrXor:2417
+%x = xor %nx, -1
+%op0 = or %x, %y
+%r = xor %op0, -1
+  =>
+%ny = xor %y, -1
+%r = and %nx, %ny
+
+
+Name: AndOrXor:2429
+%op0 = and %x, %y
+%r = xor %op0, -1
+  =>
+%nx = xor %x, -1
+%ny = xor %y, -1
+%r = or %nx, %ny
+
+
+Name: AndOrXor:2430
+%op0 = or %x, %y
+%r = xor %op0, -1
+  =>
+%nx = xor %x, -1
+%ny = xor %y, -1
+%r = and %nx, %ny
+
+
+Name: AndOrXor:2443
+%nx = xor %x, -1
+%op0 = ashr %nx, %y
+%r = xor %op0, -1
+  =>
+%r = ashr %x, %y
+
+
+Name: AndOrXor:2453
+; FIXME: generic over icmp operators; need getInversePredicate
+%op0 = icmp slt %x, %y
+%r = xor %op0, -1
+  =>
+%r = icmp sge %x, %y
+
+
+Name: AndOrXor:2459-1
+; FIXME: generic over icmp operators; need getInversePredicate
+%cmp = icmp slt %x, %y
+%op0 = zext %cmp
+%r = xor %op0, 1
+  =>
+%ncmp = icmp sge %x, %y
+%r = zext %ncmp
+
+
+Name: AndOrXor:2459-2
+%cmp = icmp slt %x, %y
+%op0 = sext %cmp
+%r = xor %op0, -1
+  =>
+%ncmp = icmp sge %x, %y
+%r = sext %ncmp
+
+
+Name: AndOrXor:2475
+%op0 = sub C, %x
+%r = xor %op0, -1
+  =>
+%r = add %x, -1-C  ; LLVM has -C-1, which prevents testing i1
+
+
+Name: AndOrXor:2486
+%op0 = add %x, C
+%r = xor %op0, -1
+  =>
+%r = sub -1-C, %x
+
+
+Name: AndOrXor:2494
+Pre: isSignBit(C1)
+%op0 = add %x, C
+%r = xor %op0, C1
+  =>
+%r = add %x, C + C1
+
+
+Name: AndOrXor:2500
+Pre: MaskedValueIsZero(%x,C1)
+%op0 = or %x, C1
+%r = xor %op0, C2
+  =>
+%r = xor %x, C1^C2
+
+
+Name: AndOrXor:2515   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3)
+%e1  = xor %x, C1
+%op0 = lshr %e1, C2
+%r   = xor %op0, C3
+  =>
+%0 = lshr %x, C2
+%r = xor %0, lshr(C1,C2)^C3
+
+
+Name: AndOrXor:2581  (B|A)^B -> A & ~B
+%op0 = or %a, %op1
+%r = xor %op0, %op1
+  =>
+%nop1 = xor %op1, -1
+%r = and %a, %nop1
+
+
+Name: AndOrXor:2587  (B&A)^A -> ~B & A
+%op0 = and %a, %op1
+%r = xor %op0, %op1
+  =>
+%na = xor %a, -1
+%r = and %na, %op1
+
+
+Name: AndOrXor:2595
+%op0 = and %a, %b
+%op1 = or %a, %b
+%r = xor %op0, %op1
+  =>
+%r = xor %a, %b
+
+
+Name: AndOrXor:2607
+%na = xor %a, -1
+%nb = xor %b, -1
+%op0 = or %a, %nb
+%op1 = or %na, %b
+%r = xor %op0, %op1
+  =>
+%r = xor %a, %b
+
+
+Name: AndOrXor:2617
+%na = xor %a, -1
+%nb = xor %b, -1
+%op0 = and %a, %nb
+%op1 = and %na, %b
+%r = xor %op0, %op1
+  =>
+%r = xor %a, %b
+
+
+Name: AndOrXor:2627
+%op0 = xor %a, %c
+%op1 = or %a, %b
+%r = xor %op0, %op1
+  =>
+%na = xor %a, -1
+%and = and %na, %b
+%r = xor %and, %c
+
+
+Name: AndOrXor:2647
+%op0 = and %a, %b
+%op1 = xor %a, %b
+%r = xor %op0, %op1
+  =>
+%r = or %a, %b
+
+
+Name: AndOrXor:2658
+%nb = xor %b, -1
+%op0 = and %a, %nb
+%na = xor %a, -1
+%r = xor %op0, %na
+  =>
+%and = and %a, %b
+%r = xor %and, -1
+
+
+Name: AndOrXor:2663
+; FIXME: parameterize over other icmp
+%op0 = icmp ule %a, %b
+%op1 = icmp ne %a, %b
+%r = xor %op0, %op1
+  =>
+%r = icmp uge %a, %b
+
+
+Name: AndOrXor:2681-1
+; FIXME: over all casts
+%op0 = zext %a
+%op1 = zext %b
+%r = xor %op0, %op1
+  =>
+%0 = xor %a, %b
+%r = zext %0
+
+
+Name: AndOrXor:2681-2
+%op0 = sext %a
+%op1 = sext %b
+%r = xor %op0, %op1
+  =>
+%0 = xor %a, %b
+%r = sext %0
+
+
+Name: AndOrXor:2681-3
+%op0 = trunc %a
+%op1 = trunc %b
+%r = xor %op0, %op1
+  =>
+%0 = xor %a, %b
+%r = trunc %0
+
+
+
+
+; FIXME: cannot do the recursive case of simplifyValueKnownNonZero()
+
+
+Name: 152
+%r = mul %x, -1
+  =>
+%r = sub 0, %x
+
+
+Name: 160
+; FIXME: slow
+%sh = shl %x, C2
+%r = mul %sh, C1
+  =>
+%r = mul %x, C1<<C2
+
+
+
+Name: 201
+Pre: C < 0 && isPowerOf2(abs(C))
+%Op0 = sub %Y, %X
+%r = mul %Op0, C
+  =>
+%sub = sub %X, %Y
+%r = mul %sub, abs(C)
+
+
+Name: 203
+Pre: C < 0 && isPowerOf2(abs(C))
+%Op0 = add %Y, C1
+%r = mul %Op0, C
+  =>
+%sub = sub -C1, %Y
+%r = mul %sub, abs(C)
+
+
+; FIXME: FoldOpIntoSelect -- 218
+; FIXME: FoldOpIntoPhi -- 222
+
+
+Name: 229
+; FIXME: missing pre that %mul is folded to something other than a mult.
+%Op0 = add %X, C1
+%r = mul %Op0, %Op1
+  =>
+%mul = mul C1, %Op1
+%tmp = mul %X, %Op1
+%r = add %tmp, %mul
+
+
+Name: 239
+%a = sub 0, %X
+%b = sub 0, %Y
+%r = mul %a, %b
+  =>
+%r = mul %X, %Y
+
+
+Name: 265
+; FIXME: Combine the following two
+%div = udiv exact %X, %Y
+%r = mul %div, %Y
+  =>
+%r = %X
+
+
+Name: 265-2
+%div = sdiv exact %X, %Y
+%r = mul %div, %Y
+  =>
+%r = %X
+
+
+Name: 266
+; FIXME: Combine the following two
+%div = udiv exact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%r = sub 0, %X
+
+
+Name: 266-2
+%div = sdiv exact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%r = sub 0, %X
+
+
+Name: 275
+; FIXME: slow
+%div = udiv %X, %Y
+%r = mul %div, %Y
+  =>
+%rem = urem %X, %Y
+%r = sub  %X, %rem
+
+
+Name: 275-2
+; FIXME: slow
+%div = sdiv %X, %Y
+%r = mul %div, %Y
+  =>
+%rem = srem %X, %Y
+%r = sub  %X, %rem
+
+
+Name: 276
+; FIXME: slow
+%div = sdiv %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%rem = srem %X, %Y
+%r = sub %rem, %X
+
+
+Name: 276-2
+; FIXME: slow
+%div = udiv %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%rem = urem %X, %Y
+%r = sub %rem, %X
+
+
+Name: 283
+%r = mul i1 %X, %Y
+  =>
+%r = and %X, %Y
+
+
+Name: 290 & 292
+%Op0 = shl 1, %Y
+%r = mul %Op0, %Op1
+  =>
+%r = shl %Op1, %Y
+
+
+Name: 304
+Pre: MaskedValueIsZero(%Op0, -2)
+%r = mul %Op0, %Op1
+  =>
+%s = sub 0, %Op0
+%r = and %s, %Op1
+
+
+Name: SimplifyDivRemOfSelect
+; FIXME: applies to *div/*rem
+%sel = select %c, %Y, 0
+%r = udiv %X, %sel
+  =>
+%r = udiv %X, %Y
+
+
+; FIXME: cannot do the remaining part of SimplifyDivRemOfSelect
+
+
+
+
+Name: 805
+%r = sdiv 1, %X
+  =>
+%inc = add %X, 1
+%c = icmp ult %inc, 3
+%r = select %c, %X, 0
+
+
+Name: 809
+%r = udiv 1, %X
+  =>
+%c = icmp eq %X, 1
+%r = zext %c
+
+
+Name: 820
+; FIXME: merge with the following?
+; FIXME: slow
+%Z = srem %X, %Op1
+%Op0 = sub %X, %Z
+%r = sdiv %Op0, %Op1
+  =>
+%r = sdiv %X, %Op1
+
+
+Name: 820
+; FIXME: slow
+%Z = urem %X, %Op1
+%Op0 = sub %X, %Z
+%r = udiv %Op0, %Op1
+  =>
+%r = udiv %X, %Op1
+
+
+
+Name: 876
+Pre: C u>= (1<<(width(C)-1))
+%r = udiv %x, C
+  =>
+%c = icmp ult %x, C
+%r = select %c, 0, 1
+
+
+Name: 891
+%s = shl 1, %N
+%r = udiv %x, %s
+  =>
+%r = lshr %x, %N
+
+Name: 891-exact
+%s = shl 1, %N
+%r = udiv exact %x, %s
+  =>
+%r = lshr exact %x, %N
+
+
+
+Name: 976-exact
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = udiv exact %Op0, %Op1
+  =>
+%d = udiv exact %X, %Y
+%r = zext %d
+
+
+Name: 976
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = udiv %Op0, %Op1
+  =>
+%d = udiv %X, %Y
+%r = zext %d
+
+
+
+; FIXME: how to handle visitUDivOperand??
+
+
+Name: 1030
+%r = sdiv %X, -1
+  =>
+%r = sub 0, %X
+
+
+
+Name: 1045
+Pre: isSignBit(C)
+%r = sdiv %Op0, C
+  =>
+%cmp = icmp eq %Op0, C
+%r = zext %cmp
+
+
+Name: 1049
+; FIXME: slow
+%Op0 = sub nsw 0, %X
+%r = sdiv %Op0, C
+  =>
+%r = sdiv %X, -C
+
+
+Name: 1062
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && MaskedValueIsZero(%Op1, 1<<(width(%Op0)-1))
+%r = sdiv %Op0, %Op1
+  =>
+%r = udiv %Op0, %Op1
+
+
+Name: 1065
+; FIXME: slow
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && isPowerOf2(C)
+%Op1 = shl C, %X
+%r = sdiv %Op0, %Op1
+  =>
+; FIXME: we shouldnt require Op1 to be typed here
+%Op1 = shl C, %X
+%r = udiv %Op0, %Op1
+
+
+Name: 1285
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = urem %Op0, %Op1
+  =>
+%u = urem %X, %Y
+%r = zext %u
+
+
+Name: 1298
+%r = urem 1, %Op1
+  =>
+%cmp = icmp ne %Op1, 1
+%r = zext %cmp
+
+
+Name: 1321
+; FIXME: slow
+Pre: C < 0 && !isSignBit(C)
+%r = srem %Op0, C
+  =>
+%r = srem %Op0, -C
+
+
+Name: 1333
+Pre: MaskedValueIsZero(%Op1, 1<<(width(%Op1)-1)) && MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1))
+%r = srem %Op0, %Op1
+  =>
+%r = urem %Op0, %Op1
+Name: Select:420
+Pre: isPowerOf2(C1) && C1 == C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%F = xor %X, C2
+%r = select %c, %X, %F
+  =>
+%r = and %X, ~C1
+
+
+Name: Select:423
+Pre: isPowerOf2(C1) && C1 == ~C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%F = and %X, C2
+%r = select %c, %X, %F
+  =>
+%F = and %X, C2
+%r = %F
+
+
+Name: Select:427
+Pre: isPowerOf2(C1) && C1 == C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = xor %X, C2
+%r = select %c, %T, %X
+  =>
+%r = or %X, C1
+
+
+Name: Select:430
+Pre: isPowerOf2(C1) && C1 == ~C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = and %X, C2
+%r = select %c, %T, %X
+  =>
+%r = %X
+
+
+Name: Select:433
+Pre: isPowerOf2(C1) && C1 == C2
+%and = and %X, C1
+%c = icmp eq %and, 0
+%T = or %X, C2
+%r = select %c, %T, %X
+  =>
+%T = or %X, C2
+%r = %T
+
+
+Name: Select:485
+Pre: isSignBit(C)
+%c = icmp slt %x, C
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:485-2
+%c = icmp ult %x, 0
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:489
+Pre: C == (1<<(width(%x)-1))-1
+%c = icmp sgt %x, C
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:489-2
+%c = icmp ugt %x, -1
+%r = select %c, %A, %B
+  =>
+%r = %B
+
+
+Name: Select:510
+Pre: C2 == C+1 && C != (1<<(width(%X)-1))-1
+%c = icmp sgt %X, C
+%r = select %c, %X, C2
+  =>
+%c2 = icmp slt %X, C2
+%r = select %c2, C2, %X
+
+
+Name: Select:511
+Pre: C2 == C-1 && !isSignBit(C)
+%c = icmp slt %X, C
+%r = select %c, %X, C2
+  =>
+%c2 = icmp sgt %X, C2
+%r = select %c2, C2, %X
+
+
+
+Name: Select:575
+%c = icmp sgt %X, -1
+%r = select %c, C1, C2
+  =>
+%s = ashr %X, width(%X)-1
+%a = and %s, C2-C1
+%r = add %a, C1
+
+
+Name: Select:575
+%c = icmp sgt %X, -1
+%r = select %c, C1, -1
+  =>
+%s = ashr %X, width(%X)-1
+%r = or %s, C1
+
+
+Name: Select:576
+%c = icmp slt %X, 0
+%r = select %c, C2, C1
+  =>
+%s = ashr %X, width(%X)-1
+%a = and %s, C2-C1
+%r = add %a, C1
+
+
+Name: Select:576
+%c = icmp slt %X, 0
+%r = select %c, -1, C1
+  =>
+%s = ashr %X, width(%X)-1
+%r = or %s, C1
+
+
+Name: Select:637
+%c = icmp eq %X, C
+%r = select %c, %X, %Y
+  =>
+%c = icmp eq %X, C
+%r = select %c, C, %Y
+
+
+Name: Select:641
+%c = icmp ne %X, C
+%r = select %c, %Y, %X
+  =>
+%c = icmp ne %X, C
+%r = select %c, %Y, C
+
+
+Name: Select:699
+; FIXME: need pattern recognition for max, min, abs templates
+%c = icmp uge %A, %B
+%umax = select %c, %A, %B
+%c2 = icmp uge %umax, %B
+%umax2 = select %c2, %umax, %B
+  =>
+%c = icmp uge %A, %B
+%umax2 = select %c, %A, %B
+
+
+Name: Select:700
+%c = icmp slt %A, %B
+%smin = select %c, %A, %B
+%c2 = icmp slt %smin, %B
+%smin2 = select %c2, %smin, %B
+  =>
+%c = icmp slt %A, %B
+%smin2 = select %c, %A, %B
+
+
+Name: Select:704
+%c = icmp slt %A, %B
+%smin = select %c, %A, %B
+%c2 = icmp sge %smin, %A
+%smax = select %c2, %smin, %A
+  =>
+%smax = %A
+
+
+Name: Select:705
+%c = icmp sge %A, %B
+%umax = select %c, %A, %B
+%c2 = icmp slt %umax, %A
+%umin = select %c2, %umax, %A
+  =>
+%umin = %A
+
+
+Name: Select:719
+Pre: C1 < C2
+%c = icmp slt %A, C1
+%smin = select %c, %A, C1
+%c2 = icmp slt %smin, C2
+%smin2 = select %c2, %smin, C2
+  =>
+%c = icmp slt %A, C1
+%smin2 = select %c, %A, C1
+
+
+Name: Select:720
+Pre: C1 u> C2
+%c = icmp uge %A, C1
+%umax = select %c, %A, C1
+%c2 = icmp uge %umax, C2
+%umax2 = select %c2, %umax, C2
+  =>
+%c = icmp uge %A, C1
+%umax2 = select %c, %A, C1
+
+
+Name: Select:727
+Pre: C1 > C2
+%c = icmp slt %A, C1
+%smin = select %c, %A, C1
+%c2 = icmp slt %smin, C2
+%smin2 = select %c2, %smin, C2
+  =>
+%c3 = icmp slt %A, C2
+%smin2 = select %c3, %A, C2
+
+
+Name: Select:728
+Pre: C1 u< C2
+%c = icmp uge %A, C1
+%umax = select %c, %A, C1
+%c2 = icmp uge %umax, C2
+%umax2 = select %c2, %umax, C2
+  =>
+%c3 = icmp uge %A, C2
+%umax2 = select %c3, %A, C2
+
+
+Name: Select:740
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = icmp sgt %abs, -1
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %abs, %minus2
+  =>
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c, %A, %minus
+
+
+Name: Select:741
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %minus, %A
+%c2 = icmp sgt %abs, -1
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %minus2, %abs
+  =>
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c, %minus, %A
+
+
+Name: Select:746
+%c = icmp slt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = icmp sgt %abs, 0
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %abs, %minus2
+  =>
+%c3 = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c3, %A, %minus
+
+
+Name: Select:747
+%c = icmp sgt %A, 0
+%minus = sub 0, %A
+%abs = select %c, %A, %minus
+%c2 = icmp slt %abs, 0
+%minus2 = sub 0, %abs
+%abs2 = select %c2, %abs, %minus2
+  =>
+%c3 = icmp slt %A, 0
+%minus = sub 0, %A
+%abs2 = select %c3, %A, %minus
+
+
+
+Name: Select:846
+%A = select %B, true, %C
+  =>
+%A = or %B, %C
+
+
+Name: Select:850
+%A = select %B, false, %C
+  =>
+%notb = xor %B, true
+%A = and %notb, %C
+
+
+Name: Select:855
+%A = select %B, %C, false
+  =>
+%A = and %B, %C
+
+
+Name: Select:859
+%A = select %B, %C, true
+  =>
+%notb = xor %B, true
+%A = or %notb, %C
+
+
+Name: Select:851
+%r = select %a, %b, %a
+  =>
+%r = and %a, %b
+
+Name: Select:852
+%r = select %a, %a, %b
+  =>
+%r = or %a, %b
+
+Name: Select:858
+%nota = xor %a, -1
+%r = select %a, %nota, %b
+  =>
+%nota = xor %a, -1
+%r = and %nota, %b
+
+Name: Select:859
+%nota = xor %a, -1
+%r = select %a, %b, %nota
+  =>
+%nota = xor %a, -1
+%r = or %nota, %b
+
+Name: Select:869
+%r = select C, 1, 0
+  =>
+%r = zext C
+
+Name: Select:873
+%r = select C, -1, 0
+  =>
+%r = sext C
+
+Name: Select:877
+%r = select %c, 0, 1
+  =>
+%notc = xor %c, -1
+%r = zext %notc
+
+Name: Select:883
+%r = select %c, 0, -1
+  =>
+%notc = xor %c, -1
+%r = sext %notc
+
+Name: Select:962
+; FIXME: valid for any binop
+%s1 = add %x, %y
+%s2 = add %x, %z
+%r = select %c, %s1, %s2
+  =>
+%yz = select %c, %y, %z
+%r = add %x, %yz
+
+Name: Select:967a
+%sum = add %x, %y
+%dif = sub %x, %y
+%r = select %c, %sum, %dif
+  =>
+%neg = sub 0, %y
+%sel = select %c, %y, %neg
+%r = add %x, %sel
+
+Name: Select:967b
+%sum = sub %x, %y
+%dif = add %x, %y
+%r = select %c, %sum, %dif
+  =>
+%neg = sub 0, %y
+%sel = select %c, %neg, %y
+%r = add %x, %sel
+
+
+Name: Select:1070
+%X = select %c, %W, %Z
+%r = select %c, %X, %Y
+  =>
+%r = select %c, %W, %Y
+
+
+Name: Select:1078
+%Y = select %c, %W, %Z
+%r = select %c, %X, %Y
+  =>
+%r = select %c, %X, %Z
+
+
+Name: Select:1087
+%c = xor %val, true
+%r = select %c, %X, %Y
+  =>
+%r = select %val, %Y, %X
+
+
+Name: Select:1100
+%r = select true, %X, %Y
+  =>
+%r = %X
+
+
+Name: Select:1105
+%r = select false, %X, %Y
+  =>
+%r = %Y
+Name: InstCombineShift: 46
+Pre: isPowerOf2(C)
+%Op1 = srem %A, C
+%r = shl %Op0, %Op1
+  =>
+%a = and %A, C-1
+%r = shl %Op0, %a
+
+
+Name: InstCombineShift: 46-2
+Pre: isPowerOf2(C)
+%Op1 = srem %A, C
+%r = ashr %Op0, %Op1
+  =>
+%a = and %A, C-1
+%r = ashr %Op0, %a
+
+
+Name: InstCombineShift: 46-3
+Pre: isPowerOf2(C)
+%Op1 = srem %A, C
+%r = lshr %Op0, %Op1
+  =>
+%a = and %A, C-1
+%r = lshr %Op0, %a
+
+
+Name: InstCombineShift: 239
+%Op0 = shl %X, C
+%r = lshr %Op0, C
+  =>
+%r = and %X, lshr(-1, C)
+
+
+Name: InstCombineShift: 252
+Pre: C1 > C2 && MaskedValueIsZero(%X, lshr(-1, (width(C2)-C2)) << (width(C1)-C1))
+%Op0 = shl %X, C1
+%r = lshr %Op0, C2
+  =>
+%r = shl %X, C1-C2
+
+
+
+Name: InstCombineShift: 279
+%Op0 = lshr %X, C
+%r = shl %Op0, C
+  =>
+%r = and %X, -1 << C
+
+Name: InstCombineShift: 292
+Pre: C1 > C2 && MaskedValueIsZero(%X, lshr(-1, (width(C2)-C2))<<(C1-C2))
+%Op0 = lshr i31 %X, C1
+%r = shl %Op0, C2
+  =>
+%r = lshr %X, C1-C2
+
+
+
+Name: InstCombineShift: 351
+%Op0 = mul %X, C1
+%r = shl %Op0, C2
+  =>
+%r = mul %X, C1 << C2
+
+
+
+Name: InstCombineShift: 422-1
+%Op1 = lshr %X, C
+%Op0 = add %Y, %Op1
+%r = shl %Op0, C
+  =>
+%s = shl %Y, C
+%a = add %s, %X
+%r = and %a, -1 << C
+
+
+Name: InstCombineShift: 422-2
+%Op1 = ashr %X, C
+%Op0 = add %Y, %Op1
+%r = shl %Op0, C
+  =>
+%s = shl %Y, C
+%a = add %s, %X
+%r = and %a, -1 << C
+
+
+Name: InstCombineShift: 440
+%s = lshr %X, C
+%Op1 = and %s, C2
+%Op0 = xor %Y, %Op1
+%r = shl %Op0, C
+  =>
+%a = and %X, C2 << C
+%y2 = shl %Y, C
+%r = xor %a, %y2
+
+
+Name: InstCombineShift: 458
+%s = ashr %X, C
+%Op0 = sub %s, %Y
+%r = shl %Op0, C
+  =>
+%s2 = shl %Y, C
+%a = sub %X, %s2
+%r = and %a, -1<<C
+
+
+Name: InstCombineShift: 476
+%shr = lshr %X, C
+%s = and %shr, C2
+%Op0 = or %s, %Y
+%r = shl %Op0, C
+  =>
+%s2 = shl %Y, C
+%a = and %X, C2<<C
+%r = or %a, %s2
+
+
+
+Name: InstCombineShift: 497
+; FIXME: missing cases
+%Op0 = xor %X, C2
+%r = lshr %Op0, C
+  =>
+%s2 = lshr %X, C
+%r = xor %s2, lshr(C2, C)
+
+
+Name: InstCombineShift: 497
+Pre: lshr(C2, (width(C)-1)) == 0
+%Op0 = xor %X, C2
+%r = ashr %Op0, C
+  =>
+%s2 = ashr %X, C
+%r = xor %s2, C2 >> C
+
+
+Name: InstCombineShift: 497
+Pre: lshr(C2, width(C)-1) == 1
+%Op0 = and %X, C2
+%r = ashr %Op0, C
+  =>
+%s2 = ashr %X, C
+%r = and %s2, C2 >> C
+
+
+Name: InstCombineShift: 497
+%Op0 = add %X, C2
+%r = shl %Op0, C
+  =>
+%s2 = shl %X, C
+%r = add %s2, C2 << C
+
+
+Name: InstCombineShift: 582
+%Op0 = shl %X, C
+%r = lshr %Op0, C
+  =>
+%r = and %X, lshr(-1, C)
+
+
+Name: InstCombineShift: 592-ashr-nsw
+Pre: C1 < C2
+%Op0 = ashr exact %X, C1
+%r = shl nsw %Op0, C2
+  =>
+%r = shl nsw %X, C2-C1
+
+Name: InstCombineShift: 592-ashr-nuw
+Pre: C1 < C2
+%Op0 = ashr exact %X, C1
+%r = shl nuw %Op0, C2
+  =>
+%r = shl nuw %X, C2-C1
+
+
+Name: InstCombineShift: 592-ashr
+Pre: C1 < C2
+%Op0 = ashr exact %X, C1
+%r = shl %Op0, C2
+  =>
+%r = shl %X, C2-C1
+
+
+Name: InstCombineShift: 592-lshr-nsw
+Pre: C1 < C2
+%Op0 = lshr exact %X, C1
+%r = shl nsw %Op0, C2
+  =>
+%r = shl nsw %X, C2-C1
+
+
+Name: InstCombineShift: 592-lshr-nuw
+Pre: C1 < C2
+%Op0 = lshr exact %X, C1
+%r = shl nuw %Op0, C2
+  =>
+%r = shl nuw %X, C2-C1
+
+Name: InstCombineShift: 592-lshr
+Pre: C1 < C2
+%Op0 = lshr exact %X, C1
+%r = shl %Op0, C2
+  =>
+%r = shl %X, C2-C1
+
+
+
+
+Name: InstCombineShift: 612-exact
+Pre: C1 < C2
+%Op0 = shl nuw %X, C1
+%r =  lshr exact %Op0, C2
+  =>
+%r = lshr exact %X, C2-C1
+
+Name: InstCombineShift: 612
+Pre: C1 < C2
+%Op0 = shl nuw %X, C1
+%r =  lshr %Op0, C2
+  =>
+%r = lshr %X, C2-C1
+
+
+
+Name: InstCombineShift: 622
+Pre: C1 < C2
+%Op0 = shl %X, C1
+%r =  lshr %Op0, C2
+  =>
+%s = lshr %X, C2-C1
+%r = and %s, lshr(-1, C2)
+
+
+
+Name: InstCombineShift: 628-exact
+Pre: C1 < C2
+%Op0 = shl nsw %X, C1
+%r = ashr exact %Op0, C2
+  =>
+%r = ashr exact %X, C2-C1
+
+
+Name: InstCombineShift: 628
+Pre: C1 < C2
+%Op0 = shl nsw %X, C1
+%r = ashr %Op0, C2
+  =>
+%r = ashr %X, C2-C1
+
+
+
+Name: InstCombineShift: 646-exact
+Pre: C1 > C2
+%Op0 = ashr exact %X, C1
+%r = shl %Op0, C2
+  =>
+%r = ashr exact %X, C1-C2
+
+
+Name: InstCombineShift: 646
+Pre: C1 > C2
+%Op0 = lshr exact %X, C1
+%r = shl %Op0, C2
+  =>
+%r = lshr exact %X, C1-C2
+
+
+
+Name: InstCombineShift: 661
+Pre: C1 > C2
+%Op0 = shl nuw %X, C1
+%r = lshr %Op0, C2
+  =>
+%r = shl nuw %X, C1-C2
+
+
+
+Name: InstCombineShift: 670
+Pre: C1 > C2
+%Op0 = shl %X, C1
+%r = lshr %Op0, C2
+  =>
+%s = shl %X, C1-C2
+%r = and %s, lshr(-1, C2)
+
+
+Name: InstCombineShift: 676
+Pre: C1 > C2
+%Op0 = shl nsw %X, C1
+%r = ashr %Op0, C2
+  =>
+%r = shl nsw %X, C1-C2
+
+
+Name: InstCombineShift: 708
+Pre: MaskedValueIsZero(%Op0, -1<<(width(C)-C))
+%r = shl %Op0, C
+  =>
+%r = shl nuw %Op0, C
+
+
+Name: InstCombineShift: 724
+%Op0 = shl C1, %A
+%r = shl %Op0, C2
+  =>
+%r = shl C1<<C2, %A
+
+
+Name: InstCombineShift: 767
+Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
+%r = lshr %Op0, C
+  =>
+%r = lshr exact %Op0, C
+
+
+Name: InstCombineShift: 807
+Pre: C == width(%X)-width(%x)
+%X = zext %x
+%Op0 = shl %X, C
+%r = ashr %Op0, C
+  =>
+%r = sext %x
+
+
+Name: InstCombineShift: 812
+Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
+%r = ashr %Op0, C
+  =>
+%r = ashr exact %Op0, C
+
+
+Name: InstCombineShift: 821
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%r)-1))
+%r = ashr %Op0, %Op1
+  =>
+%r = lshr %Op0, %Op1
