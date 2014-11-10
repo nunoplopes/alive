@@ -1773,13 +1773,14 @@ Name: AndOrXor:2417
 %r = and %nx, %ny
 
 
-Name: AndOrXor:2429
-%op0 = and %x, %y
-%r = xor %op0, -1
-  =>
-%nx = xor %x, -1
-%ny = xor %y, -1
-%r = or %nx, %ny
+; ; undoes AndOrXor:2247
+; ame: AndOrXor:2429
+; %op0 = and %x, %y
+; %r = xor %op0, -1
+;   =>
+; %nx = xor %x, -1
+; %ny = xor %y, -1
+; %r = or %nx, %ny
 
 
 Name: AndOrXor:2430
@@ -3000,11 +3001,11 @@ Pre: C1 > C2
 %r = shl nsw %X, C1-C2
 
 
-Name: InstCombineShift: 708
-Pre: MaskedValueIsZero(%Op0, -1<<(width(C)-C))
-%r = shl %Op0, C
-  =>
-%r = shl nuw %Op0, C
+; ame: InstCombineShift: 708
+; Pre: MaskedValueIsZero(%Op0, -1<<(width(C)-C))
+; %r = shl %Op0, C
+;   =>
+; %r = shl nuw %Op0, C
 
 
 Name: InstCombineShift: 724
