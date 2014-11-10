@@ -7,6 +7,7 @@ from itertools import combinations
 
 HAS_SPECIFIC_INT = False
 DO_STATS = True
+LIMITER = False
 
 class GenContext(object):
   def __init__(self):
@@ -255,6 +256,9 @@ for n,p,s,t,us,ut in opts:
   if not isinstance(p, TruePred):
     matches.append(p.getPatternMatch())
 
+  # prevent infinite loops (for debugging)
+  if DO_STATS and LIMITER:
+    matches.append(CBinExpr('<', CVariable('Rule' + str(rule)), CVariable('10000')))
 
   gen = []
   if DO_STATS:
