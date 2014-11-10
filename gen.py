@@ -229,7 +229,7 @@ for n,p,s,t,us,ut in opts:
         #       explicit type that isn't used anywhere else (eg. zext i4 0)
 
       m = CBinExpr('==',
-        CVariable(rep).arr('getType', []).arr('getPrimitiveSizeInBits', []),
+        CVariable(rep).arr('getType', []).arr('getScalarSizeInBits', []),
         CVariable(str(sz)))
       matches.append(m)
 
