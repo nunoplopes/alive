@@ -484,7 +484,8 @@ Name: AddSub:1667
 
 
 Name: AndOrXor:144
-Pre: C1&C2 != C1  -- only for profitability
+Pre: C1&C2 != C1
+; -- only for profitability
 %op = or %X, C1
 %r = and %op, C2
   =>
@@ -493,7 +494,8 @@ Pre: C1&C2 != C1  -- only for profitability
 
 
 Name: AndOrXor:151
-Pre: (C1 & C2) == C1 && (C1 & C2) != 0  -- only for profitability
+Pre: (C1 & C2) == C1 && (C1 & C2) != 0
+; -- only for profitability
 %op = or %X, C1
 %r = and %op, C2
   =>
@@ -546,7 +548,8 @@ Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
 
 
 Name: AndOrXor:230
-Pre: C2 & lshr(-1, C1) != lshr(-1, C1) && C2 & lshr(-1, C1) != C2 -- profitability only
+Pre: C2 & lshr(-1, C1) != lshr(-1, C1) && C2 & lshr(-1, C1) != C2 
+; -- profitability only
 %op = lshr %X, C1
 %r = and %op, C2
   =>
