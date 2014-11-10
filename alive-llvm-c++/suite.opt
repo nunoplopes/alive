@@ -1253,6 +1253,7 @@ Name: AndOrXor:1705
 
 
 Name: AndOrXor:1733
+; FIXME: need to ensure %A and %B are integers
 %cmp1 = icmp ne %A, 0
 %cmp2 = icmp ne %B, 0
 %r = or %cmp1, %cmp2
@@ -1783,13 +1784,14 @@ Name: AndOrXor:2417
 ; %r = or %nx, %ny
 
 
-Name: AndOrXor:2430
-%op0 = or %x, %y
-%r = xor %op0, -1
-  =>
-%nx = xor %x, -1
-%ny = xor %y, -1
-%r = and %nx, %ny
+; ; undoes AndOrXor:1230
+; ame: AndOrXor:2430
+; %op0 = or %x, %y
+; %r = xor %op0, -1
+;   =>
+; %nx = xor %x, -1
+; %ny = xor %y, -1
+; %r = and %nx, %ny
 
 
 Name: AndOrXor:2443
