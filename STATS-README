@@ -1,0 +1,10 @@
+
+
+(1) Run the AliveStatsCollect.py program in the test-suite directory after test-suite has been run.
+
+
+python AliveStatsCollect.py
+
+
+(2) It will create a latext table entries in a file called results.txt
+
