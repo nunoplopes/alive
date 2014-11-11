@@ -94,8 +94,12 @@ class State:
 
 ################################
 class Instr(Value):
-  def toConstruct(self):
-    return [CDefinition(CVariable('Value'), CVariable(self.getCName()), self.toInstruction(), True)]
+  def toConstruct(self, is_root = False):
+    if is_root:
+      return [CDefinition(CVariable('Instruction'), CVariable(self.getCName()), self.toInstruction(), True)]
+    else:
+      return [CDefinition(CVariable('Instruction'), CVariable(self.getCName()),
+                CVariable('Builder').arr('Insert', [self.toInstruction()]), True)]
 
 
 ################################
@@ -318,11 +322,15 @@ class BinOp(Instr):
     Xor:  'Xor',
   }
 
-  def toConstruct(self):
-    gen = [CDefinition(CVariable('BinaryOperator'), CVariable(self.getCName()),
-      CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
-        self.v1.toOperand(), self.v2.toOperand(), CVariable('""'), CVariable('I')),
-      True)]
+  def toConstruct(self, is_root = False):
+    cons = CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
+        self.v1.toOperand(), self.v2.toOperand())
+
+    if is_root:
+      gen = [CDefinition(CVariable('BinaryOperator'), CVariable(self.getCName()), cons, True)]
+    else:
+      gen = [CDefinition(CVariable('BinaryOperator'), CVariable(self.getCName()), 
+        CVariable('Builder').arr('Insert', [cons]), True)]
 
     for f in self.flags:
       setter = {'nsw': 'setHasNoSignedWrap', 'nuw': 'setHasNoUnsignedWrap', 'exact': 'setIsExact'}[f]
@@ -462,9 +470,7 @@ class ConversionOp(Instr):
   def toInstruction(self):
     return CFunctionCall('new ' + self.constr[self.op],
       self.v.toOperand(),
-      self.toCType(),
-      CVariable('""'),
-      CVariable('I'))
+      self.toCType())
 
   def setRepresentative(self, manager):
     self._manager = manager
@@ -615,11 +621,9 @@ class Icmp(Instr):
       opname = Icmp.op_enum[self.op]
 
     return CFunctionCall('new ICmpInst',
-      CVariable('I'),
       CVariable(opname),
       self.v1.toOperand(),
-      self.v2.toOperand(),
-      CVariable('""'))
+      self.v2.toOperand())
 
 ################################
 class Select(Instr):
@@ -670,9 +674,7 @@ class Select(Instr):
     return CFunctionCall('SelectInst::Create',
       self.c.toOperand(),
       self.v1.toOperand(),
-      self.v2.toOperand(),
-      CVariable('""'),
-      CVariable('I'))
+      self.v2.toOperand())
 
 ################################
 class Alloca(Instr):

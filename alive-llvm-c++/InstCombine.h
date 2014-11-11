@@ -237,7 +237,7 @@ private:
   Instruction *scalarizePHI(ExtractElementInst &EI, PHINode *PN);
   Value *EvaluateInDifferentElementOrder(Value *V, ArrayRef<int> Mask);
   
-  bool runOnInstruction(Instruction *I);
+  Instruction *runOnInstruction(Instruction *I);
 
 public:
   // InsertNewInstBefore - insert an instruction New before instruction Old

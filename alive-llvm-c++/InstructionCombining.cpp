@@ -2424,7 +2424,7 @@ bool InstCombiner::DoOneIteration(Function &F, unsigned Iteration) {
     DEBUG(raw_string_ostream SS(OrigI); I->print(SS); OrigI = SS.str(););
     DEBUG(dbgs() << "IC: Visiting: " << OrigI << '\n');
 
-    if (Instruction *Result = visit(*I)) {
+    if (Instruction *Result = runOnInstruction(I)) {
       ++NumCombined;
       // Should we replace the old instruction with a new one?
       if (Result != I) {
@@ -2520,73 +2520,43 @@ bool isExact(Value *I) {
 }
 
 
-STATISTIC(NumXforms, "total rules fired");
 // ----------------------------
 // Insert InstCombiner::runOnInstruction here
 // ----------------------------
 
 
 
-bool InstCombiner::runOnFunction(Function &F){
+bool InstCombiner::runOnFunction(Function &F) {
+  TD = getAnalysisIfAvailable<DataLayout>();
+  TLI = &getAnalysis<TargetLibraryInfo>();
+  // Minimizing size?
+  MinimizeSize = F.getAttributes().hasAttribute(AttributeSet::FunctionIndex,
+                                                Attribute::MinSize);
+
+  /// Builder - This is an IRBuilder that automatically inserts new
+  /// instructions into the worklist when they are created.
+  IRBuilder<true, TargetFolder, InstCombineIRInserter>
+    TheBuilder(F.getContext(), TargetFolder(TD),
+               InstCombineIRInserter(Worklist));
+  Builder = &TheBuilder;
+
+  InstCombinerLibCallSimplifier TheSimplifier(TD, TLI, this);
+  Simplifier = &TheSimplifier;
+
   bool EverMadeChange = false;
-  
-  if(F.isDeclaration())
-    return false;
 
-  for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
-    SmallPtrSet<Instruction*,10> seen;
-    bool more = true;
-    while (more) {
-      more = false;
+  // Lower dbg.declare intrinsics otherwise their value may be clobbered
+  // by instcombiner.
+  EverMadeChange = LowerDbgDeclare(F);
 
-      for (BasicBlock::iterator BBI = BB->begin(), BBE = BB->end(); BBI != BBE; ) {
-        Instruction *I = BBI++;
-        bool newI = seen.insert((Instruction*) I);
-        if (newI && runOnInstruction(I)) {
-          ++NumXforms;
-          more = true;
-          EverMadeChange = true;
-          break;
-        }
-      }
-    }
-  }
-  
+  // Iterate while there is work to do.
+  unsigned Iteration = 0;
+  while (DoOneIteration(F, Iteration++))
+    EverMadeChange = true;
+
+  Builder = 0;
   return EverMadeChange;
 }
-
-
-// bool InstCombiner::runOnFunction(Function &F) {
-//   TD = getAnalysisIfAvailable<DataLayout>();
-//   TLI = &getAnalysis<TargetLibraryInfo>();
-//   // Minimizing size?
-//   MinimizeSize = F.getAttributes().hasAttribute(AttributeSet::FunctionIndex,
-//                                                 Attribute::MinSize);
-// 
-//   /// Builder - This is an IRBuilder that automatically inserts new
-//   /// instructions into the worklist when they are created.
-//   IRBuilder<true, TargetFolder, InstCombineIRInserter>
-//     TheBuilder(F.getContext(), TargetFolder(TD),
-//                InstCombineIRInserter(Worklist));
-//   Builder = &TheBuilder;
-// 
-//   InstCombinerLibCallSimplifier TheSimplifier(TD, TLI, this);
-//   Simplifier = &TheSimplifier;
-// 
-//   bool EverMadeChange = false;
-// 
-//   // Lower dbg.declare intrinsics otherwise their value may be clobbered
-//   // by instcombiner.
-//   EverMadeChange = LowerDbgDeclare(F);
-// 
-//   // Iterate while there is work to do.
-//   unsigned Iteration = 0;
-//   while (DoOneIteration(F, Iteration++))
-//     EverMadeChange = true;
-// 
-//   Builder = 0;
-//   return EverMadeChange;
-// }
 
 FunctionPass *llvm::createInstructionCombiningPass() {
   return new InstCombiner();

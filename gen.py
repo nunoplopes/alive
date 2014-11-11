@@ -194,6 +194,12 @@ def generate_optimization(rule, opt, out):
   p.setRepresentative(unifier)
   disjoint = unifier.all_reps()
 
+  # FIXME: hack to avoid matching pointers
+  for r in disjoint:
+    if r in unifier.preferred:
+      matches.append(CUnaryExpr('!', 
+        CFunctionCall('isa<PointerType>', CVariable(r).arr('getType', []))))
+
   unifier.in_source = False
 
   # now add type equalities implied by the target
@@ -257,11 +263,21 @@ def generate_optimization(rule, opt, out):
 
   for (k,v) in t.iteritems():
     if isinstance(v, Instr) and not k in s:
-      gen.extend(v.toConstruct())
+      if isinstance(v, CopyOperand):
+        gen.append(CDefinition(CVariable('Value'), 
+          CVariable(self.getCName()), self.toInstruction(), True))
+      else:
+        gen.extend(v.toConstruct())
+        #gen.append(CVariable('Worklist').dot('Add', [v.toOperand()]))
+
   new_root = t[root_name]
-  gen.extend(new_root.toConstruct())
-  gen.append(CVariable('I').arr('replaceAllUsesWith', [new_root.toOperand()]))
-  gen.append(CReturn(CVariable('true')))
+  if isinstance(new_root, CopyOperand):
+    gen.append(CDefinition(CVariable('Instruction'),
+      new_root.toOperand(),
+      CFunctionCall('ReplaceInstUsesWith', CVariable('*I'), new_root.toInstruction()), True))
+  else:
+    gen.extend(new_root.toConstruct(is_root = True))
+  gen.append(CReturn(new_root.toOperand()))
 
   
   cond = CIf(CBinExpr.reduce('&&', matches), gen)
@@ -282,14 +298,14 @@ def generate_suite(opts, out):
       #FIXME: sanitize name
       out.write('STATISTIC(Rule{0}, "{0}. {1}");\n'.format(rule, n))
 
-  out.write('\nbool runOnInstruction(Instruction* I) {\n')
+  out.write('\nInstruction *InstCombiner::runOnInstruction(Instruction *I) {\n')
 
   for rule, opt in opts:
     generate_optimization(rule, opt, out)
 
   out.write('''
 
-  return false;
+  return nullptr;
 }
 ''')
 
