@@ -75,7 +75,7 @@ class ConstantVal(Constant):
     # FIXME: ensure value is integral
 
     return CFunctionCall('APInt',
-      self.toCType().arr('getPrimitiveSizeInBits', []),
+      self.toCType().arr('getScalarSizeInBits', []),
       CVariable(self.val))
 
   def toAPIntOrLit(self):
@@ -317,21 +317,21 @@ class CnstFunction(Constant):
       return self.args[0].toAPInt().dot('lshr', [self.args[1].toAPIntOrLit()])
 
     if self.op == self.trunc:
-      return self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getPrimitiveSizeInBits',[])])
+      return self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getScalarSizeInBits',[])])
 
     if self.op == self.umax:
       return CFunctionCall('APIntOps::umax', *(arg.toAPInt() for arg in self.args))
 
     if self.op == self.width:
       return CFunctionCall('APInt',
-        self.toCType().arr('getPrimitiveSizeInBits', []),
-        self.args[0].toCType().arr('getPrimitiveSizeInBits', []))
+        self.toCType().arr('getScalarSizeInBits', []),
+        self.args[0].toCType().arr('getScalarSizeInBits', []))
 
     raise AliveError(self.opnames[self.op] + ' not implemented')
 
   def toAPIntOrLit(self):
     if self.op == self.width:
-      return self.args[0].toCType().arr('getPrimitiveSizeInBits',[])
+      return self.args[0].toCType().arr('getScalarSizeInBits',[])
 
     return self.toAPInt()
 

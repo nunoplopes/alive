@@ -312,11 +312,11 @@ Name: AddSub:1309
 
 
 
-Name: AddSub:1334
-Pre: WillNotOverflowSignedAdd(%lhs, %rhs)
-%r = add %lhs, %rhs
-  =>
-%r = add nsw %lhs, %rhs
+; ame: AddSub:1334
+; Pre: WillNotOverflowSignedAdd(%lhs, %rhs)
+; %r = add %lhs, %rhs
+;   =>
+; %r = add nsw %lhs, %rhs
 
 
 ; TODO: GEP stuff
@@ -484,7 +484,8 @@ Name: AddSub:1667
 
 
 Name: AndOrXor:144
-;Pre: C1&C2 != C1  -- only for profitability
+Pre: C1&C2 != C1
+; -- only for profitability
 %op = or %X, C1
 %r = and %op, C2
   =>
@@ -493,8 +494,8 @@ Name: AndOrXor:144
 
 
 Name: AndOrXor:151
-Pre: (C1 & C2) == C1
-; && (C1 & C2) != 0  -- only for profitability
+Pre: (C1 & C2) == C1 && (C1 & C2) != 0
+; -- only for profitability
 %op = or %X, C1
 %r = and %op, C2
   =>
@@ -547,8 +548,8 @@ Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
 
 
 Name: AndOrXor:230
-Pre: C2 & lshr(-1, C1) != lshr(-1, C1)
-; && C2 & lshr(-1, C1) != C2 -- profitability only
+Pre: C2 & lshr(-1, C1) != lshr(-1, C1) && C2 & lshr(-1, C1) != C2 
+; -- profitability only
 %op = lshr %X, C1
 %r = and %op, C2
   =>
@@ -1252,6 +1253,7 @@ Name: AndOrXor:1705
 
 
 Name: AndOrXor:1733
+; FIXME: need to ensure %A and %B are integers
 %cmp1 = icmp ne %A, 0
 %cmp2 = icmp ne %B, 0
 %r = or %cmp1, %cmp2
@@ -1772,22 +1774,24 @@ Name: AndOrXor:2417
 %r = and %nx, %ny
 
 
-Name: AndOrXor:2429
-%op0 = and %x, %y
-%r = xor %op0, -1
-  =>
-%nx = xor %x, -1
-%ny = xor %y, -1
-%r = or %nx, %ny
+; ; undoes AndOrXor:2247
+; ame: AndOrXor:2429
+; %op0 = and %x, %y
+; %r = xor %op0, -1
+;   =>
+; %nx = xor %x, -1
+; %ny = xor %y, -1
+; %r = or %nx, %ny
 
 
-Name: AndOrXor:2430
-%op0 = or %x, %y
-%r = xor %op0, -1
-  =>
-%nx = xor %x, -1
-%ny = xor %y, -1
-%r = and %nx, %ny
+; ; undoes AndOrXor:1230
+; ame: AndOrXor:2430
+; %op0 = or %x, %y
+; %r = xor %op0, -1
+;   =>
+; %nx = xor %x, -1
+; %ny = xor %y, -1
+; %r = and %nx, %ny
 
 
 Name: AndOrXor:2443
@@ -2999,11 +3003,11 @@ Pre: C1 > C2
 %r = shl nsw %X, C1-C2
 
 
-Name: InstCombineShift: 708
-Pre: MaskedValueIsZero(%Op0, -1<<(width(C)-C))
-%r = shl %Op0, C
-  =>
-%r = shl nuw %Op0, C
+; ame: InstCombineShift: 708
+; Pre: MaskedValueIsZero(%Op0, -1<<(width(C)-C))
+; %r = shl %Op0, C
+;   =>
+; %r = shl nuw %Op0, C
 
 
 Name: InstCombineShift: 724
@@ -3013,11 +3017,11 @@ Name: InstCombineShift: 724
 %r = shl C1<<C2, %A
 
 
-Name: InstCombineShift: 767
-Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
-%r = lshr %Op0, C
-  =>
-%r = lshr exact %Op0, C
+; ame: InstCombineShift: 767
+; Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
+; %r = lshr %Op0, C
+;   =>
+; %r = lshr exact %Op0, C
 
 
 Name: InstCombineShift: 807
@@ -3029,11 +3033,11 @@ Pre: C == width(%X)-width(%x)
 %r = sext %x
 
 
-Name: InstCombineShift: 812
-Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
-%r = ashr %Op0, C
-  =>
-%r = ashr exact %Op0, C
+; ame: InstCombineShift: 812
+; Pre: MaskedValueIsZero(%Op0, (1<<C)-1)
+; %r = ashr %Op0, C
+;   =>
+; %r = ashr exact %Op0, C
 
 
 Name: InstCombineShift: 821
