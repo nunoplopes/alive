@@ -9,9 +9,8 @@ WARNING: This tool is not complete and its results should not be relied upon.
 
 Requirements
 ------------
-Alive requires Z3Py, which can be obtained from http://z3.codeplex.com
-You should use the 'unstable' branch of Z3, with a checkout at least as recent
-as 25/Jun/2014 (7158e814d1dc22eabaace0f8da6f8950e9bca1d9).
+Alive requires Python 2.7.x and Z3 4.3.2 (or later), which can be obtained
+from http://z3.codeplex.com
 
 
 Generating Benchmarks
