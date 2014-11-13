@@ -298,7 +298,13 @@ def generate_suite(opts, out):
       #FIXME: sanitize name
       out.write('STATISTIC(Rule{0}, "{0}. {1}");\n'.format(rule, n))
 
-  out.write('\nInstruction *InstCombiner::runOnInstruction(Instruction *I) {\n')
+  out.write('''Instruction *InstCombiner::runOnInstruction(Instruction *I) {
+
+  if (Value *V = SimplifyInstruction(I, TD)) {
+    return ReplaceInstUsesWith(*I, V);
+  }
+''')
+
 
   for rule, opt in opts:
     generate_optimization(rule, opt, out)
