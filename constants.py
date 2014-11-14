@@ -225,17 +225,26 @@ class CnstBinaryOp(Constant):
     return Constant.toOperand(self)
 
   def toAPInt(self):
-    if self.op == self.AShr:
-      return self.v1.toAPInt().dot('ashr', [self.v2.toAPIntOrLit()])
-    if self.op == self.Div:
-      return self.v1.toAPInt().dot('sdiv', [self.v2.toAPInt()])
-    if self.op == self.Rem:
-      return self.v1.toAPInt().dot('srem', [self.v2.toAPInt()])
+    op = {
+      CnstBinaryOp.And:  lambda a,b: CBinExpr('&', a, b),
+      CnstBinaryOp.Or:   lambda a,b: CBinExpr('|', a, b),
+      CnstBinaryOp.Xor:  lambda a,b: CBinExpr('^', a, b),
+      CnstBinaryOp.Add:  lambda a,b: CBinExpr('+', a, b),
+      CnstBinaryOp.Sub:  lambda a,b: CBinExpr('-', a, b),
+      CnstBinaryOp.Mul:  lambda a,b: CBinExpr('*', a, b),
+      CnstBinaryOp.Div:  lambda a,b: a.dot('sdiv', [b]),
+      CnstBinaryOp.DivU: lambda a,b: a.dot('udiv', [b]),
+      CnstBinaryOp.Rem:  lambda a,b: a.dot('srem', [b]),
+      CnstBinaryOp.RemU: lambda a,b: a.dot('urem', [b]),
+      CnstBinaryOp.AShr: lambda a,b: a.dot('ashr', [b]),
+      CnstBinaryOp.LShr: lambda a,b: a.dot('lshr', [b]),
+      CnstBinaryOp.Shl:  lambda a,b: CBinExpr('<<', a,  b),
+    }[self.op]
 
-    if self.op in {self.Add, self.Sub, self.Shl}:
-      return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPIntOrLit())
+    if self.op in {CnstBinaryOp.Add, CnstBinaryOp.Sub, CnstBinaryOp.AShr, CnstBinaryOp.LShr, CnstBinaryOp.Shl}:
+      return op(self.v1.toAPInt(), self.v2.toAPIntOrLit())
 
-    return CBinExpr(self.opnames[self.op], self.v1.toAPInt(), self.v2.toAPInt())
+    return op(self.v1.toAPInt(), self.v2.toAPInt())
 
   def setRepresentative(self, manager):
     self._manager = manager

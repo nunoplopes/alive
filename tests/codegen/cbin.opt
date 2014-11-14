@@ -1,0 +1,65 @@
+Name: constant fold add
+%x = add C1, C2
+=>
+%x = C1+C2
+
+Name: constant fold sub
+%x = sub C1, C2
+=>
+%x = C1-C2
+
+Name: constant fold mul
+%x = mul C1, C2
+=>
+%x = C1*C2
+
+Name: constant fold sdiv
+%x = sdiv C1, C2
+=>
+%x = C1/C2
+
+Name: constant fold srem
+%x = srem C1, C2
+=>
+%x = C1 % C2
+
+Name: constant fold udiv
+%x = udiv C1, C2
+=>
+%x = C1 /u C2
+
+Name: constant fold urem
+%x = urem C1, C2
+=>
+%x = C1 %u C2
+
+
+Name: constant fold shl
+%x = shl C1, C2
+=>
+%x = C1 << C2
+
+Name: constant fold ashr
+%x = ashr C1, C2
+=>
+%x = C1 >> C2
+
+Name: constant fold lshr
+%x = lshr C1, C2
+=>
+%x = C1 u>> C2
+
+Name: constant fold and
+%x = and C1, C2
+=>
+%x = C1 & C2
+
+Name: constant fold or
+%x = or C1, C2
+=>
+%x = C1 | C2
+
+Name: constant fold xor
+%x = xor C1, C2
+=>
+%x = C1 ^ C2
