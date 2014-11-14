@@ -29,22 +29,22 @@ Name: constant fold ashr
 %x = C1 >> C2
 
 Name: constant fold lshr
-%x = shl C1, C2
+%x = lshr C1, C2
 =>
 %x = lshr(C1, C2)
 
 Name: constant fold and
-%x = shl C1, C2
+%x = and C1, C2
 =>
 %x = C1 & C2
 
 Name: constant fold or
-%x = shl C1, C2
+%x = or C1, C2
 =>
 %x = C1 | C2
 
 Name: constant fold xor
-%x = shl C1, C2
+%x = xor C1, C2
 =>
 %x = C1 ^ C2
 
