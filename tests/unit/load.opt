@@ -6,12 +6,13 @@ Name: load null
 
 
 Name: uninit read
-%p = alloca i32, 5
+; FIXME: slow
+%p = alloca i9, 5
 store 3, %p
 %ptr = getelementptr %p, i64 1
-%val = load i32* %ptr
+%val = load i9* %ptr
   =>
-%p = alloca i32, 5
+%p = alloca i9, 5
 store 3, %p
 %val = undef
 

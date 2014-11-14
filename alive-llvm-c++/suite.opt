@@ -548,7 +548,7 @@ Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
 
 
 Name: AndOrXor:230
-Pre: C2 & lshr(-1, C1) != lshr(-1, C1) && C2 & lshr(-1, C1) != C2 
+Pre: (C2 & lshr(-1, C1) != lshr(-1, C1)) && C2 & lshr(-1, C1) != C2
 ; -- profitability only
 %op = lshr %X, C1
 %r = and %op, C2
@@ -1244,6 +1244,7 @@ Name: AndOrXor:1704
 
 
 Name: AndOrXor:1705
+; FIXME: need to ensure %B is an integer
 %cmp1 = icmp eq %B, 0
 %cmp2 = icmp ugt %B, %A
 %r = or %cmp1, %cmp2

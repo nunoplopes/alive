@@ -42,29 +42,46 @@ class State:
     self.vars = collections.OrderedDict()
     self.defined = [] # definedness so far in the BB
     self.ptrs = []
+    self.bb_pres = {}
 
   def add(self, v, smt, defined, poison, qvars):
     if v.getUniqueName() == '':
       return
-    self.defined = self.defined + defined
-    self.vars[v.getUniqueName()] = (smt, self.defined, poison, qvars)
+    self.vars[v.getUniqueName()] = (smt, self.defined + defined, poison, qvars)
+    if isinstance(v, TerminatorInst):
+      for (bb,cond) in v.getSuccessors(self):
+        bb = bb[1:]
+        if bb not in self.bb_pres:
+          self.bb_pres[bb] = []
+        self.bb_pres[bb] += [cond]
 
   def addAlloca(self, ptr, mem, info):
-    self.ptrs += [(ptr, mem, info)]
+    self.ptrs += [(ptr, mem, [mem], info)]
+
+  def addInputMem(self, ptr, mem, info):
+    self.ptrs += [(ptr, mem, [], info)]
+
+  def newBB(self, name):
+    if name in self.bb_pres:
+      self.defined = [mk_or(self.bb_pres[name])]
+    else:
+      self.defined = []
+    self.current_bb = name
 
   def getAllocaConstraints(self):
-    ptrs = [ptr for (ptr, mem, info) in self.ptrs]
-    return mk_distinct(ptrs)
+    ptrs = [ptr for (ptr, mem, qvars, info) in self.ptrs]
+    return [mk_distinct(ptrs)]
 
-  def eval(self, v, poison, qvars):
+  def eval(self, v, defined, poison, qvars):
     (smt, d, p, q) = self.vars[v.getUniqueName()]
+    defined += d
     poison += p
     qvars += q
     return smt
 
   def iteritems(self):
     for k,v in self.vars.iteritems():
-      if k[0] != '%' and k[0] != 'C':
+      if k[0] != '%' and k[0] != 'C' and not k.startswith('ret_'):
         continue
       yield k,v
 
@@ -95,8 +112,8 @@ class CopyOperand(Instr):
       t += ' '
     return t + self.v.getName()
 
-  def toSMT(self, poison, state, qvars):
-    return [], state.eval(self.v, poison, qvars)
+  def toSMT(self, defined, poison, state, qvars):
+    return state.eval(self.v, defined, poison, qvars)
 
   def getTypeConstraints(self):
     return And(self.type == self.v.type,
@@ -197,10 +214,8 @@ class BinOp(Instr):
       self.Sub: {'nsw': lambda a,b: SignExt(1,a)-SignExt(1,b) == SignExt(1,a-b),
                  'nuw': lambda a,b: ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1,a-b),
                 },
-      self.Mul: {'nsw': lambda a,b: SignExt(bits, a) * SignExt(bits, b) ==
-                                    SignExt(bits, a * b),
-                 'nuw': lambda a,b: ZeroExt(bits, a) * ZeroExt(bits, b) ==
-                                    ZeroExt(bits, a * b),
+      self.Mul: {'nsw': lambda a,b: no_overflow_smul(a, b),
+                 'nuw': lambda a,b: no_overflow_umul(a, b),
                 },
       self.UDiv:{'exact': lambda a,b: UDiv(a, b) * b == a,
                 },
@@ -220,8 +235,13 @@ class BinOp(Instr):
       self.Xor: {},
     }[self.op]
 
-    for f in self.flags:
-      poison += [poison_conds[f](v1, v2)]
+    if do_infer_flags():
+      for flag,fn in poison_conds.iteritems():
+        bit = get_flag_var(flag, self.getName())
+        poison += [Implies(bit == 1, fn(v1, v2))]
+    else:
+      for f in self.flags:
+        poison += [poison_conds[f](v1, v2)]
 
     # definedness of the instruction
     return {
@@ -240,11 +260,11 @@ class BinOp(Instr):
       self.Xor:  lambda a,b: [],
       }[self.op](v1,v2)
 
-  def toSMT(self, poison, state, qvars):
-    v1 = state.eval(self.v1, poison, qvars)
-    v2 = state.eval(self.v2, poison, qvars)
-    defined = self._genSMTDefConds(v1, v2, poison)
-    return defined, {
+  def toSMT(self, defined, poison, state, qvars):
+    v1 = state.eval(self.v1, defined, poison, qvars)
+    v2 = state.eval(self.v2, defined, poison, qvars)
+    defined += self._genSMTDefConds(v1, v2, poison)
+    return {
       self.Add:  lambda a,b: a + b,
       self.Sub:  lambda a,b: a - b,
       self.Mul:  lambda a,b: a * b,
@@ -317,15 +337,16 @@ class BinOp(Instr):
 
 ################################
 class ConversionOp(Instr):
-  Trunc, ZExt, SExt, Ptr2Int, Int2Ptr, Bitcast, Last = range(7)
+  Trunc, ZExt, SExt, ZExtOrTrunc, Ptr2Int, Int2Ptr, Bitcast, Last = range(8)
 
   opnames = {
-    Trunc:   'trunc',
-    ZExt:    'zext',
-    SExt:    'sext',
-    Ptr2Int: 'ptrtoint',
-    Int2Ptr: 'inttoptr',
-    Bitcast: 'bitcast',
+    Trunc:       'trunc',
+    ZExt:        'zext',
+    SExt:        'sext',
+    ZExtOrTrunc: 'ZExtOrTrunc',
+    Ptr2Int:     'ptrtoint',
+    Int2Ptr:     'inttoptr',
+    Bitcast:     'bitcast',
   }
   opids = {v:k for k, v in opnames.items()}
 
@@ -354,6 +375,7 @@ class ConversionOp(Instr):
     return op == ConversionOp.Trunc or\
            op == ConversionOp.ZExt or\
            op == ConversionOp.SExt or\
+           op == ConversionOp.ZExtOrTrunc or\
            op == ConversionOp.Int2Ptr
 
   @staticmethod
@@ -365,6 +387,7 @@ class ConversionOp(Instr):
     return op == ConversionOp.Trunc or\
            op == ConversionOp.ZExt or\
            op == ConversionOp.SExt or\
+           op == ConversionOp.ZExtOrTrunc or\
            op == ConversionOp.Ptr2Int
 
   @staticmethod
@@ -380,26 +403,28 @@ class ConversionOp(Instr):
       tt = ' to ' + tt
     return '%s%s %s%s' % (self.getOpName(), st, self.v.getName(), tt)
 
-  def toSMT(self, poison, state, qvars):
-    return [], {
-      self.Trunc:   lambda v: Extract(self.type.getSize()-1, 0, v),
-      self.ZExt:    lambda v: ZeroExt(self.type.getSize() -
-                                      self.stype.getSize(), v),
-      self.SExt:    lambda v: SignExt(self.type.getSize() -
-                                      self.stype.getSize(), v),
-      self.Ptr2Int: lambda v: truncateOrZExt(v, self.type.getSize()),
-      self.Int2Ptr: lambda v: truncateOrZExt(v, self.type.getSize()),
-      self.Bitcast: lambda v: v,
-    }[self.op](state.eval(self.v, poison, qvars))
+  def toSMT(self, defined, poison, state, qvars):
+    return {
+      self.Trunc:       lambda v: Extract(self.type.getSize()-1, 0, v),
+      self.ZExt:        lambda v: ZeroExt(self.type.getSize() -
+                                         self.stype.getSize(), v),
+      self.SExt:        lambda v: SignExt(self.type.getSize() -
+                                          self.stype.getSize(), v),
+      self.ZExtOrTrunc: lambda v: truncateOrZExt(v, self.type.getSize()),
+      self.Ptr2Int:     lambda v: truncateOrZExt(v, self.type.getSize()),
+      self.Int2Ptr:     lambda v: truncateOrZExt(v, self.type.getSize()),
+      self.Bitcast:     lambda v: v,
+    }[self.op](state.eval(self.v, defined, poison, qvars))
 
   def getTypeConstraints(self):
     cnstr = {
-      self.Trunc:   lambda src,tgt: src > tgt,
-      self.ZExt:    lambda src,tgt: src < tgt,
-      self.SExt:    lambda src,tgt: src < tgt,
-      self.Ptr2Int: lambda src,tgt: BoolVal(True),
-      self.Int2Ptr: lambda src,tgt: BoolVal(True),
-      self.Bitcast: lambda src,tgt: src.getSize() == tgt.getSize(),
+      self.Trunc:       lambda src,tgt: src > tgt,
+      self.ZExt:        lambda src,tgt: src < tgt,
+      self.SExt:        lambda src,tgt: src < tgt,
+      self.ZExtOrTrunc: lambda src,tgt: BoolVal(True),
+      self.Ptr2Int:     lambda src,tgt: BoolVal(True),
+      self.Int2Ptr:     lambda src,tgt: BoolVal(True),
+      self.Bitcast:     lambda src,tgt: src.getSize() == tgt.getSize(),
     } [self.op](self.stype, self.type)
 
     return And(self.stype == self.v.type,
@@ -478,11 +503,6 @@ class Icmp(Instr):
     self.v1 = v1
     self.v2 = v2
 
-  def setName(self, name):
-    if self.op == self.Var and self.opname == '':
-      self.opname = name
-    Value.setName(self, name)
-
   @staticmethod
   def getOpId(name):
     return Icmp.opids.get(name, Icmp.Var)
@@ -513,18 +533,19 @@ class Icmp(Instr):
   def recurseSMT(self, ops, a, b, i):
     if len(ops) == 1:
       return self.opToSMT(ops[0], a, b)
-    var = BitVec('icmp_' + self.opname, 4)
+    opname = self.opname if self.opname != '' else self.getName()
+    var = BitVec('icmp_' + opname, 4)
     assert 1 << 4 > self.Var
     return If(var == i,
               self.opToSMT(ops[0], a, b),
               self.recurseSMT(ops[1:], a, b, i+1))
 
-  def toSMT(self, poison, state, qvars):
+  def toSMT(self, defined, poison, state, qvars):
     # Generate all possible comparisons if icmp is generic. Set of comparisons
     # can be restricted in the precondition.
     ops = [self.op] if self.op != self.Var else range(self.Var)
-    return [], self.recurseSMT(ops, state.eval(self.v1, poison, qvars),
-                               state.eval(self.v2, poison, qvars), 0)
+    return self.recurseSMT(ops, state.eval(self.v1, defined, poison, qvars),
+                           state.eval(self.v2, defined, poison, qvars), 0)
 
   def getTypeConstraints(self):
     return And(self.stype == self.v1.type,
@@ -620,10 +641,10 @@ class Select(Instr):
     return 'select i1 %s, %s%s, %s%s' % (self.c.getName(), t, self.v1.getName(),
                                          t, self.v2.getName())
 
-  def toSMT(self, poison, state, qvars):
-    return [], If(state.eval(self.c, poison, qvars) == 1,
-                  state.eval(self.v1, poison, qvars),
-                  state.eval(self.v2, poison, qvars))
+  def toSMT(self, defined, poison, state, qvars):
+    return If(state.eval(self.c, defined, poison, qvars) == 1,
+              state.eval(self.v1, defined, poison, qvars),
+              state.eval(self.v2, defined, poison, qvars))
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,
@@ -675,22 +696,24 @@ class Alloca(Instr):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'alloca %s%s%s' % (str(self.type.type), elems, align)
 
-  def toSMT(self, poison, state, qvars):
-    self.numElems.toSMT(poison, state, qvars)
+  def toSMT(self, defined, poison, state, qvars):
+    self.numElems.toSMT(defined, poison, state, qvars)
     ptr = BitVec(self.getName(), self.type.getSize())
     block_size = getAllocSize(self.type.type)
     num_elems = self.numElems.getValue()
     size = num_elems * block_size
-    initialized = BitVecVal(0, size)
 
-    defined = [ULT(ptr, ptr + (size >> 3)),
-               ptr != 0,
-               num_elems != 0,
-               getPtrAlignCnstr(ptr, self.align)]
+    if size == 0:
+      qvars.append(ptr)
+      return ptr
 
-    mem = BitVec('alloca' + self.getName(), size)
-    state.addAlloca(ptr, mem, (block_size, num_elems, self.align, initialized))
-    return defined, ptr
+    defined += [ULT(ptr, ptr + (size >> 3)),
+                ptr != 0,
+                getPtrAlignCnstr(ptr, self.align)]
+
+    mem = freshBV('alloca' + self.getName(), size)
+    state.addAlloca(ptr, mem, (block_size, num_elems, self.align))
+    return ptr
 
   def getTypeConstraints(self):
     return And(self.numElems.getType() == self.elemsType,
@@ -724,17 +747,17 @@ class GEP(Instr):
     return 'getelementptr %s%s %s%s' % (inb, self.type, self.ptr.getName(),
                                         idxs)
 
-  def toSMT(self, poison, state, qvars):
-    ptr = state.eval(self.ptr, poison, qvars)
+  def toSMT(self, defined, poison, state, qvars):
+    ptr = state.eval(self.ptr, defined, poison, qvars)
     type = self.type
     for i in range(len(self.idxs)):
-      idx = truncateOrSExt(state.eval(self.idxs[i], poison, qvars), ptr)
+      idx = truncateOrSExt(state.eval(self.idxs[i], defined, poison, qvars),ptr)
       ptr += getAllocSize(type.getPointeeType())/8 * idx
       if i + 1 != len(self.idxs):
         type = type.getUnderlyingType()
 
     # TODO: handle inbounds
-    return [], ptr
+    return ptr
 
   def getTypeConstraints(self):
     return And(self.type.ensureTypeDepth(len(self.idxs)),
@@ -762,46 +785,43 @@ class Load(Instr):
     BV = BV << offset
     return Extract(old_size - 1, old_size - size, BV)
 
-  def _recPtrLoad(self, l, v, defined, mustload):
+  def _recPtrLoad(self, l, v, defined, mustload, qvars):
     if len(l) == 0:
       return None
 
-    (ptr, mem, info) = l[0]
-    (block_size, num_elems, align, initialized) = info
+    (ptr, mem, qvs, info) = l[0]
+    (block_size, num_elems, align) = info
     size = mem.size()
     read_size = self.type.getSize()
     actual_read_size = getAllocSize(self.type)
 
     if size > read_size:
-      offset = truncateOrZExt(v - ptr, mem)
+      offset = truncateOrZExt((v - ptr) << 3, mem)
       mem = self.extractBV(mem, offset, read_size)
-      initialized = self.extractBV(initialized, offset, actual_read_size)
     elif size < read_size:
       # undef behavior; skip this block
-      return self._recPtrLoad(l[1:], v, defined, mustload)
+      return self._recPtrLoad(l[1:], v, defined, mustload, qvars)
 
-    inbounds = And(UGE(v, ptr), ULE(v + read_size/8, ptr + size/8))
+    inbounds = And(UGE(v, ptr), UGE((size - read_size)/8, v - ptr))
     mustload += [inbounds]
-
-    # reading unitialized data is undef behavior
-    defined += [Implies(inbounds,
-                        initialized ==
-                          BitVecVal((1<<actual_read_size)-1, actual_read_size))]
+    qvars += qvs
 
     if self.align != 0:
       # overestimating the alignment is undefined behavior.
       defined += [Implies(inbounds, align >= self.align)]
 
-    mem2 = self._recPtrLoad(l[1:], v, defined, mustload)
+    mem2 = self._recPtrLoad(l[1:], v, defined, mustload, qvars)
     return mem if mem2 is None else If(inbounds, mem, mem2)
 
-  def toSMT(self, poison, state, qvars):
-    v = state.eval(self.v, poison, qvars)
-    defined = [v != 0]
+  def toSMT(self, defined, poison, state, qvars):
+    v = state.eval(self.v, defined, poison, qvars)
     mustload = []
-    val = self._recPtrLoad(state.ptrs, v, defined, mustload)
-    defined += [mk_or(mustload)]
-    return ([BoolVal(False)], 0) if val is None else (defined, val)
+    val = self._recPtrLoad(state.ptrs, v, defined, mustload, qvars)
+    defined += [v != 0, mk_or(mustload)]
+    if val is None:
+      defined.append(BoolVal(False))
+      return 0
+    return val
 
   def getTypeConstraints(self):
     return And(self.stype == self.v.type,
@@ -841,7 +861,7 @@ class Store(Instr):
     write_size = self.stype.getSize()
     if write_size == size:
       return src
-    offset = tgt - ptr
+    offset = (tgt - ptr) << 3
     new = LShR(truncateOrPad(src, mem), truncateOrZExt(offset, mem))
 
     # mask out bits that will be written
@@ -851,34 +871,40 @@ class Store(Instr):
     old = mem & (m1 | m2)
     return new | old
 
-  def toSMT(self, poison, state, qvars):
-    src = state.eval(self.src, poison, qvars)
-    tgt = state.eval(self.dst, poison, qvars)
-    defined = [tgt != 0]
+  def toSMT(self, defined, poison, state, qvars):
+    qvars_new = []
+    src = state.eval(self.src, defined, poison, qvars_new)
+    tgt = state.eval(self.dst, defined, poison, qvars_new)
+    qvars += qvars_new
 
     write_size = getAllocSize(self.stype)
     newmem = []
     mustwrite = []
-    for (ptr, mem, info) in state.ptrs:
-      (block_size, num_elems, align, initialized) = info
+    for (ptr, mem, qvs, info) in state.ptrs:
+      (block_size, num_elems, align) = info
       size = block_size * num_elems
-      inbounds = And(UGE(tgt, ptr), ULE(tgt + write_size/8, ptr + size/8))
+      # skip block if it is too small
+      if size < write_size:
+        newmem += [(ptr, mem, qvs, info)]
+        continue
+
+      inbounds = And(UGE(tgt, ptr), UGE((size - write_size)/8, tgt - ptr))
       mustwrite += [inbounds]
 
-      mem = If(inbounds, self._mkMem(src, tgt, ptr, size, mem), mem)
-      allOnes = BitVecVal((1 << write_size) - 1, mem.size())
-      initialized2 = If(inbounds,
-                        self._mkMem(allOnes, tgt, ptr, size, initialized),
-                        initialized)
-      newmem += [(ptr, mem, (block_size, num_elems, align, initialized2))]
+      writes = mk_and(state.defined + [inbounds])
+      mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
+      qvs += qvars_new
+      newmem += [(ptr, mem, qvs, (block_size, num_elems, align))]
 
       if self.align != 0:
         # overestimating the alignment is undefined behavior.
         defined += [Implies(inbounds, align >= self.align)]
 
     state.ptrs = newmem
-    defined += [mk_or(mustwrite)]
-    return defined, None
+    defined += [tgt != 0, mk_or(mustwrite)]
+    # cutpoint; record BB definedness
+    state.defined = state.defined + defined
+    return None
 
   def getTypeConstraints(self):
     return And(self.stype == self.type.type,
@@ -886,6 +912,21 @@ class Store(Instr):
                self.dst.type == self.type,
                self.stype.getTypeConstraints(),
                self.type.getTypeConstraints())
+
+
+################################
+class Skip(Instr):
+  def __init__(self):
+    self.id = mk_unique_id()
+
+  def getUniqueName(self):
+    return 'skip_' + self.id
+
+  def __repr__(self):
+    return 'skip'
+
+  def toSMT(self, defined, poison, state, qvars):
+    return None
 
 
 ################################
@@ -899,26 +940,100 @@ class Unreachable(Instr):
   def __repr__(self):
     return 'unreachable'
 
-  def toSMT(self, poison, state, qvars):
-    return [BoolVal(False)], None
+  def toSMT(self, defined, poison, state, qvars):
+    defined.append(BoolVal(False))
+    return None
+
+
+################################
+class TerminatorInst(Instr):
+  pass
+
+
+################################
+class Br(TerminatorInst):
+  def __init__(self, bb_label, cond, true, false):
+    assert isinstance(bb_label, str)
+    assert isinstance(cond, Value)
+    assert isinstance(true, str)
+    assert isinstance(false, str)
+    self.cond = cond
+    self.true = true
+    self.false = false
+    self.setName('br_' + bb_label)
+
+  def __repr__(self):
+    return "br i1 %s, label %s, label %s" % (self.cond.getName(),
+                                             self.true, self.false)
+
+  def getSuccessors(self, state):
+    defined = []
+    poison = []
+    qvars = []
+    cond = state.eval(self.cond, defined, poison, qvars)
+    assert qvars == []
+    return [(self.true, mk_and([cond != 0] + defined + poison)),
+            (self.false, mk_and([cond == 0] + defined + poison))]
+
+  def toSMT(self, defined, poison, state, qvars):
+    return None
+
+
+################################
+class Ret(TerminatorInst):
+  def __init__(self, bb_label, type, val):
+    assert isinstance(bb_label, str)
+    assert isinstance(type, Type)
+    assert isinstance(val, Value)
+    self.type = type
+    self.val = val
+    self.setName('ret_' + bb_label)
+
+  def __repr__(self):
+    t = str(self.type)
+    if len(t) > 0:
+      t = t + ' '
+    return "ret %s%s" % (t, self.val.getName())
+
+  def getSuccessors(self, state):
+    return []
+
+  def toSMT(self, defined, poison, state, qvars):
+    return state.eval(self.val, defined, poison, qvars)
 
   def getTypeConstraints(self):
-    return BoolVal(True)
+    return And(self.type == self.val.type, self.type.getTypeConstraints())
 
 
 ################################
 def print_prog(p):
-  for k,v in p.iteritems():
-    if isinstance(v, (Input, Constant)):
-      continue
-    if isinstance(v, (Store, Unreachable)):
-      print v
-    else:
-      print '%s = %s' % (k, v)
+  for bb, instrs in p.iteritems():
+    if bb != "":
+      print "%s:" % bb
+
+    for k,v in instrs.iteritems():
+      k = str(k)
+      if k[0] == '%':
+        print '  %s = %s' % (k, v)
+      else:
+        print "  %s" % v
+
+
+def countUsers(prog):
+  m = {}
+  for bb, instrs in prog.iteritems():
+    for k, v in instrs.iteritems():
+      v.countUsers(m)
+  return m
 
 
 def getTypeConstraints(p):
-  return [v.getTypeConstraints() for v in p.itervalues()]
+  t = [v.getTypeConstraints() for v in p.itervalues()]
+  # ensure all return instructions have the same type
+  ret_types = [v.type for v in p.itervalues() if isinstance(v, Ret)]
+  if len(ret_types) > 1:
+    t += mkTyEqual(ret_types)
+  return t
 
 
 def fixupTypes(p, types):
@@ -926,11 +1041,24 @@ def fixupTypes(p, types):
     v.fixupTypes(types)
 
 
-def toSMT(prog):
+def toSMT(prog, idents, isSource):
+  set_smt_is_source(isSource)
   state = State()
-  for k,v in prog.iteritems():
-    poison = []
-    qvars = []
-    defined, smt = v.toSMT(poison, state, qvars)
-    state.add(v, smt, defined, poison, qvars)
+  for k,v in idents.iteritems():
+    if isinstance(v, (Input, Constant)):
+      defined = []
+      poison = []
+      qvars = []
+      smt = v.toSMT(defined, poison, state, qvars)
+      assert defined == [] and poison == []
+      state.add(v, smt, [], [], qvars)
+
+  for bb, instrs in prog.iteritems():
+    state.newBB(bb)
+    for k,v in instrs.iteritems():
+      defined = []
+      poison = []
+      qvars = []
+      smt = v.toSMT(defined, poison, state, qvars)
+      state.add(v, smt, defined, poison, qvars)
   return state

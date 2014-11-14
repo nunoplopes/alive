@@ -1,0 +1,5 @@
+; ERROR: Domain of definedness of Target is smaller than Source
+%Op1 = sub 0, %X
+%r = srem %Op0, %Op1
+  =>
+%r = srem %Op0, %X

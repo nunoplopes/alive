@@ -22,9 +22,10 @@ class BoolPred:
       a = getattr(self, attr)
       if isinstance(a, (Type, Value, BoolPred)):
         a.fixupTypes(types)
-      if isinstance(a, tuple) and all(isinstance(v, (Type,Value,BoolPred)) for v in a):
+      if isinstance(a, tuple):
         for v in a:
-          v.fixupTypes(types)
+          if isinstance(v, (Type, Value, BoolPred)):
+            v.fixupTypes(types)
 
   # TODO: remove this
   def getPatternMatch(self):
@@ -40,7 +41,7 @@ class TruePred(BoolPred):
     return BoolVal(True)
 
   def toSMT(self, state):
-    return BoolVal(True)
+    return [], []
 
   def getPatternMatch(self):
     return CVariable('TRUE') # FIXME
@@ -63,7 +64,8 @@ class PredNot(BoolPred):
     return self.v.getTypeConstraints()
 
   def toSMT(self, state):
-    return Not(self.v.toSMT(state))
+    d, v = self.v.toSMT(state)
+    return d, [mk_not(mk_and(v))]
 
   def getPatternMatch(self):
     return CUnaryExpr('!', self.v.getPatternMatch())
@@ -85,7 +87,13 @@ class PredAnd(BoolPred):
     return mk_and(v.getTypeConstraints() for v in self.args)
 
   def toSMT(self, state):
-    return And([v.toSMT(state) for v in self.args])
+    d = []
+    r = []
+    for v in self.args:
+      d2, v = v.toSMT(state)
+      d += d2
+      r += v
+    return d, r
 
   def getPatternMatch(self):
     return CBinExpr.reduce('&&', (arg.getPatternMatch() for arg in self.args))
@@ -108,7 +116,13 @@ class PredOr(BoolPred):
     return mk_and(v.getTypeConstraints() for v in self.args)
 
   def toSMT(self, state):
-    return Or([v.toSMT(state) for v in self.args])
+    d = []
+    r = []
+    for v in self.args:
+      d2, v = v.toSMT(state)
+      d += d2
+      r.append(mk_and(v))
+    return d, [mk_or(r)]
 
   def getPatternMatch(self):
     return CBinExpr.reduce('||', (arg.getPatternMatch() for arg in self.args))
@@ -148,9 +162,10 @@ class BinaryBoolPred(BoolPred):
                    self.v2.getTypeConstraints()])
 
   def toSMT(self, state):
-    v1 = self.v1.toSMT([], state, [])[1]
-    v2 = self.v2.toSMT([], state, [])[1]
-    return {
+    defined = []
+    v1 = self.v1.toSMT(defined, [], state, [])
+    v2 = self.v2.toSMT(defined, [], state, [])
+    return defined, [{
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
       self.SLT: lambda a,b: a < b,
@@ -161,7 +176,7 @@ class BinaryBoolPred(BoolPred):
       self.ULE: lambda a,b: ULE(a, b),
       self.UGT: lambda a,b: UGT(a, b),
       self.UGE: lambda a,b: UGE(a, b),
-    }[self.op](v1, v2)
+    }[self.op](v1, v2)]
 
   gens = {
     EQ:  lambda a,b: CBinExpr('==', a, b),
@@ -187,23 +202,43 @@ class BinaryBoolPred(BoolPred):
 
 ################################
 class LLVMBoolPred(BoolPred):
-  isPower2, isSignBit, known, maskZero, NSWAdd, Last = range(6)
+  eqptrs, isPower2, isPower2OrZ, isShiftedMask, isSignBit, maskZero,\
+  NSWAdd, NUWAdd, NSWSub, NUWSub, NSWMul, NUWMul, NUWShl, OneUse,\
+  Last = range(15)
 
   opnames = {
-    isPower2:  'isPowerOf2',
-    isSignBit: 'isSignBit',
-    known:     'Known',
-    maskZero:  'MaskedValueIsZero',
-    NSWAdd:    'WillNotOverflowSignedAdd',
+    eqptrs:      'equivalentAddressValues',
+    isPower2:    'isPowerOf2',
+    isPower2OrZ: 'isPowerOf2OrZero',
+    isShiftedMask: 'isShiftedMask',
+    isSignBit:   'isSignBit',
+    maskZero:    'MaskedValueIsZero',
+    NSWAdd:      'WillNotOverflowSignedAdd',
+    NUWAdd:      'WillNotOverflowUnsignedAdd',
+    NSWSub:      'WillNotOverflowSignedSub',
+    NUWSub:      'WillNotOverflowUnsignedSub',
+    NSWMul:      'WillNotOverflowSignedMul',
+    NUWMul:      'WillNotOverflowUnsignedMul',
+    NUWShl:      'WillNotOverflowUnsignedShl',
+    OneUse:      'hasOneUse',
   }
   opids = {v:k for k, v in opnames.items()}
 
   num_args = {
-    isPower2:  1,
-    isSignBit: 1,
-    known:     2,
-    maskZero:  2,
-    NSWAdd:    2,
+    eqptrs:      2,
+    isPower2:    1,
+    isPower2OrZ: 1,
+    isShiftedMask: 1,
+    isSignBit:   1,
+    maskZero:    2,
+    NSWAdd:      2,
+    NUWAdd:      2,
+    NSWSub:      2,
+    NUWSub:      2,
+    NSWMul:      2,
+    NUWMul:      2,
+    NUWShl:      2,
+    OneUse:      1,
   }
 
   def __init__(self, op, args):
@@ -231,11 +266,20 @@ class LLVMBoolPred(BoolPred):
       raise ParseError('Unknown boolean predicate')
 
   arg_types = {
-    isPower2:  ['const'],
-    isSignBit: ['const'],
-    known:     ['any', 'const'],
-    maskZero:  ['input', 'const'],
-    NSWAdd:    ['input', 'input'],
+    eqptrs:      ['var', 'var'],
+    isPower2:    ['any'],
+    isPower2OrZ: ['any'],
+    isShiftedMask: ['const'],
+    isSignBit:   ['const'],
+    maskZero:    ['input', 'const'],
+    NSWAdd:      ['input', 'input'],
+    NUWAdd:      ['input', 'input'],
+    NSWSub:      ['input', 'input'],
+    NUWSub:      ['input', 'input'],
+    NSWMul:      ['const', 'const'],
+    NUWMul:      ['const', 'const'],
+    NUWShl:      ['const', 'const'],
+    OneUse:      ['var'],
   }
 
   @staticmethod
@@ -245,6 +289,8 @@ class LLVMBoolPred(BoolPred):
       return (True, 'any value')
     if kind == 'input':
       return (isinstance(val, (Input, Constant)), 'constant or input var')
+    if kind == 'var':
+      return (not isinstance(val, Constant), 'register')
     if kind == 'const':
       if isinstance(val, Input):
         ok = val.getName()[0] == 'C'
@@ -254,11 +300,20 @@ class LLVMBoolPred(BoolPred):
     assert False
 
   argConstraints = {
-    isPower2:  lambda a: allTyEqual([a], Type.Int),
-    isSignBit: lambda a: allTyEqual([a], Type.Int),
-    known:     lambda a,b: allTyEqual([a,b], Type.Int),
-    maskZero:  lambda a,b: allTyEqual([a,b], Type.Int),
-    NSWAdd:    lambda a,b: allTyEqual([a,b], Type.Int),
+    eqptrs:      lambda a,b: allTyEqual([a,b], Type.Ptr),
+    isPower2:    lambda a: allTyEqual([a], Type.Int),
+    isPower2OrZ: lambda a: allTyEqual([a], Type.Int),
+    isShiftedMask: lambda a: allTyEqual([a], Type.Int),
+    isSignBit:   lambda a: allTyEqual([a], Type.Int),
+    maskZero:    lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWAdd:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWAdd:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWSub:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWSub:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NSWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWMul:      lambda a,b: allTyEqual([a,b], Type.Int),
+    NUWShl:      lambda a,b: allTyEqual([a,b], Type.Int),
+    OneUse:      lambda a: []
   }
 
   def getTypeConstraints(self):
@@ -266,28 +321,51 @@ class LLVMBoolPred(BoolPred):
     c += [v.getTypeConstraints() for v in self.args]
     return mk_and(c)
 
+  def _mkMayAnalysis(self, d, vars, expr):
+    # If all vars are constant, then analysis is precise.
+    if all(str(v)[0] == 'C' for v in vars):
+      return d, [expr]
+    c = BitVec('ana_%s' % self, 1)
+    return d + [Implies(c == 1, expr)], [c == 1]
+
   def toSMT(self, state):
-    args = [v.toSMT([], state, [])[1] for v in self.args]
+    d = []
+    args = []
+    for v in self.args:
+      a = v.toSMT(d, [], state, [])
+      args.append(a)
+
     return {
-      self.isPower2:  lambda a: And(a != 0, a & (a-1) == 0),
-      self.isSignBit: lambda a: a == (1 << (a.sort().size()-1)),
-      self.known:     lambda a,b: a == b,
-      self.maskZero:  lambda a,b: a & b == 0,
-      self.NSWAdd:    lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1, a+b),
+      self.eqptrs:      lambda a,b: self._mkMayAnalysis(d, [a,b], a == b),
+      self.isPower2:    lambda a: self._mkMayAnalysis(d, [a],
+                          And(a != 0, a & (a-1) == 0)),
+      self.isPower2OrZ: lambda a: self._mkMayAnalysis(d, [a], a & (a-1) == 0),
+      self.isShiftedMask: lambda a: (d, isShiftedMask(a)),
+      self.isSignBit:   lambda a: (d, [a == (1 << (a.sort().size()-1))]),
+      self.maskZero:    lambda a,b: self._mkMayAnalysis(d, [a], a & b == 0),
+      self.NSWAdd:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          SignExt(1,a) + SignExt(1,b) == SignExt(1, a+b)),
+      self.NUWAdd:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1, a+b)),
+      self.NSWSub:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          SignExt(1,a)-SignExt(1,b) == SignExt(1, a-b)),
+      self.NUWSub:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+                          ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1, a-b)),
+      self.NSWMul:      lambda a,b: (d, [no_overflow_smul(a, b)]),
+      self.NUWMul:      lambda a,b: (d, [no_overflow_umul(a, b)]),
+      self.NUWShl:      lambda a,b: (d, [LShR(a << b, b) == a]),
+      self.OneUse:      lambda a: (d,
+                          [get_users_var(self.args[0].getUniqueName()) == 1]),
     }[self.op](*args)
 
   def getPatternMatch(self):
-    if self.op == self.known:
-      raise AliveError('Cannot use Known for code generation')
 
     args = []
     for i in range(self.num_args[self.op]):
       if self.arg_types[self.op][i] == 'const':
         args.append(self.args[i].toAPInt())
-      elif self.arg_types[self.op][i] == 'input':
-        args.append(self.args[i].toOperand())
       else:
-        assert False
+        args.append(self.args[i].toOperand())
 
     if self.op in {self.isPower2, self.isSignBit}:
       return args[0].dot(self.opnames[self.op], [])

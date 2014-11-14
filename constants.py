@@ -64,8 +64,8 @@ class ConstantVal(Constant):
       return And(c, self.type >= bits)
     return c
 
-  def toSMT(self, poison, state, qvars):
-    return [], BitVecVal(self.val, self.type.getSize())
+  def toSMT(self, defined, poison, state, qvars):
+    return BitVecVal(self.val, self.type.getSize())
 
   def toOperand(self):
     return CFunctionCall('ConstantInt::get', self.toCType(), CVariable(str(self.val)))
@@ -100,10 +100,10 @@ class UndefVal(Constant):
     # overload Constant's method
     return self.type.getTypeConstraints()
 
-  def toSMT(self, poison, state, qvars):
+  def toSMT(self, defined, poison, state, qvars):
     v = BitVec('undef' + self.id, self.type.getSize())
     qvars += [v]
-    return [], v
+    return v
 
   def setRepresentative(self, manager):
     # FIXME: handle defined types
@@ -148,11 +148,12 @@ class CnstUnaryOp(Constant):
                    self.v.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, poison, state, qvars):
-    return [], {
+  def toSMT(self, defined, poison, state, qvars):
+    v = self.v.toSMT(defined, poison, state, qvars)
+    return {
       self.Not: lambda a: ~a,
       self.Neg: lambda a: -a,
-    }[self.op](self.v.toSMT(poison, state, qvars)[1])
+    }[self.op](v)
 
   def toAPInt(self):
     return CUnaryExpr(self.opnames[self.op], self.v.toAPInt())
@@ -166,9 +167,10 @@ class CnstUnaryOp(Constant):
 
 ################################
 class CnstBinaryOp(Constant):
-  And, Or, Xor, Add, Sub, Mul, Div, Rem, Shr, Shl, Last = range(11)
+  And, Or, Xor, Add, Sub, Mul, Div, DivU, Rem, RemU, AShr, LShr, Shl,\
+  Last = range(14)
 
-  opnames = ['&', '|', '^', '+', '-', '*', '/', '%', '>>', '<<']
+  opnames = ['&', '|', '^', '+', '-', '*', '/', '/u', '%', '%u','>>','u>>','<<']
 
   def __init__(self, op, v1, v2):
     assert 0 <= op < self.Last
@@ -197,20 +199,23 @@ class CnstBinaryOp(Constant):
                    self.v2.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, poison, state, qvars):
-    v1 = self.v1.toSMT(poison, state, qvars)[1]
-    v2 = self.v2.toSMT(poison, state, qvars)[1]
-    return [], {
-      self.And: lambda a,b: a & b,
-      self.Or:  lambda a,b: a | b,
-      self.Xor: lambda a,b: a ^ b,
-      self.Add: lambda a,b: a + b,
-      self.Sub: lambda a,b: a - b,
-      self.Mul: lambda a,b: a * b,
-      self.Div: lambda a,b: a / b,
-      self.Rem: lambda a,b: SRem(a, b),
-      self.Shr: lambda a,b: a >> b,
-      self.Shl: lambda a,b: a << b,
+  def toSMT(self, defined, poison, state, qvars):
+    v1 = self.v1.toSMT(defined, poison, state, qvars)
+    v2 = self.v2.toSMT(defined, poison, state, qvars)
+    return {
+      self.And:  lambda a,b: a & b,
+      self.Or:   lambda a,b: a | b,
+      self.Xor:  lambda a,b: a ^ b,
+      self.Add:  lambda a,b: a + b,
+      self.Sub:  lambda a,b: a - b,
+      self.Mul:  lambda a,b: a * b,
+      self.Div:  lambda a,b: a / b,
+      self.DivU: lambda a,b: UDiv(a, b),
+      self.Rem:  lambda a,b: SRem(a, b),
+      self.RemU: lambda a,b: URem(a, b),
+      self.AShr: lambda a,b: a >> b,
+      self.LShr: lambda a,b: LShR(a, b),
+      self.Shl:  lambda a,b: a << b,
     }[self.op](v1, v2)
 
   def toOperand(self):
@@ -220,7 +225,7 @@ class CnstBinaryOp(Constant):
     return Constant.toOperand(self)
 
   def toAPInt(self):
-    if self.op == self.Shr:
+    if self.op == self.AShr:
       return self.v1.toAPInt().dot('ashr', [self.v2.toAPIntOrLit()])
     if self.op == self.Div:
       return self.v1.toAPInt().dot('sdiv', [self.v2.toAPInt()])
@@ -241,29 +246,49 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  abs, lshr, trunc, umax, width, Last = range(6)
+  abs, sbits, obits, zbits, ctlz, cttz, log2, lshr, max, sext, trunc, umax,\
+  width, zext, Last = range(15)
 
   opnames = {
     abs:   'abs',
+    sbits: 'ComputeNumSignBits',
+    obits: 'computeKnownOneBits',
+    zbits: 'computeKnownZeroBits',
+    ctlz:  'countLeadingZeros',
+    cttz:  'countTrailingZeros',
+    log2:  'log2',
     lshr:  'lshr',
+    max:   'max',
+    sext:  'sext',
     trunc: 'trunc',
     umax:  'umax',
     width: 'width',
+    zext:  'zext',
   }
   opids = {v:k for k,v in opnames.items()}
 
   num_args = {
     abs:   1,
+    sbits: 1,
+    obits: 1,
+    zbits: 1,
+    ctlz:  1,
+    cttz:  1,
+    log2:  1,
     lshr:  2,
+    max:   2,
+    sext:  1,
     trunc: 1,
     umax:  2,
     width: 1,
+    zext:  1,
   }
 
   def __init__(self, op, args, type):
     assert 0 <= op < self.Last
     for a in args:
       assert isinstance(a, Value)
+    assert isinstance(type, IntType)
 
     self.op = op
     self.args = args
@@ -290,24 +315,57 @@ class CnstFunction(Constant):
   def getTypeConstraints(self):
     c = {
       self.abs:   lambda a: allTyEqual([a,self], Type.Int),
+      self.sbits: lambda a: allTyEqual([a], Type.Int),
+      self.obits: lambda a: allTyEqual([a,self], Type.Int),
+      self.zbits: lambda a: allTyEqual([a,self], Type.Int),
+      self.ctlz:  lambda a: allTyEqual([a], Type.Int),
+      self.cttz:  lambda a: allTyEqual([a], Type.Int),
+      self.log2:  lambda a: allTyEqual([a], Type.Int),
       self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
+      self.max:   lambda a,b: allTyEqual([a,b,self], Type.Int),
+      self.sext:  lambda a: [a.type < self.type],
       self.trunc: lambda a: [self.type < a.type],
       self.umax:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.width: lambda a: [],
+      self.zext:  lambda a: [self.type > a.type],
     }[self.op](*self.args)
 
     return mk_and([v.getTypeConstraints() for v in self.args] +\
                   [self.type.getTypeConstraints()] + c)
 
-  def toSMT(self, poison, state, qvars):
-    args = [v.toSMT(poison, state, qvars)[1] for v in self.args]
-    return [], {
-      self.abs:   lambda a: If(a >= 0, a, -a),
-      self.lshr:  lambda a,b: LShR(a,b),
-      self.trunc: lambda a: Extract(self.type.getSize()-1, 0, a),
-      self.umax:  lambda a,b: If(UGT(a,b), a, b),
-      self.width: lambda a: BitVecVal(a.sort().size(), self.type.getSize()),
+  def toSMT(self, defined, poison, state, qvars):
+    size = self.type.getSize()
+    args = []
+    for v in self.args:
+      a = v.toSMT(defined, poison, state, qvars)
+      args.append(a)
+
+    d, v = {
+      self.abs:   lambda a: ([], If(a >= 0, a, -a)),
+      self.sbits: lambda a:
+        (lambda b: ([ULE(b, ComputeNumSignBits(a, size))], b))
+          (ComputeNumSignBits(BitVec('ana_' + self.getName(), size), size)),
+      self.obits: lambda a: (lambda b: ([b & ~a == 0], b))
+                              (BitVec('ana_' + self.getName(), size)),
+      self.zbits: lambda a: (lambda b: ([b & a == 0], b))
+                              (BitVec('ana_' + self.getName(), size)),
+      self.ctlz:  lambda a: ([], ctlz(a, size)),
+      self.cttz:  lambda a: ([], cttz(a, size)),
+      self.log2:  lambda a: ([], bv_log2(a, size)),
+      self.lshr:  lambda a,b: ([], LShR(a, b)),
+      self.max:   lambda a,b: ([], If(a > b, a, b)),
+      self.sext:  lambda a: ([], SignExt(size - a.size(), a)),
+      self.trunc: lambda a: ([], Extract(size-1, 0, a)),
+      self.umax:  lambda a,b: ([], If(UGT(a,b), a, b)),
+      self.width: lambda a: (None, BitVecVal(a.size(), size)),
+      self.zext:  lambda a: ([], ZeroExt(size - a.size(), a)),
     }[self.op](*args)
+
+    if d is None:
+      del defined[:]
+    else:
+      defined += d
+    return v
 
   def toAPInt(self):
     if self.op == self.abs:
@@ -353,4 +411,3 @@ class CnstFunction(Constant):
 
     else:
       raise AliveError('setRepresentative not implemented for' + self.opnames[self.op])
-      

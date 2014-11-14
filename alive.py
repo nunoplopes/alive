@@ -24,14 +24,20 @@ def block_model(s, sneg, m):
   sneg.push()
   bools = []
   exprs = []
+  req   = []
+  skip_model = get_pick_one_type()
+
   for n in m.decls():
     b = FreshBool()
-    expr = (Int(str(n)) == m[n])
+    name = str(n)
+    expr = (Int(name) == m[n])
     sneg.add(b == expr)
-    bools += [b]
-    exprs += [expr]
+    if name in skip_model:
+      req += [b]
+    else:
+      bools += [b]
+      exprs += [expr]
 
-  req = []
   req_exprs = []
   for i in range(len(bools)):
     if sneg.check(req + bools[i+1:]) != unsat:
@@ -42,6 +48,38 @@ def block_model(s, sneg, m):
 
   # Now block the simplified model.
   s.add(Not(mk_and(req_exprs)))
+
+
+def pick_pre_types(s, s2):
+  m = s.model()
+  skip_model = get_pick_one_type()
+  vars = []
+
+  for n in m.decls():
+    name = str(n)
+    # FIXME: only fix size_* variables?
+    if name in skip_model and name.startswith('size_'):
+      vars += [Int(name)]
+    else:
+      s2.add(Int(name) == m[n])
+
+  for v in vars:
+    b = FreshBool()
+    e = v >= 32
+    s2.add(b == e)
+    if s2.check(b) == sat:
+      s.add(e)
+  res = s.check()
+  assert res == sat
+
+
+pre_tactic = AndThen(
+  Tactic('propagate-values'),
+  Repeat(AndThen(Tactic('simplify'), Tactic('ctx-solver-simplify')))
+)
+def simplify_pre(f):
+  # TODO: extract set of implied things (iffs, tgt=0, etc).
+  return pre_tactic.apply(f)[0].as_expr()
 
 
 def get_z3_id(x):
@@ -88,6 +126,7 @@ def check_incomplete_solver(res, s):
 
 tactic = AndThen(
   Repeat(AndThen(Tactic('simplify'), Tactic('propagate-values'))),
+  #Tactic('ctx-simplify')
   Tactic('elim-term-ite'),
   Tactic('simplify'),
   Tactic('propagate-values'),
@@ -133,9 +172,23 @@ def var_type(var, types):
   assert False
 
 
+def val2binhex(v, bits):
+  return '0x%0*X' % ((bits+3) / 4, v)
+  #if bits % 4 == 0:
+  #  return '0x%0*X' % (bits / 4, v)
+  #return format(v, '#0'+str(bits)+'b')
+
+
 def str_model(s, v):
-  val = s.model().evaluate(v, True).as_long()
-  return "%d (%s)" % (val, hex(val))
+  val = s.model().evaluate(v, True)
+  if isinstance(val, BoolRef):
+    return "true" if is_true(val) else "false"
+  valu = val.as_long()
+  vals = val.as_signed_long()
+  bin = val2binhex(valu, val.size())
+  if valu != vals:
+    return "%s (%d, %d)" % (bin, valu, vals)
+  return "%s (%d)" % (bin, valu)
 
 
 def _print_var_vals(s, vars, stopv, seen, types):
@@ -154,14 +207,24 @@ def print_var_vals(s, vs1, vs2, stopv, types):
   _print_var_vals(s, vs2, stopv, seen, types)
 
 
-def check_typed_opt(pre, src, tgt, types):
-  srcv = toSMT(src)
-  tgtv = toSMT(tgt)
-  pre  = pre.toSMT(srcv)
-  extra_cnstrs = [pre,
-                  srcv.getAllocaConstraints(),
-                  tgtv.getAllocaConstraints()]
+def get_smt_vars(f):
+  if is_const(f):
+    if is_bv_value(f) or is_bool(f):
+      return {}
+    return {str(f): f}
 
+  ret = {}
+  if isinstance(f, list):
+    for v in f:
+      ret.update(get_smt_vars(v))
+    return ret
+
+  for c in f.children():
+    ret.update(get_smt_vars(c))
+  return ret
+
+
+def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
   for k,v in srcv.iteritems():
     # skip instructions only on one side; assumes they remain unchanged
     if k[0] == 'C' or not tgtv.has_key(k):
@@ -172,65 +235,187 @@ def check_typed_opt(pre, src, tgt, types):
     defb = mk_and(defb)
     poisonb = mk_and(poisonb)
 
+    n_users = users[k]
+    base_cnstr = defa + poisona + extra_cnstrs + n_users
+
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, defa + [mk_not(defb)] + extra_cnstrs, lambda s :
+    check_expr(qvars, base_cnstr + [mk_not(defb)], lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
     # Check if domain of poison values of Src implies that of Tgt.
-    check_expr(qvars, defa + poisona + [mk_not(poisonb)] + extra_cnstrs,
-      lambda s :
+    check_expr(qvars, base_cnstr + [mk_not(poisonb)], lambda s :
       ("Domain of poisoness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'poison', k, srcv, tgtv, types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, defa + poisona + [a != b] + extra_cnstrs, lambda s :
+    check_expr(qvars, base_cnstr + [a != b], lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
-  # now check that the final memory state is similar in both programs
-  memsb = {str(ptr) : mem for (ptr, mem, info) in tgtv.ptrs}
-  for (ptr, mem, info) in srcv.ptrs:
+
+def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
+  query = []
+  flag_vars_src = {}
+  flag_vars_tgt = {}
+
+  for k,v in srcv.iteritems():
+    # skip instructions only on one side; assumes they remain unchanged
+    if k[0] == 'C' or not tgtv.has_key(k):
+      continue
+
+    (a, defa, poisona, qvars) = v
+    (b, defb, poisonb, qvarsb) = tgtv[k]
+
+    pre = mk_and(defa + poisona + prev_flags + extra_cnstrs)
+    eq = [] if a.eq(b) else [a == b]
+    q = mk_implies(pre, mk_and(defb + poisonb + eq))
+    if is_true(q):
+      continue
+    q = mk_and(users[k] + [q])
+
+    input_vars = []
+    for k,v in get_smt_vars(q).iteritems():
+      if k[0] == '%' or k[0] == 'C' or k.startswith('icmp_') or\
+         k.startswith('alloca') or k.startswith('mem_') or k.startswith('ana_'):
+        input_vars.append(v)
+      elif k.startswith('f_'):
+        if k.endswith('_src'):
+          flag_vars_src[k] = v
+        else:
+          assert k.endswith('_tgt')
+          flag_vars_tgt[k] = v
+      elif k.startswith('u_') or k.startswith('undef'):
+        continue
+      else:
+        print "Unknown smt var: " + str(v)
+        exit(-1)
+
+    q = mk_exists(qvars, q)
+    q = mk_forall(input_vars, q)
+    query.append(q)
+
+  s = Solver()#tactic.solver()
+  s.add(query)
+  if __debug__:
+    gen_benchmark(s)
+
+  res = s.check()
+  check_incomplete_solver(res, s)
+  if s.check() == unsat:
+    # optimization is incorrect. Run the normal procedure for nice diagnostics.
+    check_refinement(srcv, tgtv, types, extra_cnstrs, users)
+    exit()
+
+  # enumerate all models (all possible flag assignments)
+  models = []
+  while True:
+    m = s.model()
+    min_model = []
+    for v in flag_vars_src.itervalues():
+      val = m[v]
+      if val and val.as_long() == 1:
+        min_model.append(v == 1)
+    for v in flag_vars_tgt.itervalues():
+      val = m[v]
+      if val and val.as_long() == 0:
+        min_model.append(v == 0)
+
+    m = mk_and(min_model)
+    models.append(m)
+    s.add(mk_not(m))
+    if __debug__:
+      gen_benchmark(s)
+
+    res = s.check()
+    check_incomplete_solver(res, s)
+    if s.check() == unsat:
+      return mk_or(models)
+
+
+gbl_prev_flags = []
+
+def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
+  srcv = toSMT(src, ident_src, True)
+  tgtv = toSMT(tgt, ident_tgt, False)
+  pre_d, pre = pre.toSMT(srcv)
+  extra_cnstrs = pre_d + pre +\
+                 srcv.getAllocaConstraints() + tgtv.getAllocaConstraints()
+
+  # 1) check preconditions of BBs
+  tgtbbs = tgtv.bb_pres
+  for k,v in srcv.bb_pres.iteritems():
+    if not tgtbbs.has_key(k):
+      continue
+    # assume open world. May need to add language support to state that a BB is
+    # complete (closed world)
+    p1 = mk_and(v)
+    p2 = mk_and(tgtbbs[k])
+    check_expr([], [p1 != p2] + extra_cnstrs, lambda s :
+      ("Mismatch in preconditions for BB '%s'\n" % k, str_model(s, p1),
+       str_model(s, p2), None, srcv, tgtv, types))
+
+  # 2) check register values
+  if do_infer_flags():
+    global gbl_prev_flags
+    flgs = infer_flags(srcv, tgtv, types, extra_cnstrs, gbl_prev_flags, users)
+    gbl_prev_flags = [simplify_pre(mk_and(gbl_prev_flags + [flgs]))]
+  else:
+    check_refinement(srcv, tgtv, types, extra_cnstrs, users)
+
+  # 3) check that the final memory state is similar in both programs
+  memsb = {str(ptr) : mem for (ptr, mem, qvars, info) in tgtv.ptrs}
+  for (ptr, mem, qvars, info) in srcv.ptrs:
     memb = memsb.get(str(ptr))
     if memb == None:
-      # If memory was not written in Source, then ignore the block.
-      if is_const(simplify(mem)):
-        continue
-      print '\nERROR: No memory state for %s in Target' % str(ptr)
-      exit(-1)
+      memb = freshBV('mem', mem.size())
 
-    check_expr([], [mem != memb] + extra_cnstrs, lambda s :
-      ('ERROR: Mismatch in final memory state for %s (%d bits)' %
+    check_expr(qvars, [mem != memb] + extra_cnstrs, lambda s :
+      ('Mismatch in final memory state for %s (%d bits)' %
          (ptr, mem.sort().size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
 
 
 def check_opt(opt):
-  name, pre, src, tgt, used_src, used_tgt = opt
+  name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt = opt
 
   print '----------------------------------------'
   print 'Optimization: ' + name
   print 'Precondition: ' + str(pre)
   print_prog(src)
-  print '  =>'
+  print '=>'
   print_prog(tgt)
   print
 
+  reset_pick_one_type()
+  global gbl_prev_flags
+  gbl_prev_flags = []
+
   # infer allowed types for registers
-  type_src = getTypeConstraints(src)
-  type_tgt = getTypeConstraints(tgt)
+  type_src = getTypeConstraints(ident_src)
+  type_tgt = getTypeConstraints(ident_tgt)
   type_pre = pre.getTypeConstraints()
 
   s = SolverFor('QF_LIA')
   s.add(type_pre)
+  if s.check() != sat:
+    print 'Precondition does not type check'
+    exit(-1)
+
+  # Only one type per variable/expression in the precondition is required.
+  for v in s.model().decls():
+    register_pick_one_type(v)
+
   s.add(type_src)
+  unregister_pick_one_type(get_smt_vars(type_src))
   if s.check() != sat:
     print 'Source program does not type check'
     exit(-1)
 
   s.add(type_tgt)
+  unregister_pick_one_type(get_smt_vars(type_tgt))
   if s.check() != sat:
     print 'Source and Target programs do not type check'
     exit(-1)
@@ -238,37 +423,54 @@ def check_opt(opt):
   sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
-  has_unreach = any(v.startswith('unreachable') for v in tgt.iterkeys())
-  for v in src.iterkeys():
-    if v[0] == '%' and v not in used_src and v not in used_tgt and v not in tgt\
-       and not has_unreach:
+  has_unreach = any(v.startswith('unreachable') for v in ident_tgt.iterkeys())
+  for v in ident_src.iterkeys():
+    if v[0] == '%' and v not in used_src and v not in used_tgt and\
+       v not in ident_tgt and not has_unreach:
       print 'ERROR: Temporary register %s unused and not overwritten' % v
       exit(-1)
 
-  for v in tgt.iterkeys():
-    if v[0] == '%' and v not in used_tgt and v not in src:
+  for v in ident_tgt.iterkeys():
+    if v[0] == '%' and v not in used_tgt and v not in ident_src:
       print 'ERROR: Temporary register %s unused and does not overwrite any'\
             ' Source register' % v
       exit(-1)
 
+  # build constraints that indicate the number of users for each register.
+  users_count = countUsers(src)
+  users = {}
+  for k in ident_src.iterkeys():
+    n_users = users_count.get(k)
+    users[k] = [get_users_var(k) != n_users] if n_users else []
+
+  # pick one representative type for types in Pre
+  res = s.check()
+  assert res != unknown
+  if res == sat:
+    s2 = SolverFor('QF_LIA')
+    s2.add(s.assertions())
+    pick_pre_types(s, s2)
+
   # now check for correctness
   proofs = 0
-  while True:
-    res = s.check()
-    if res != sat:
-      break
+  while res == sat:
     types = s.model()
-    fixupTypes(src, types)
-    fixupTypes(tgt, types)
+    fixupTypes(ident_src, types)
+    fixupTypes(ident_tgt, types)
     pre.fixupTypes(types)
-    check_typed_opt(pre, src, tgt, types)
+    check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users)
     block_model(s, sneg, types)
     proofs += 1
     sys.stdout.write('\rDone: ' + str(proofs))
     sys.stdout.flush()
+    res = s.check()
+    assert res != unknown
 
   if res == unsat:
-    print '\nOptimization is correct!\n'
+    print '\nOptimization is correct!'
+    if do_infer_flags():
+      print 'Flags: %s' % gbl_prev_flags[0]
+    print
   else:
     print '\nVerification incomplete; did not check all bit widths\n'
 
@@ -277,6 +479,8 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('-m', '--match', action='append', metavar='name',
     help='run tests containing this text')
+  parser.add_argument('--infer-flags', action='store_true', default=False,
+    help='Infer NSW/NUW/exact flags automaically', dest='infer_flags')
   parser.add_argument('-V', '--verify', action='store_true', default=True,
     help='check correctness of optimizations (default: True)')
   parser.add_argument('--no-verify', action='store_false', dest='verify')
@@ -284,6 +488,9 @@ def main():
     help='optimization file (read from stdin if none given)',)
 
   args = parser.parse_args()
+
+  set_infer_flags(args.infer_flags)
+
   for f in args.file:
     opts = parse_opt_file(f.read())
 

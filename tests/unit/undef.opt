@@ -25,3 +25,32 @@ Name: undef 5
 %4 = and %3, 1
   =>
 %4 = 0
+
+Name: undef 6
+store %x, undef
+  =>
+unreachable
+
+
+; FIXME: slow
+Name: undef 7
+store i9 undef, %X
+  =>
+skip
+
+
+; FIXME: slow
+Name: undef 8
+%a = alloca Ty
+store i5 undef, %a
+  =>
+%a = alloca Ty
+
+
+Name: undef 9
+; FIXME: slow
+;%p = alloca Ty
+%p = alloca i7
+%x = load %p
+  =>
+%x = undef

@@ -1,3 +1,11 @@
+Name: alloca equivalence
 %p = alloca [5 x Ty], 3
   =>
 %p = alloca [5 x Ty], 3
+
+
+Name: introduce store
+%p = alloca Ty
+  =>
+%p = alloca Ty
+store 5, %p

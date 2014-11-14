@@ -1,0 +1,658 @@
+Name: simplifyValueKnownNonZero 1
+; FIXME: combine the following 12 into 3.
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = udiv %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = udiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 2
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = udiv %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = udiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 3
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = udiv %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = udiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 4
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = sdiv %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = sdiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 5
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = sdiv %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = sdiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 6
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = sdiv %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = sdiv %X, %Y
+
+
+Name: simplifyValueKnownNonZero 7
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = urem %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = urem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 8
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = urem %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = urem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 9
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = urem %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = urem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 10
+; FIXME: slow
+Pre: hasOneUse(%Y)
+%s = shl i33 1, %A
+%Y = lshr %s, %B
+%r = srem %X, %Y
+  =>
+%sub = sub %A, %B
+%Y = shl 1, %sub
+%r = srem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 11
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = lshr %A, %B
+%r = srem %X, %Y
+  =>
+%Y = lshr exact %A, %B
+%r = srem %X, %Y
+
+
+Name: simplifyValueKnownNonZero 12
+Pre: isPowerOf2(%A) && hasOneUse(%Y)
+%Y = shl %A, %B
+%r = srem %X, %Y
+  =>
+%Y = shl nuw %A, %B
+%r = srem %X, %Y
+
+; FIXME: cannot do the recursive case of simplifyValueKnownNonZero()
+
+
+Name: 152
+%r = mul %x, -1
+  =>
+%r = sub 0, %x
+
+
+Name: 160
+; FIXME: slow
+%sh = shl i7 %x, C2
+%r = mul %sh, C1
+  =>
+%r = mul %x, C1<<C2
+
+
+Name: 168
+; FIXME: slow
+Pre: isPowerOf2(C1)
+%r = mul i11 %x, C1
+  =>
+%r = shl %x, log2(C1)
+
+Name: 168-2
+; FIXME: slow
+Pre: isPowerOf2(C1)
+%r = mul nuw i11 %x, C1
+  =>
+%r = shl nuw %x, log2(C1)
+
+
+Name: 201
+Pre: C < 0 && isPowerOf2(abs(C))
+%Op0 = sub %Y, %X
+%r = mul %Op0, C
+  =>
+%sub = sub %X, %Y
+%r = mul %sub, abs(C)
+
+
+Name: 203
+Pre: C < 0 && isPowerOf2(abs(C))
+%Op0 = add %Y, C1
+%r = mul %Op0, C
+  =>
+%sub = sub -C1, %Y
+%r = mul %sub, abs(C)
+
+
+; FIXME: FoldOpIntoSelect -- 218
+; FIXME: FoldOpIntoPhi -- 222
+
+
+Name: 229
+; FIXME: missing pre that %mul is folded to something other than a mult.
+%Op0 = add %X, C1
+%r = mul %Op0, %Op1
+  =>
+%mul = mul C1, %Op1
+%tmp = mul %X, %Op1
+%r = add %tmp, %mul
+
+
+Name: 239
+%a = sub 0, %X
+%b = sub 0, %Y
+%r = mul %a, %b
+  =>
+%r = mul %X, %Y
+
+
+Name: 265
+; FIXME: Combine the following two
+%div = udiv exact %X, %Y
+%r = mul %div, %Y
+  =>
+%r = %X
+
+
+Name: 265-2
+%div = sdiv exact %X, %Y
+%r = mul %div, %Y
+  =>
+%r = %X
+
+
+Name: 266
+; FIXME: Combine the following two
+%div = udiv exact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%r = sub 0, %X
+
+
+Name: 266-2
+%div = sdiv exact %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%r = sub 0, %X
+
+
+Name: 275
+; FIXME: slow
+%div = udiv i5 %X, %Y
+%r = mul %div, %Y
+  =>
+%rem = urem %X, %Y
+%r = sub  %X, %rem
+
+
+Name: 275-2
+; FIXME: slow
+%div = sdiv i5 %X, %Y
+%r = mul %div, %Y
+  =>
+%rem = srem %X, %Y
+%r = sub  %X, %rem
+
+
+Name: 276
+; FIXME: slow
+%div = sdiv i5 %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%rem = srem %X, %Y
+%r = sub %rem, %X
+
+
+Name: 276-2
+; FIXME: slow
+%div = udiv i5 %X, %Y
+%negY = sub 0, %Y
+%r = mul %div, %negY
+  =>
+%rem = urem %X, %Y
+%r = sub %rem, %X
+
+
+Name: 283
+%r = mul i1 %X, %Y
+  =>
+%r = and %X, %Y
+
+
+Name: 290 & 292
+%Op0 = shl 1, %Y
+%r = mul %Op0, %Op1
+  =>
+%r = shl %Op1, %Y
+
+
+Name: 304
+Pre: MaskedValueIsZero(%Op0, -2)
+%r = mul %Op0, %Op1
+  =>
+%s = sub 0, %Op0
+%r = and %s, %Op1
+
+
+Name: SimplifyDivRemOfSelect
+; FIXME: applies to *div/*rem
+%sel = select %c, %Y, 0
+%r = udiv %X, %sel
+  =>
+%r = udiv %X, %Y
+
+
+; FIXME: cannot do the remaining part of SimplifyDivRemOfSelect
+
+
+Name: 735
+; FIXME: slow
+Pre: WillNotOverflowSignedMul(C1, C2)
+%Op0 = sdiv i7 %X, C1
+%r = sdiv %Op0, C2
+  =>
+%r = sdiv %X, C1*C2
+
+
+Name: 735
+; FIXME: slow
+Pre: WillNotOverflowUnsignedMul(C1, C2)
+%Op0 = udiv i7 %X, C1
+%r = udiv %Op0, C2
+  =>
+%r = udiv %X, C1*C2
+
+
+Name: 748
+; FIXME: merge with the following
+Pre: C2 % C1 == 0
+%m = mul nsw i7 %X, C1
+%r = sdiv %m, C2
+  =>
+%r = sdiv %X, C2/C1
+
+
+Name: 748
+Pre: C2 % C1 == 0
+%m = mul nsw i7 %X, C1
+%r = sdiv exact %m, C2
+  =>
+%r = sdiv exact %X, C2/C1
+
+
+Name: 748
+; FIXME: merge with the following
+Pre: C2 %u C1 == 0
+%m = mul nuw i7 %X, C1
+%r = udiv %m, C2
+  =>
+%r = udiv %X, C2 /u C1
+
+
+Name: 748
+Pre: C2 %u C1 == 0
+%m = mul nuw i7 %X, C1
+%r = udiv exact %m, C2
+  =>
+%r = udiv exact %X, C2 /u C1
+
+
+Name: 756
+; FIXME: merge the following 3
+Pre: C1 % C2 == 0
+%m = mul nsw i7 %X, C1
+%r = sdiv %m, C2
+  =>
+%r = mul nsw %X, C1/C2
+
+
+Name: 756
+Pre: C1 %u C2 == 0
+%m = mul nuw i7 %X, C1
+%r = udiv %m, C2
+  =>
+%r = mul nuw %X, C1/u C2
+
+
+Name: 756
+Pre: C1 %u C2 == 0
+%m = mul nuw nsw i7 %X, C1
+%r = udiv %m, C2
+  =>
+%r = mul nuw nsw %X, C1/u C2
+
+
+Name: 764
+; FIXME: slow
+; FIXME: merge the following 4
+Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+%s = shl nsw i9 %X, C1
+%r = sdiv %s, C2
+  =>
+%r = sdiv %X, C2/(1<<C1)
+
+
+Name: 764
+; FIXME: slow
+Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+%s = shl nsw i7 %X, C1
+%r = sdiv exact %s, C2
+  =>
+%r = sdiv exact %X, C2/(1<<C1)
+
+
+Name: 764
+; FIXME: slow
+Pre: C2 %u (1<<C1) == 0
+%s = shl nuw i9 %X, C1
+%r = udiv %s, C2
+  =>
+%r = udiv %X, C2/u (1<<C1)
+
+
+Name: 764
+; FIXME: slow
+Pre: C2 %u (1<<C1) == 0
+%s = shl nuw i7 %X, C1
+%r = udiv exact %s, C2
+  =>
+%r = udiv exact %X, C2/u (1<<C1)
+
+
+Name: 772
+; FIXME: slow
+; FIXME: merge the following 3
+Pre: (1<<C1) % C2 == 0 && C1 != width(C1)-1
+%s = shl nsw i9 %X, C1
+%r = sdiv %s, C2
+  =>
+%r = mul nsw %X, (1<<C1)/C2
+
+
+Name: 772
+Pre: (1<<C1) %u C2 == 0
+%s = shl nuw i9 %X, C1
+%r = udiv %s, C2
+  =>
+%r = mul nuw %X, (1<<C1) /u C2
+
+
+Name: 772
+Pre: (1<<C1) %u C2 == 0
+%s = shl nsw nuw i9 %X, C1
+%r = udiv %s, C2
+  =>
+%r = mul nsw nuw %X, (1<<C1) /u C2
+
+
+Name: 805
+%r = sdiv 1, %X
+  =>
+%inc = add %X, 1
+%c = icmp ult %inc, 3
+%r = select %c, %X, 0
+
+
+Name: 809
+%r = udiv 1, %X
+  =>
+%c = icmp eq %X, 1
+%r = zext %c
+
+
+Name: 820
+; FIXME: merge with the following?
+; FIXME: slow
+%Z = srem i9 %X, %Op1
+%Op0 = sub %X, %Z
+%r = sdiv %Op0, %Op1
+  =>
+%r = sdiv %X, %Op1
+
+
+Name: 820
+; FIXME: slow
+%Z = urem i9 %X, %Op1
+%Op0 = sub %X, %Z
+%r = udiv %Op0, %Op1
+  =>
+%r = udiv %X, %Op1
+
+
+Name: 865
+Pre: isPowerOf2(C)
+%r = udiv i9 %x, C
+  =>
+%r = lshr %x, log2(C)
+
+
+Name: 865
+Pre: isPowerOf2(C)
+%r = udiv exact i9 %x, C
+  =>
+%r = lshr exact %x, log2(C)
+
+
+Name: 876
+Pre: C u>= (1<<(width(C)-1))
+%r = udiv %x, C
+  =>
+%c = icmp ult %x, C
+%r = select %c, 0, 1
+
+
+Name: 891
+%s = shl i13 1, %N
+%r = udiv %x, %s
+  =>
+%r = lshr %x, %N
+
+Name: 891-exact
+%s = shl i13 1, %N
+%r = udiv exact %x, %s
+  =>
+%r = lshr exact %x, %N
+
+Name: 891-2
+Pre: isPowerOf2(C)
+%s = shl i13 C, %N
+%r = udiv %x, %s
+  =>
+%N2 = add %N, log2(C)
+%r = lshr %x, %N2
+
+
+Name: 891-2
+Pre: isPowerOf2(C)
+%s = shl i13 C, %N
+%r = udiv exact %x, %s
+  =>
+%N2 = add %N, log2(C)
+%r = lshr exact %x, %N2
+
+
+Name: 891-3
+Pre: isPowerOf2(C)
+%s = shl C, %N
+%Op1 = zext %s
+%r = udiv i13 %x, %Op1
+  =>
+%N2 = add %N, log2(C)
+%N3 = zext %N2
+%r = lshr %x, %N3
+
+
+Name: 891-3
+Pre: isPowerOf2(C)
+%s = shl C, %N
+%Op1 = zext %s
+%r = udiv exact i13 %x, %Op1
+  =>
+%N2 = add %N, log2(C)
+%N3 = zext %N2
+%r = lshr exact %x, %N3
+
+
+Name: 968
+; FIXME: slow
+Pre: WillNotOverflowUnsignedShl(C2, C1)
+%Op0 = lshr i9 %X, C1
+%r = udiv %Op0, C2
+  =>
+%r = udiv %X, C2 << C1
+
+
+Name: 976
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = udiv %Op0, %Op1
+  =>
+%d = udiv %X, %Y
+%r = zext %d
+
+
+Name: 976-exact
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = udiv exact i9 %Op0, %Op1
+  =>
+%d = udiv exact %X, %Y
+%r = zext %d
+
+
+; FIXME: how to handle visitUDivOperand??
+
+
+Name: 1030
+%r = sdiv %X, -1
+  =>
+%r = sub 0, %X
+
+
+Name: 1033
+; FIXME: slow
+Pre: C >= 0 && isPowerOf2(C)
+%r = sdiv exact i33 %Op0, C
+  =>
+%r = ashr exact %Op0, log2(C)
+
+
+Name: 1045
+Pre: isSignBit(C)
+%r = sdiv %Op0, C
+  =>
+%cmp = icmp eq %Op0, C
+%r = zext %cmp
+
+
+Name: 1049
+; FIXME: slow
+%Op0 = sub nsw i11 0, %X
+%r = sdiv %Op0, C
+  =>
+%r = sdiv %X, -C
+
+
+Name: 1062
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && MaskedValueIsZero(%Op1, 1<<(width(%Op0)-1))
+%r = sdiv %Op0, %Op1
+  =>
+%r = udiv %Op0, %Op1
+
+
+Name: 1065
+; FIXME: slow
+Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && isPowerOf2(C)
+%Op1 = shl i23 C, %X
+%r = sdiv %Op0, %Op1
+  =>
+; FIXME: we shouldnt require Op1 to be typed here
+%Op1 = shl C, %X
+%r = udiv %Op0, %Op1
+
+
+Name: 1285
+%Op0 = zext Ty %X
+%Op1 = zext Ty %Y
+%r = urem %Op0, %Op1
+  =>
+%u = urem %X, %Y
+%r = zext %u
+
+
+Name: 1291
+; FIXME: slow
+Pre: isPowerOf2OrZero(%Op1)
+%r = urem i33 %Op0, %Op1
+  =>
+%add = add %Op1, -1
+%r = and %Op0, %add
+
+
+Name: 1298
+%r = urem 1, %Op1
+  =>
+%cmp = icmp ne %Op1, 1
+%r = zext %cmp
+
+
+Name: 1321
+; FIXME: slow
+Pre: C < 0 && !isSignBit(C)
+%r = srem i11 %Op0, C
+  =>
+%r = srem %Op0, -C
+
+
+Name: 1333
+Pre: MaskedValueIsZero(%Op1, 1<<(width(%Op1)-1)) && MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1))
+%r = srem %Op0, %Op1
+  =>
+%r = urem %Op0, %Op1

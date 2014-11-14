@@ -170,10 +170,13 @@ if DO_STATS:
 print 'bool runOnInstruction(Instruction* I) {'
 
 rule = 1
-for n,p,s,t,us,ut in opts:
+for n,p,sbb,tbb,s,t,us,ut in opts:
   # transform the last instruction in the source
   context = GenContext()
   
+  if len(sbb) != 1 or len(tbb) != 1:
+    raise AliveError("codegen can't handle multiple-block optimizations: " + n)
+
   # find the last instruction in s (skip values declared in the precondition)
   vals = s.values()
   root = vals.pop()

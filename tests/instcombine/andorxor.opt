@@ -1,8 +1,557 @@
-; visitAnd
+Name: AndOrXor:135
+%op = xor %X, C1
+%r = and %op, C2
+  =>
+%a = and %X, C2
+%r = xor %a, C1&C2
 
-Name: AndOrXor:1114,1118,1123,1129
+
+Name: AndOrXor:144
+;Pre: C1&C2 != C1  -- only for profitability
+%op = or %X, C1
+%r = and %op, C2
+  =>
+%o = or %X, C1&C2
+%r = and %o, C2
+
+
+Name: AndOrXor:151
+Pre: (C1 & C2) == C1
+; && (C1 & C2) != 0  -- only for profitability
+%op = or %X, C1
+%r = and %op, C2
+  =>
+%a = and %X, C2^(C1&C2)
+%r = or %a, C1
+
+
+Name: AndOrXor:185
+Pre: isPowerOf2(C2) && C1 & (C2-1) == 0 && C2 & C1 == 0
+%op = add %X, C1
+%r = and %op, C2
+  =>
+%r = and %X, C2
+
+
+Name: AndOrXor:190
+Pre: isPowerOf2(C2) && C1 & (C2-1) == 0 && C2 & C1 != 0
+%op = add %X, C1
+%r = and %op, C2
+  =>
+%a = and %X, C2
+%r = xor %a, C2
+
+
+Name: AndOrXor:206
+Pre: C2 & (-1 << C1) == (-1 << C1)
+%op = shl %X, C1
+%r = and %op, C2
+  =>
+%op = shl %X, C1
+%r = %op
+
+
+Name: AndOrXor:210
+Pre: C2 & (-1 << C1) != (-1 << C1) && C2 & (-1 << C1) != C2
+%op = shl %X, C1
+%r = and %op, C2
+  =>
+%op = shl %X, C1
+%r = and %op, C2 & (-1 << C1)
+
+
+Name: AndOrXor:226
+Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
+%op = lshr %X, C1
+%r = and %op, C2
+  =>
+%op = lshr %X, C1
+%r = %op
+
+
+Name: AndOrXor:230
+Pre: C2 & lshr(-1, C1) != lshr(-1, C1)
+; && C2 & lshr(-1, C1) != C2 -- profitability only
+%op = lshr %X, C1
+%r = and %op, C2
+  =>
+%op = lshr %X, C1
+%r = and %op, C2 & lshr(-1, C1)
+
+
+Name: AndOrXor:246
+Pre: hasOneUse(%op) && C2 & lshr(-1, C1) == C2
+%op = ashr %X, C1
+%r = and %op, C2
+  =>
+%op  = lshr %X, C1
+%r = and %op, C2
+
+
+Name: AndOrXor:270
+Pre: C1 <= C2 && C1 == C2
+%c1 = icmp sge %X, C1
+%c2 = icmp slt %X, C2
+%r = and %c1, %c2
+  =>
+%r = false
+
+
+Name: AndOrXor:273
+Pre: C1 <= C2 && C1 == 1 << (width(C1)-1)
+%c1 = icmp sge %X, C1
+%c2 = icmp slt %X, C2
+%r = and %c1, %c2
+  =>
+%r = icmp slt %X, C2
+
+
+Name: AndOrXor:280
+Pre: C1 <= C2
+%c1 = icmp sge %X, C1
+%c2 = icmp slt %X, C2
+%r = and %c1, %c2
+  =>
+%a = add %X, -C1
+%r = icmp ult %a, -C1+C2
+
+
+Name: AndOrXor:287
+Pre: C1 <= C2 && C1 == C2
+%c1 = icmp slt %X, C1
+%c2 = icmp sge %X, C2
+%r = or %c1, %c2
+  =>
+%r = true
+
+
+Name: AndOrXor:290
+Pre: C1 <= C2 && C1 != C2 && C1 == 1<< (width(C1)-1)
+%c1 = icmp slt %X, C1
+%c2 = icmp sge %X, C2
+%r = or %c1, %c2
+  =>
+%r = icmp sgt %X, (C2-1)
+
+
+Name: AndOrXor:298
+Pre: C1 <= C2 && C1 != C2
+%c1 = icmp slt %X, C1
+%c2 = icmp sge %X, C2
+%r = or %c1, %c2
+  =>
+%a = add %X, -C1
+%r = icmp ugt %a, -C1+(C2-1)
+
+
+Name: AndOrXor:343
+Pre: C1 & C2 == C2 && (isPowerOf2OrZero(C2+1) || (isShiftedMask(C2) && MaskedValueIsZero(%B, (1 << (width(C2) - countLeadingZeros((C2 - 1) ^ C2)))-1)))
+%lhs = and %A, C1
+%Op = add %lhs, %B
+%r = and %Op, C2
+  =>
+%op = add %A, %B
+%r = and %op, C2
+
+
+Name: AndOrXor:363
+Pre: isPowerOf2OrZero(C2+1) && C1 & C2 == 0
+%lhs = or %A, C1
+%Op = add %lhs, %B
+%r = and %Op, C2
+  =>
+%op = add %A, %B
+%r = and %op, C2
+
+
+Name: AndOrXor:364
+Pre: isPowerOf2OrZero(C2+1) && C1 & C2 == 0
+%lhs = xor %A, C1
+%Op = sub %lhs, %B
+%r = and %Op, C2
+  =>
+%op = sub %A, %B
+%r = and %op, C2
+
+
+Name: AndOrXor:516
+%r = icmp slt %X, 0
+  =>
+%a = and %X, 1 << (width(%X)-1)
+%r = icmp ne %a, 0
+
+
+Name: AndOrXor:523
+%r = icmp sgt %X, -1
+  =>
+%a = and %X, 1 << (width(%X)-1)
+%r = icmp eq %a, 0
+
+
+Name: AndOrXor:530
+Pre: isPowerOf2(C)
+%r = icmp ult %X, C
+  =>
+%a = and %X, -C
+%r = icmp eq %a, 0
+
+
+Name: AndOrXor:537
+Pre: isPowerOf2(C+1)
+%r = icmp ugt %X, C
+  =>
+%a = and %X, ~C
+%r = icmp ne %a, 0
+
+
+Name: AndOrXor:698
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = icmp eq %a1, 0
+%op1 = icmp eq %a2, 0
+%r = and %op0, %op1
+  =>
+%or = or %b, %d
+%a3 = and %a, %or
+%r = icmp eq %a3, 0
+
+
+Name: AndOrXor:709
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = icmp eq %a1, %b
+%op1 = icmp eq %a2, %d
+%r = and %op0, %op1
+  =>
+%or = or %b, %d
+%a3 = and %a, %or
+%r = icmp eq %a3, %or
+
+
+Name: AndOrXor:716
+%a1 = and %a, %b
+%a2 = and %a, %d
+%op0 = icmp eq %a1, %a
+%op1 = icmp eq %a2, %a
+%r = and %op0, %op1
+  =>
+%a4 = and %b, %d
+%a3 = and %a, %a4
+%r = icmp eq %a3, %a
+
+
+Name: AndOrXor:732-1
+Pre: C1 & C2 == C1
+%a1 = and %a, C1
+%a2 = and %a, C2
+%op0 = icmp ne %a1, 0
+%op1 = icmp ne %a2, 0
+%r = and %op0, %op1
+  =>
+%a1 = and %a, C1
+%r = icmp ne %a1, 0
+
+
+Name: AndOrXor:732-2
+Pre: C1 & C2 == C1
+%a1 = and %a, C1
+%a2 = and %a, C2
+%op0 = icmp ne %a1, C1
+%op1 = icmp ne %a2, C2
+%r = and %op0, %op1
+  =>
+%a1 = and %a, C1
+%r = icmp ne %a1, C1
+
+
+Name: AndOrXor:745
+Pre: C1 | C2 == C1
+%a1 = and %a, C1
+%a2 = and %a, C2
+%op0 = icmp ne %a1, %a
+%op1 = icmp ne %a2, %a
+%r = and %op0, %op1
+  =>
+%a1 = and %a, C1
+%r = icmp ne %a1, %a
+
+
+Name: AndOrXor:757
+Pre: (C1 & C3) & (C2 ^ C4) == 0 && C1 & C2 == C2 && C3 & C4 == C4
+%a1 = and %a, C1
+%a2 = and %a, C3
+%op0 = icmp eq %a1, C2
+%op1 = icmp eq %a2, C4
+%r = and %op0, %op1
+  =>
+%a3 = and %a, C1|C3
+%r = icmp eq %a3, C2|C4
+
+
+Name: AndOrXor:794
+; FIXME: missing the remaining cases
+%op0 = icmp sgt %a, %b
+%op1 = icmp ne %a, %b
+%r = and %op0, %op1
+  =>
+%r = icmp sgt %a, %b
+
+
+Name: AndOrXor:819
+Pre: isPowerOf2(C)
+%op0 = icmp ult %a, C
+%op1 = icmp ult %b, C
+%r = and %op0, %op1
+  =>
+%o = or %a, %b
+%r = icmp ult %o, C
+
+
+Name: AndOrXor:827
+%op0 = icmp eq %a, 0
+%op1 = icmp eq %b, 0
+%r = and %op0, %op1
+  =>
+%o = or %a, %b
+%r = icmp eq %o, 0
+
+
+Name: AndOrXor:842
+Pre: ((1 << width(C1))-1) & C3 == 0 && ((1 << width(C1))-1) & C2 == 0
+%t = trunc %x to i11
+%op0 = icmp eq %t, C1
+%a1 = and %x, C3
+%op1 = icmp eq %a1, C2
+%r = and %op0, %op1
+  =>
+%a2 = and %x, C3 | ((1 << width(C1))-1)
+%r = icmp eq %a2, zext(C1) | C2
+
+
+Name: AndOrXor:887-1
+; FIXME: missing the remaining combinations: [su][lg]t
+Pre: C1 != C2
+%op0 = icmp eq %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:887-2
+%op0 = icmp eq %a, C1
+%op1 = icmp ne %a, C1
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:922
+Pre: C1 u< C2
+%op0 = icmp eq %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp eq %a, C1
+%r = %op0
+
+
+Name: AndOrXor:923
+Pre: C1 u< C2
+%op0 = icmp eq %a, C1
+%op1 = icmp ult %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp eq %a, C1
+%r = %op0
+
+
+Name: AndOrXor:924
+Pre: C1 < C2
+%op0 = icmp eq %a, C1
+%op1 = icmp slt %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp eq %a, C1
+%r = %op0
+
+
+Name: AndOrXor:931
+Pre: C1 u< C2 && C1 == C2-1
+%op0 = icmp ne %a, C1
+%op1 = icmp ult %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp ult %a, C1
+
+
+Name: AndOrXor:937
+Pre: C1 < C2 && C1 == C2-1
+%op0 = icmp ne %a, C1
+%op1 = icmp slt %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp slt %a, C1
+
+
+Name: AndOrXor:940
+Pre: C1 u< C2
+%op0 = icmp ne %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp eq %a, C2
+%r = %op1
+
+
+Name: AndOrXor:941
+Pre: C1 u< C2
+%op0 = icmp ne %a, C1
+%op1 = icmp ugt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp ugt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:942
+Pre: C1 < C2
+%op0 = icmp ne %a, C1
+%op1 = icmp sgt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp sgt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:949
+Pre: C1 u< C2 && C1 == C2-1
+%op0 = icmp ne %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%s = add %a, -C1
+%r = icmp ugt %s, 1
+
+
+Name: AndOrXor:961
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:962
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp ugt %a, C2
+%r = and %op0, %op1
+  =>
+%r = false
+
+
+Name: AndOrXor:966
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp ult %a, C1
+%r = %op0
+
+
+Name: AndOrXor:967
+Pre: C1 u< C2
+%op0 = icmp ult %a, C1
+%op1 = icmp ult %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp ult %a, C1
+%r = %op0
+
+
+Name: AndOrXor:978
+Pre: C1 < C2
+%op0 = icmp slt %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp slt %a, C1
+%r = %op0
+
+
+Name: AndOrXor:979
+Pre: C1 < C2
+%op0 = icmp slt %a, C1
+%op1 = icmp slt %a, C2
+%r = and %op0, %op1
+  =>
+%op0 = icmp slt %a, C1
+%r = %op0
+
+
+Name: AndOrXor:988
+Pre: C1 u< C2
+%op0 = icmp ugt %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp eq %a, C2
+%r = %op1
+
+
+Name: AndOrXor:989
+Pre: C1 u< C2
+%op0 = icmp ugt %a, C1
+%op1 = icmp ugt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp ugt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:994
+Pre: C1 u< C2 && C2 == C1+1
+%op0 = icmp ugt %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp ugt %a, C2
+
+
+Name: AndOrXor:1006
+Pre: C1 < C2
+%op0 = icmp sgt %a, C1
+%op1 = icmp eq %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp eq %a, C2
+%r = %op1
+
+
+Name: AndOrXor:1007
+Pre: C1 < C2
+%op0 = icmp sgt %a, C1
+%op1 = icmp sgt %a, C2
+%r = and %op0, %op1
+  =>
+%op1 = icmp sgt %a, C2
+%r = %op1
+
+
+Name: AndOrXor:1012
+Pre: C1 < C2 && C2 == C1+1
+%op0 = icmp sgt %a, C1
+%op1 = icmp ne %a, C2
+%r = and %op0, %op1
+  =>
+%r = icmp sgt %a, C2
+
+
+Name: AndOrXor:1140-1
 Pre: MaskedValueIsZero(%op0LHS, ~C)
-	; HasOneUse(%op0)
 %op0 = xor %op0LHS, %op0RHS
 %r = and %op0, C
   =>
@@ -10,10 +559,8 @@ Pre: MaskedValueIsZero(%op0LHS, ~C)
 %r = xor %op0LHS, %newRHS
 
 
-Name: AndOrXor:1114,1118,1124,1129
+Name: AndOrXor:1140-2
 Pre: MaskedValueIsZero(%op0LHS, ~C)
-	; HasOneUse(%op0)
-	; same as above, but with or
 %op0 = or %op0LHS, %op0RHS
 %r = and %op0, C
   =>
@@ -21,20 +568,16 @@ Pre: MaskedValueIsZero(%op0LHS, ~C)
 %r = or %op0LHS, %newRHS
 
 
-Name: AndOrXor:1114,1118,1123,1135
+Name: AndOrXor:1146-1
 Pre: MaskedValueIsZero(%op0RHS, ~C)
-	; HasOneUse(%op0) && !constant(%op0RHS)
-
 %op0 = xor %op0LHS, %op0RHS
 %r = and %op0, C
   =>
 %newLHS = and %op0LHS, C
 %r = xor %newLHS, %op0RHS
 
-Name: AndOrXor:1114,1118,1124,1135
+Name: AndOrXor:1146-2
 Pre: MaskedValueIsZero(%op0RHS, ~C)
-	; HasOneUse(%op0) && !constant(%op0RHS)
-	; same as above, but with or
 %op0 = or %op0LHS, %op0RHS
 %r = and %op0, C
   =>
@@ -42,13 +585,16 @@ Pre: MaskedValueIsZero(%op0RHS, ~C)
 %r = or %newLHS, %op0RHS
 
 
-; @@deferring 1114,1118,1145. FoldLogicalPlusAnd
-; @@deferring 1114,1118,1155,1159. FoldLogicalPlusAnd
-; @@deferring 1114,1118,1155,1164. countLeadingZeros
+Name: AndOrXor:1175
+Pre: MaskedValueIsZero(%A, lshr(-1, countLeadingZeros(C)))
+%lhs = sub %A, %B
+%r = and %lhs, C
+  =>
+%neg = sub 0, %B
+%r = and %neg, C
 
 
-Name: AndOrXor:1114,1118,1176
-
+Name: AndOrXor:1191-1
 %op0 = shl 1, %op0RHS
 %r = and %op0, 1
   =>
@@ -56,18 +602,15 @@ Name: AndOrXor:1114,1118,1176
 %r = zext %newICMP
 
 
-Name: AndOrXor:1114,1118,1177
-	; same as above, but with lshr
+Name: AndOrXor:1191-2
 %op0 = lshr 1, %op0RHS
 %r = and %op0, 1
   =>
 %newICMP = icmp eq %op0RHS, 0
 %r = zext %newICMP
 
-; @@deferring 1114,1118,1188. OptAndOp
 
-Name: AndOrXor:1114,1197
-
+Name: AndOrXor:1207
 %a = and %x, C1
 %op0 = trunc %a
 %r = and %op0, C2
@@ -75,12 +618,8 @@ Name: AndOrXor:1114,1197
 %newcast = trunc %x
 %r = and %newcast, trunc(C1) & C2
 
-; @@deferring 1114,1210. FoldOpIntoSelect
-; @@deferring 1114,1213. FoldOpIntoPhi
 
-Name: AndOrXor:1220  ~A & ~B -> ~(A | B)
-	; HasOneUse(Op0) && HasOneUse(Op1)
-
+Name: AndOrXor:1230  ~A & ~B -> ~(A | B)
 %op0 = xor %notOp0, -1
 %op1 = xor %notOp1, -1
 %r = and %op0, %op1
@@ -89,9 +628,7 @@ Name: AndOrXor:1220  ~A & ~B -> ~(A | B)
 %r = xor %or, -1
 
 
-Name: AndOrXor:1231 (A|B) & ~(A&B) => A^B
-	; commute %op0 and %notOp1
-
+Name: AndOrXor:1241 (A|B) & ~(A&B) => A^B
 %op0 = or %A, %B
 %notOp1 = and %A, %B
 %op1 = xor %notOp1, -1
@@ -100,9 +637,7 @@ Name: AndOrXor:1231 (A|B) & ~(A&B) => A^B
 %r = xor %A, %B
 
 
-Name: AndOrXor:1237 ~(A&B) & (A|B) => A^B
-	; commute %notOp0 and %op1
-
+Name: AndOrXor:1247 ~(A&B) & (A|B) => A^B
 %notOp0 = and %A, %B
 %op0 = xor %notOp0, -1
 %op1 = or %A, %B
@@ -111,11 +646,8 @@ Name: AndOrXor:1237 ~(A&B) & (A|B) => A^B
 %r = xor %A, %B
 
 
-Name: AndOrXor:1243 A & (A^B) -> A & ~B
-	; HasOneUse(%op0)
-	; commute %r, %op1
-	; !constant(%A) ; avoid infinite loop when A == -1
-
+Name: AndOrXor:1253 A & (A^B) -> A & ~B
+; FIXME: need pre: !constant(%A) to avoid infinite loop when A == -1
 %op0 = xor %A, %B
 %r = and %op0, %A
   =>
@@ -123,9 +655,7 @@ Name: AndOrXor:1243 A & (A^B) -> A & ~B
 %r = and %A, %notB
 
 
-Name: AndOrXor:1270 (~A|B)&A -> A&B
-	; commute %op0
-
+Name: AndOrXor:1280 (~A|B)&A -> A&B
 %nA = xor %A, -1
 %op0 = or %nA, %B
 %r = and %op0, %A
@@ -133,24 +663,27 @@ Name: AndOrXor:1270 (~A|B)&A -> A&B
 %r = and %A, %B
 
 
-Name: AndOrXor:1273 A&(~A|B) -> A&B
-	; commute %op0
-	; see AndOrXor:1270
+Name: AndOrXor:1288 (A ^ B) & ((B ^ C) ^ A) -> (A ^ B) & ~C
+%op0 = xor %A, %B
+%x = xor %B, %C
+%op1 = xor %x, %A
+%r = and %op0, %op1
+  =>
+%op0 = xor %A, %B
+%negC = xor %C, -1
+%r = and %op0, %negC
 
-%nA = xor %A, -1
-%op1 = or %nA, %B
-%r = and %A, %op1
+
+Name: AndOrXor:1294 (A | B) & ((~A) ^ B) -> (A & B)
+%op0 = or %A, %B
+%x = xor %A, -1
+%op1 = xor %x, %B
+%r = and %op0, %op1
   =>
 %r = and %A, %B
 
 
-; @@deferring 1278. FoldAndOfICmps
-; @@deferring 1284. FoldAnsOfFCmps
-
-
-Name: AndOrXor:1290 (sext)
-	; ShouldOptimizeCast
-	; type(%x) == type(%y)
+Name: AndOrXor:1346 (sext)
 %op0 = sext %x
 %op1 = sext %y
 %r = and %op0, %op1
@@ -159,9 +692,7 @@ Name: AndOrXor:1290 (sext)
 %r = sext %0
 
 
-Name: AndOrXor:1290 (zext)
-	; ShouldOptimizeCast
-	; type(%x) == type(%y)
+Name: AndOrXor:1346 (zext)
 %op0 = zext %x
 %op1 = zext %y
 %r = and %op0, %op1
@@ -170,9 +701,7 @@ Name: AndOrXor:1290 (zext)
 %r = zext %0
 
 
-Name: AndOrXor:1290 (trunc)
-	; ShouldOptimizeCast
-	; type(%x) == type(%y)
+Name: AndOrXor:1346 (trunc)
 %op0 = trunc %x
 %op1 = trunc %y
 %r = and %op0, %op1
@@ -180,35 +709,15 @@ Name: AndOrXor:1290 (trunc)
 %0 = and %x, %y
 %r = trunc %0
 
-; @@deferring 1308. FoldAndOfICmps
-; @@deferring 1315. FoldAndOfFCmps
 
-
-Name: AndOrXor:1323
-	; HasOneUse(%op0) && HasOneUse(%op1)
-	; generic over shifts (flags?)
-	; Slow
-
-%op0 = shl %x, %z
-%op1 = shl %y, %z
-%r = and %op0, %op1
-  =>
-%0 = and %x, %y
-%r = shl %0, %z
-
-
-Name: AndOrXor:1347
-	; commute %r
-
+Name: AndOrXor:1388
 %op0 = sext i1 %a
 %r = and %op0, %b
   =>
 %r = select %a, %b, 0
 
 
-Name: AndOrXor:1354
-	; commute %r
-
+Name: AndOrXor:1395
 %nop0 = sext i1 %a
 %op0 = xor %nop0, -1
 %r = and %op0, %b
@@ -216,18 +725,409 @@ Name: AndOrXor:1354
 %r = select %a, 0, %b
 
 
-; visitOr
+Name: AndOrXor:1574
+%A = sext %Cond
+%D = xor %A, -1
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %B
 
-; @@deferring 1917. SimplifyAssociativeOrCommutative
-; @@deferring 1920. SimplifyOrInst
-; @@deferring 1924. SimplifyUsingDistributiveLaws
-; @@deferring 1929. SimplifyDemandedInstructionBits
 
-Name: AndOrXor:1932,1936  (X & C1) | C2 --> (X | C2) & (C1|C2)
+Name: AndOrXor:1577
+%A = sext %Cond
+%n = xor %Cond, -1
+%D = sext %n
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %B
+
+
+Name: AndOrXor:1581
+%A = sext %Cond
+%B = xor %A, -1
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %D
+
+
+Name: AndOrXor:1583
+%A = sext %Cond
+%n = xor %Cond, -1
+%B = sext %n
+%a1 = and %A, %C
+%a2 = and %B, %D
+%r = or %a1, %a2
+  =>
+%r = select %Cond, %C, %D
+
+
+Name: AndOrXor:1593
+Pre: isPowerOf2(%K1) && isPowerOf2(%K2)
+%a1 = and %A, %K1
+%a2 = and %A, %K2
+%cmp1 = icmp eq %a1, 0
+%cmp2 = icmp eq %a2, 0
+%r = or %cmp1, %cmp2
+  =>
+%mask = or %K1, %K2
+%masked = and %A, %mask
+%r = icmp ne %masked, %mask
+
+
+Name: AndOrXor:1628-1
+Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C2 ^ -C1) && -C2 ^ -C1 == (C3-C2) ^ (C3-C1) && abs(C1-C2) u> C3
+%a1 = add i29 %A, C1
+%a2 = add %A, C2
+%cmp1 = icmp ult %a1, C3
+%cmp2 = icmp ult %a2, C3
+%r = or %cmp1, %cmp2
+  =>
+%newand = and %A, ~(C1^C2)
+%newadd = add %newand, umax(C1, C2)
+%r = icmp ult %newadd, C3
+
+
+Name: AndOrXor:1628-2
+Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C2 ^ -C1) && -C2 ^ -C1 == (C3-C2) ^ (C3-C1) && abs(C1-C2) u> C3
+%a1 = add i29 %A, C1
+%a2 = add %A, C2
+%cmp1 = icmp ule %a1, C3
+%cmp2 = icmp ule %a2, C3
+%r = or %cmp1, %cmp2
+  =>
+%newand = and %A, ~(C1^C2)
+%newadd = add %newand, umax(C1, C2)
+%r = icmp ule %newadd, C3
+
+
+Name: AndOrXor:1683-1
+; FIXME: parameterize over other icmp
+%op0 = icmp ugt %a, %b
+%op1 = icmp eq %a, %b
+%r = or %op0, %op1
+  =>
+%r = icmp uge %a, %b
+
+
+Name: AndOrXor:1683-2
+%op0 = icmp uge %a, %b
+%op1 = icmp ne %a, %b
+%r = or %op0, %op1
+  =>
+%r = true
+
+
+Name: AndOrXor:1704
+%cmp1 = icmp eq %B, 0
+%cmp2 = icmp ult %A, %B
+%r = or %cmp1, %cmp2
+  =>
+%b1 = add %B, -1
+%r = icmp uge %b1, %A
+
+
+Name: AndOrXor:1705
+%cmp1 = icmp eq %B, 0
+%cmp2 = icmp ugt %B, %A
+%r = or %cmp1, %cmp2
+  =>
+%b1 = add %B, -1
+%r = icmp uge %b1, %A
+
+
+Name: AndOrXor:1733
+%cmp1 = icmp ne %A, 0
+%cmp2 = icmp ne %B, 0
+%r = or %cmp1, %cmp2
+  =>
+%or = or %A, %B
+%r = icmp ne %or, 0
+
+
+Name: AndOrXor:1740
+Pre: C2+C3 == C1
+%add = add %X, C3
+%cmp1 = icmp ult %add, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%add = add %X, C3
+%r = icmp ule %add, C1
+
+
+Name: AndOrXor:1795
+Pre: C1 u< C2 && isPowerOf2(C1 ^ C2)
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%a = and %X, ~(C1 ^ C2)
+%r = icmp eq %a, C1
+
+
+Name: AndOrXor:1806
+Pre: C1 == C2-1
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%a = add %X, -C1
+%r = icmp ult %a, 2
+
+
+Name: AndOrXor:1818
+Pre: C1 u< C2
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ne %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1819
+Pre: C1 u< C2
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ult %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1820
+Pre: C1 < C2
+%cmp1 = icmp eq %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp slt %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1827
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ne %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1828
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp ugt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ne %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1829
+Pre: C1 < C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp sgt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ne %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1831
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1832
+Pre: C1 u< C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1833
+Pre: C1 < C2
+%cmp1 = icmp ne %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1844
+Pre: C1 u< C2 && C2 == -1
+%cmp1 = icmp ult %X, C1
+%cmp2 = icmp ugt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ult %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1849
+Pre: C1 u< C2
+%cmp1 = icmp ult %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ne %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1850
+Pre: C1 u< C2
+%cmp1 = icmp ult %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ult %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1864
+Pre: C1 < C2 && C2 == 1 << (width(C2)-1)
+%cmp1 = icmp slt %X, C1
+%cmp2 = icmp sgt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp slt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1869
+Pre: C1 < C2
+%cmp1 = icmp slt %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp ne %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1870
+Pre: C1 < C2
+%cmp1 = icmp slt %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp2 = icmp slt %X, C2
+%r = %cmp2
+
+
+Name: AndOrXor:1879
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ugt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1880
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp ugt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp ugt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1884
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1885
+Pre: C1 u< C2
+%cmp1 = icmp ugt %X, C1
+%cmp2 = icmp ult %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1894
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp eq %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp sgt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1895
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp sgt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%cmp1 = icmp sgt %X, C1
+%r = %cmp1
+
+
+Name: AndOrXor:1899
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp ne %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1900
+Pre: C1 < C2
+%cmp1 = icmp sgt %X, C1
+%cmp2 = icmp slt %X, C2
+%r = or %cmp1, %cmp2
+  =>
+%r = true
+
+
+Name: AndOrXor:1979
+Pre: C1 ^ C2 == -1
+%or = or %A, %B
+%op0 = and %or, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%a = and %A, C1
+%r = or %a, %B
+
+
+Name: AndOrXor:2008
+Pre: C1 ^ C2 == -1
+%or = xor %A, %B
+%op0 = and %or, C1
+%op1 = and %B, C2
+%r = or %op0, %op1
+  =>
+%a = and %A, C1
+%r = xor %a, %B
+
+
+Name: AndOrXor:2052  (X & C1) | C2 --> (X | C2) & (C1|C2)
 Pre: C & C1 != 0 ; @@ why? it's just as correct without
-	; HasOneUse(%op0)
-	
-
 %op0 = and %x, C1
 %r = or %op0, C
   =>
@@ -235,8 +1135,7 @@ Pre: C & C1 != 0 ; @@ why? it's just as correct without
 %r = and %or, (C | C1)
 
 
-Name: AndOrXor:1932,1946  (X ^ C1) | C2 --> (X | C2) ^ (C1 & ~C2)
-	; HasOneUse(%op0)
+Name: AndOrXor:2063  (X ^ C1) | C2 --> (X | C2) ^ (C1 & ~C2)
 %op0 = xor %x, C1
 %r = or %op0, C
   =>
@@ -244,14 +1143,8 @@ Name: AndOrXor:1932,1946  (X ^ C1) | C2 --> (X | C2) ^ (C1 & ~C2)
 %r = xor %or, (C1 & ~C)
 
 
-; @@deferring 1932,1955. FoldOpIntoSelect
-; @@deferring 1932,1959. FoldOpIntoPhi
-
-; @@deferring 1969. BSwap
-
-Name: AndOrXor:1978   (X^C)|Y -> (X|Y)^C iff Y&C == 0
+Name: AndOrXor:2095   (X^C)|Y -> (X|Y)^C iff Y&C == 0
 Pre: MaskedValueIsZero(%op1, C1)
-	; HasOneUse(%op0)
 %op0 = xor %A, C1
 %r = or %op0, %op1
   =>
@@ -259,34 +1152,34 @@ Pre: MaskedValueIsZero(%op1, C1)
 %r = xor %or, C1
 
 
-Name: AndOrXor:1987  Y|(X^C) -> (X|Y)^C iff Y&C == 0
-Pre: MaskedValueIsZero(%op0, C1)
-	; HasOneUse(%op1)
-%op1 = xor %A, C1
+Name: AndOrXor:2113   ((~A & B) | A) -> (A | B)
+%negA = xor %A, -1
+%op0 = and %negA, %B
+%r = or %op0, %A
+  =>
+%r = or %A, %B
+
+
+Name: AndOrXor:2118   ((A & B) | ~A) -> (~A | B)
+%negA = xor %A, -1
+%op0 = and %A, %B
+%r = or %op0, %negA
+  =>
+%negA = xor %A, -1
+%r = or %negA, %B
+
+
+Name: AndOrXor:2123   (A & (~B)) | (A ^ B) -> (A ^ B)
+%negB = xor %B, -1
+%op0 = and %A, %negB
+%op1 = xor %A, %B
 %r = or %op0, %op1
   =>
-%or = or %A, %op0
-%r = xor %or, C1
+%r = xor %A, %B
 
 
-
-Name: AndOrXor:1997,2002,2006,2007
-Pre: C1 == ~C2 && C2 & (C2+1) == 0 && MaskedValueIsZero(%V2, C2)
-	; commute %A, %r
-
-%A = add %B, %V2
-%op0 = and %A, C1
-%op1 = and %B, C2
-%r = or %op0, %op1
-  =>
-%A = add %B, %V2
-%r = %A
-
-
-Name: AndOrXor:1997,2002,2026,2029
+Name: AndOrXor:2142
 Pre: C1 & C2 == 0 && MaskedValueIsZero(%V2, ~C1)
-	; commute %A, %r
-
 %A = or %B, %V2
 %op0 = and %A, C1
 %op1 = and %B, C2
@@ -296,9 +1189,8 @@ Pre: C1 & C2 == 0 && MaskedValueIsZero(%V2, ~C1)
 %r = and %A, (C1 | C2)
 
 
-Name: AndOrXor:1997,2002,2026,2043
-Pre: C3 & ~C1 == 0 && C4 & ~C2 == 0
-
+Name: AndOrXor:2160
+Pre: C1 & C2 == 0 && C3 & ~C1 == 0 && C4 & ~C2 == 0
 %A = or %V1, C3
 %B = or %V1, C4
 %op0 = and %A, C1
@@ -309,11 +1201,7 @@ Pre: C3 & ~C1 == 0 && C4 & ~C2 == 0
 %r = and %V2, (C1 | C2)
 
 
-; @@deferring 1997,2058. MatchSelectFromAndOr
-
-
-Name: AndOrXor:1997,2070
-
+Name: AndOrXor:2188
 %C = xor %D, -1
 %B = xor %A, -1
 %op0 = and %A, %C
@@ -323,79 +1211,51 @@ Name: AndOrXor:1997,2070
 %r = xor %A, %D
 
 
-Name: AndOrXor:1997,2074
-
-%A = xor %D, -1
-%B = xor %C, -1
-%op0 = and %A, %C
-%op1 = and %B, %D
+Name: AndOrXor:2231  (A ^ B) | ((B ^ C) ^ A) -> (A ^ B) | C
+%op0 = xor %A, %B
+%x = xor %B, %C
+%op1 = xor %x, %A
 %r = or %op0, %op1
   =>
-%r = xor %C, %D
+%op0 = xor %A, %B
+%r = or %op0, %C
 
 
-Name: AndOrXor:1997,2078
-
-%C = xor %B, -1
-%D = xor %A, -1
-%op0 = and %A, %C
-%op1 = and %B, %D
-%r = or %op0, %op1
+Name: AndOrXor:2243  ((B | C) & A) | B -> B | (A & C)
+%o = or %B, %C
+%op0 = and %o, %A
+%r = or %op0, %B
   =>
-%r = xor %A, %B
+%a = and %A, %C
+%r = or %B, %a
 
 
-Name: AndOrXor:1997,2082
-
-%A = xor %B, -1
-%D = xor %C, -1
-%op0 = and %A, %C
-%op1 = and %B, %D
-%r = or %op0, %op1
+Name: AndOrXor:2247  (~A | ~B) == (~(A & B))
+%na = xor %A, -1
+%nb = xor %B, -1
+%r = or %na, %nb
   =>
-%r = xor %C, %B
+%a = and %A, %B
+%r = xor %a, -1
 
 
-; @@deferring 1997,2087. FoldOrWithConstants
-; @@deferring 1997,2087. FoldOrWithConstants
-
-
-Name: AndOrXor:2101
-	; HasOneUse(%op0) && HasOneUse(%op1)
-	; generic on shifts
-	; Slow
-
-%op0 = shl %x, %z
-%op1 = shl %y, %z
-%r = or %op0, %op1
-  =>
-%0 = or %x, %y
-%r = shl %0, %z
-
-
-Name: AndOrXor:2114
-	; HasOneUse(%op0) && HasOneUse(%op1)
-
-%op0 = xor %nop0, -1
-%op1 = xor %nop1, -1
-%r = or %op0, %op1
-  =>
-%and = and %nop0, %nop1
-%r = xor %and, -1
-
-
-Name: AndOrXor:2124,2132,2133
-	; commute %r, %op1
-
+Name: AndOrXor:2263
 %op1 = xor %op0, %B
 %r = or %op0, %op1
   =>
 %r = or %op0, %B
 
 
-Name: AndOrXor:2124,2132,2136
-	; commute %r
+Name: AndOrXor:2264
+%na = xor %A, -1
+%op1 = xor %na, %B
+%r = or %A, %op1
+  =>
+%nb = xor %B, -1
+%r = or %A, %nb
 
+
+Name: AndOrXor:2265
 %op0 = and %A, %B
 %op1 = xor %A, %B
 %r = or %op0, %op1
@@ -403,66 +1263,36 @@ Name: AndOrXor:2124,2132,2136
 %r = or %A, %B
 
 
-Name: AndOrXor:2124,2132,2140
-	; HasOneUse(%op1)
-	; commute %r
-
-%A = xor %op0, -1
-%op1 = xor %A, %B
-%r = or %op0, %op1
+Name: AndOrXor:2284
+%o = or %A, %B
+%op1 = xor %o, -1
+%r = or %A, %op1
   =>
 %not = xor %B, -1
-%r = or %not, %op0
+%r = or %A, %not
 
 
-Name: AndOrXor:2124,2132,2144
-	; HasOneUse(%op1)
-	; commute %r
-	; see above
+Name: AndOrXor:2285
+%o = xor %A, %B
+%op1 = xor %o, -1
+%r = or %A, %op1
+  =>
+%not = xor %B, -1
+%r = or %A, %not
 
-%B = xor %op0, -1
-%op1 = xor %A, %B
+
+Name: AndOrXor:2297
+%op0 = and %A, %B
+%na = xor %A, -1
+%op1 = xor %na, %B
 %r = or %op0, %op1
   =>
-%not = xor %A, -1
-%r = or %not, %op0
+%na = xor %A, -1
+%r = xor %na, %B
 
 
-
-Name: AndOrXor:2124,2152
-	; HasOneUse(%op1)
-	; commute %r, %A
-
-%A = or %op0, %x
-%op1 = xor %A, -1
-%r = or %op0, %op1
-  =>
-%not = xor %x, -1
-%r = or %not, %op0
-
-
-Name: AndOrXor:2124,2152
-	; HasOneUse(%op1)
-	; commute %r, %A
-	; see above
-
-%A = xor %op0, %x
-%op1 = xor %A, -1
-%r = or %op0, %op1
-  =>
-%not = xor %x, -1
-%r = or %not, %op0
-
-; @@deferring 2166. FoldOrOfICmps
-; @@deferring 2172. FOldOrOfFCmps
-
-
-Name: AndOrXor:2178,2186
-	; @@ generic over casts
-	; @@ %A not a cast || %B not a cast
-	; @@ ShouldOptimizeCast
-	; @@ type(%A) == type(%B)
-	
+Name: AndOrXor:2321-1
+; FIXME: generic over casts
 %op0 = zext %A
 %op1 = zext %B
 %r = or %op0, %op1
@@ -471,29 +1301,32 @@ Name: AndOrXor:2178,2186
 %r = zext %or
 
 
-; @@deferring 2178,2197. FoldOrOfICmps
-; @@deferring 2178,2204. FoldOrOfFCmps
+Name: AndOrXor:2321-2
+%op0 = sext %A
+%op1 = sext %B
+%r = or %op0, %op1
+  =>
+%or = or %A, %B
+%r = sext %or
 
 
-Name: AndOrXor:2214
+Name: AndOrXor:2321-3
+%op0 = trunc %A
+%op1 = trunc %B
+%r = or %op0, %op1
+  =>
+%or = or %A, %B
+%r = trunc %or
 
+
+Name: AndOrXor:2356
 %op0 = sext i1 %A
 %r = or %op0, %op1
   =>
 %r = select %A, -1, %op1
 
 
-Name: AndOrXor:2216
-
-%op1 = sext i1 %A
-%r = or %op0, %op1
-  =>
-%r = select %A, -1, %op0
-
-
-Name: AndOrXor:2224
-	; HasOneUse(%op0)
-
+Name: AndOrXor:2367
 %op0 = or %A, C1
 %r = or %op0, %op1
   =>
@@ -501,9 +1334,7 @@ Name: AndOrXor:2224
 %r = or %i, C1
 
 
-Name: AndOrXor:2236
-	; HasOneUse(%op0) && HasOneUse(%op1)
-
+Name: AndOrXor:2375
 %op0 = select %x, %A, %B
 %op1 = select %x, %C, %D
 %r = or %op0, %op1
@@ -513,16 +1344,7 @@ Name: AndOrXor:2236
 %r = select %x, %t, %f
 
 
-; visitXor
-
-; @@deferring 2249. SimplifyAssociativeOrCommutative
-; @@deferring 2252. SimplifyXorInst
-; @@deferring 2256. SimplifyUsingDistributiveLaws
-; @@deferring 2261. SimplifyDemandedInstructionBits
-
-Name: AndOrXor:2265,2267,2273
-	; commute %op0
-
+Name: AndOrXor:2416
 %x = xor %nx, -1
 %op0 = and %x, %y
 %r = xor %op0, -1
@@ -531,10 +1353,7 @@ Name: AndOrXor:2265,2267,2273
 %r = or %nx, %ny
 
 
-Name: AndOrXor:2265,2267,2273
-	; commute %op0
-	; combined with previous
-
+Name: AndOrXor:2417
 %x = xor %nx, -1
 %op0 = or %x, %y
 %r = xor %op0, -1
@@ -542,10 +1361,26 @@ Name: AndOrXor:2265,2267,2273
 %ny = xor %y, -1
 %r = and %nx, %ny
 
-; @@deferring 2265,2267,2284. isFreeToInvert
 
-Name: AndOrXor:2265,2295
-	
+Name: AndOrXor:2429
+%op0 = and %x, %y
+%r = xor %op0, -1
+  =>
+%nx = xor %x, -1
+%ny = xor %y, -1
+%r = or %nx, %ny
+
+
+Name: AndOrXor:2430
+%op0 = or %x, %y
+%r = xor %op0, -1
+  =>
+%nx = xor %x, -1
+%ny = xor %y, -1
+%r = and %nx, %ny
+
+
+Name: AndOrXor:2443
 %nx = xor %x, -1
 %op0 = ashr %nx, %y
 %r = xor %op0, -1
@@ -553,81 +1388,64 @@ Name: AndOrXor:2265,2295
 %r = ashr %x, %y
 
 
-Name: AndOrXor:2304,2305
-	; HasOneUse(%op0)
-	; generic over comparison operators, with inverse
-
+Name: AndOrXor:2453
+; FIXME: generic over icmp operators; need getInversePredicate
 %op0 = icmp slt %x, %y
 %r = xor %op0, -1
   =>
 %r = icmp sge %x, %y
 
 
-
-Name: AndOrXor:2304,2313 (zext)
-	; HasOneUse(%op0) && HasOneUse(%cmp)
-	; generic over comparison operations, with inverse
-	; generic over sext/zext
-
+Name: AndOrXor:2459-1
+; FIXME: generic over icmp operators; need getInversePredicate
 %cmp = icmp slt %x, %y
-%op0 = zext %cmp
+%op0 = zext %cmp to i11
 %r = xor %op0, 1
   =>
 %ncmp = icmp sge %x, %y
 %r = zext %ncmp
 
-Name: AndOrXor:2304,2313 (sext)
-	; HasOneUse(%op0) && HasOneUse(%cmp)
-	; generic over comparison operations, with inverse
-	; generic over sext/zext
 
+Name: AndOrXor:2459-2
 %cmp = icmp slt %x, %y
-%op0 = sext %cmp
+%op0 = sext %cmp to i11
 %r = xor %op0, -1
   =>
 %ncmp = icmp sge %x, %y
 %r = sext %ncmp
 
 
-
-Name: AndOrXor:2304,2327,2329
-
+Name: AndOrXor:2475
 %op0 = sub C, %x
 %r = xor %op0, -1
   =>
 %r = add %x, -1-C  ; LLVM has -C-1, which prevents testing i1
 
 
-Name: AndOrXor:2304,2327,2337,2338,2340
-
+Name: AndOrXor:2486
 %op0 = add %x, C
 %r = xor %op0, -1
   =>
 %r = sub -1-C, %x
 
 
-Name: AndOrXor:2304,2327,2337,2338,2346
+Name: AndOrXor:2494
 Pre: isSignBit(C1)
-
 %op0 = add %x, C
 %r = xor %op0, C1
   =>
 %r = add %x, C + C1
 
 
-Name: AndOrXor:2304,2327,2337,2352
+Name: AndOrXor:2500
 Pre: MaskedValueIsZero(%x,C1)
-
 %op0 = or %x, C1
 %r = xor %op0, C2
   =>
 %r = xor %x, C1^C2
-;%r = xor %x, (C1|C2) & ~(C1&C2) ; @@ the source uses this instead of xor
 
 
-Name: AndOrXor:2304,2327,2337,2366   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3)
-	; HasOneUse(%op0)
-
+Name: AndOrXor:2515   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3)
 %e1  = xor %x, C1
 %op0 = lshr %e1, C2
 %r   = xor %op0, C3
@@ -636,75 +1454,23 @@ Name: AndOrXor:2304,2327,2337,2366   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3
 %r = xor %0, lshr(C1,C2)^C3
 
 
-; @@ not in instcombine; defined by analogy to above
-Name: AndOrXor:2304,2327,2337,2366 (ashr variant)
-	; HasOneUse(%op0)
-
-%e1  = xor %x, C1
-%op0 = ashr %e1, C2
-%r   = xor %op0, C3
-  =>
-%0 = ashr %x, C2
-%r = xor %0, (C1 >> C2)^C3
-
-
-; @@deferring 2304,2392. FoldOpIntoSelect
-; @@deferring 2304,2395. FoldOpIntoPhi
-
-; @@skipping 2401. Commutes args for later matches
-
-Name: AndOrXor:2426,2428  (B|A)^B -> A & ~B
-	; HasOneUse(%op0)
-	; @@commute %op0, %r
-
+Name: AndOrXor:2581  (B|A)^B -> A & ~B
 %op0 = or %a, %op1
 %r = xor %op0, %op1
   =>
 %nop1 = xor %op1, -1
 %r = and %a, %nop1
 
-Name: AndOrXor:2426,2434  (B&A)^A -> ~B & A
-	; HasOneUse(%op0)
-	; @@commute %op0, %r
 
+Name: AndOrXor:2587  (B&A)^A -> ~B & A
 %op0 = and %a, %op1
 %r = xor %op0, %op1
   =>
 %na = xor %a, -1
 %r = and %na, %op1
 
-Name: AndOrXor:2446 (shl)
-	; @@ generic over shifts?
 
-%op0 = shl %x, %z
-%op1 = shl %y, %z
-%r = xor %op0, %op1
-  =>
-%xy = xor %x, %y
-%r = shl %xy, %z
-
-Name: AndOrXor:2446 (ashr)
-
-%op0 = ashr %x, %z
-%op1 = ashr %y, %z
-%r = xor %op0, %op1
-  =>
-%xy = xor %x, %y
-%r = ashr %xy, %z
-
-Name: AndOrXor:2446 (lshr)
-
-%op0 = lshr %x, %z
-%op1 = lshr %y, %z
-%r = xor %op0, %op1
-  =>
-%xy = xor %x, %y
-%r = lshr %xy, %z
-
-
-Name: AndOrXor:2457
-	; @@commute %op0, %op1
-
+Name: AndOrXor:2595
 %op0 = and %a, %b
 %op1 = or %a, %b
 %r = xor %op0, %op1
@@ -712,15 +1478,86 @@ Name: AndOrXor:2457
 %r = xor %a, %b
 
 
-; @deferring 2473. PredicatesFoldable
+Name: AndOrXor:2607
+%na = xor %a, -1
+%nb = xor %b, -1
+%op0 = or %a, %nb
+%op1 = or %na, %b
+%r = xor %op0, %op1
+  =>
+%r = xor %a, %b
 
-Name: AndOrXor:2492 (zext)
-	; ShouldOptimizeCast
-	; @@ generic over casts
 
+Name: AndOrXor:2617
+%na = xor %a, -1
+%nb = xor %b, -1
+%op0 = and %a, %nb
+%op1 = and %na, %b
+%r = xor %op0, %op1
+  =>
+%r = xor %a, %b
+
+
+Name: AndOrXor:2627
+%op0 = xor %a, %c
+%op1 = or %a, %b
+%r = xor %op0, %op1
+  =>
+%na = xor %a, -1
+%and = and %na, %b
+%r = xor %and, %c
+
+
+Name: AndOrXor:2647
+%op0 = and %a, %b
+%op1 = xor %a, %b
+%r = xor %op0, %op1
+  =>
+%r = or %a, %b
+
+
+Name: AndOrXor:2658
+%nb = xor %b, -1
+%op0 = and %a, %nb
+%na = xor %a, -1
+%r = xor %op0, %na
+  =>
+%and = and %a, %b
+%r = xor %and, -1
+
+
+Name: AndOrXor:2663
+; FIXME: parameterize over other icmp
+%op0 = icmp ule %a, %b
+%op1 = icmp ne %a, %b
+%r = xor %op0, %op1
+  =>
+%r = icmp uge %a, %b
+
+
+Name: AndOrXor:2681-1
+; FIXME: over all casts
 %op0 = zext %a
 %op1 = zext %b
 %r = xor %op0, %op1
   =>
 %0 = xor %a, %b
 %r = zext %0
+
+
+Name: AndOrXor:2681-2
+%op0 = sext %a
+%op1 = sext %b
+%r = xor %op0, %op1
+  =>
+%0 = xor %a, %b
+%r = sext %0
+
+
+Name: AndOrXor:2681-3
+%op0 = trunc %a
+%op1 = trunc %b
+%r = xor %op0, %op1
+  =>
+%0 = xor %a, %b
+%r = trunc %0

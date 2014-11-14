@@ -1,0 +1,6 @@
+; ERROR: Mismatch in values
+Pre: !WillNotOverflowSignedMul(C1, C2)
+%Op0 = sdiv %X, C1
+%r = sdiv %Op0, C2
+  =>
+%r = 0

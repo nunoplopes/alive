@@ -1,0 +1,6 @@
+; ERROR: Mismatch in values
+Pre: C2 % (1<<C1) == 0
+%s = shl nsw %X, C1
+%r = sdiv %s, C2
+  =>
+%r = sdiv %X, C2/(1<<C1)
