@@ -1,0 +1,108 @@
+Name: abs
+Pre: C1 == -C
+%p = icmp slt 0, C
+%r = select %p, C, C1
+=>
+%r = abs(C)
+
+
+Name: ComputeNumSignBits - APInt
+; WARNING: loops
+Pre: ComputeNumSignBits(%Op0) > C
+%r = shl %Op0, C
+  =>
+%r = shl nsw %Op0, C
+
+
+Name: ComputeNumSignBits - APIntOrLit
+; WARNING: loops
+Pre: C < ComputeNumSignBits(%Op0)
+%r = shl %Op0, C
+  =>
+%r = shl nsw %Op0, C
+
+
+Name: computeKnownZeroBits
+Pre: isPowerOf2(C2+1) && (C2 | computeKnownZeroBits(%Y)) == -1
+%LHS = xor %Y, C2
+%r = add %LHS, C1
+  =>
+%r = sub C1+C2, %Y
+
+; TODO: test for computeKnownOneBits
+
+Name: countLeadingZeros
+Pre: MaskedValueIsZero(%A, -1 u>> countLeadingZeros(C))
+%lhs = sub %A, %B
+%r = and %lhs, C
+  =>
+%neg = sub 0, %B
+%r = and %neg, C
+
+
+; ; FIXME: first clause of precondition is untyped
+; ame: countTrailingZeros
+; Pre: countTrailingZeros(C1) == 0 && C1 == C2+1
+; %Y = and %Z, C2
+; %LHS = xor %Y, C1
+; %r = add %LHS, %RHS
+;   =>
+; %or = or %Z, ~C2
+; %r = sub %RHS, %or
+
+
+Name: log2 APIntOrLit
+; FIXME: slow
+Pre: isPowerOf2(C1)
+%r = mul i11 %x, C1
+  =>
+%r = shl %x, log2(C1)
+
+
+Name: log2 APInt
+; FIXME: slow
+Pre: isPowerOf2(C1)
+%r = mul i11 %x, C1
+  =>
+%r = shl %x, log2(C1)+0
+
+
+Name: max
+%p1 = icmp slt %x, C1
+%p2 = icmp slt %x, C2
+%r = or %p1, %p2
+=>
+%r = icmp slt %x, max(C1,C2)
+
+
+Name: sext
+%x = sext C
+=>
+%x = sext(C)
+
+
+Name: trunc
+%x = trunc C
+=>
+%x = trunc(C)
+
+
+Name: umax
+%p1 = icmp ult %x, C1
+%p2 = icmp ult %x, C2
+%r = or %p1, %p2
+=>
+%r = icmp ult %x, umax(C1,C2)
+
+
+Name: width
+Pre: C u> width(C)
+%r = shl %a, C
+=>
+%r = undef  ; TODO: change to unreachable
+
+
+Name: zext
+%x = zext C
+=>
+%x = zext(C)

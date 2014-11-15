@@ -10,6 +10,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Transforms/Utils/Local.h"
@@ -61,9 +62,28 @@ bool isExact(Value *I) {
   return false;
 }
 
-bool MaskedValueIsZero(Value *V, const APInt &Mask) {
-  return false;
+// unsigned ComputeNumSignBits(Value *Op, unsigned Depth = 0) {
+//   //return llvm::ComputeNumSignBits(Op, TD, Depth);
+//   return 1;
+// }
+
+APInt computeKnownZeroBits(Value *V) {
+  unsigned BitWidth = V->getType()->getScalarSizeInBits();
+  APInt KnownZero(BitWidth, 0), KnownOne(BitWidth, 0);
+  ComputeMaskedBits(V, KnownZero, KnownOne);
+  return KnownZero;
 }
+
+APInt computeKnownOneBits(Value *V) {
+  unsigned BitWidth = V->getType()->getScalarSizeInBits();
+  APInt KnownZero(BitWidth, 0), KnownOne(BitWidth, 0);
+  ComputeMaskedBits(V, KnownZero, KnownOne);
+  return KnownOne;
+}
+
+// bool MaskedValueIsZero(Value *V, const APInt &Mask) {
+//   return false;
+// }
 
 bool WillNotOverflowSignedAdd(Value *op1, Value *op2) {
   return false;

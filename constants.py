@@ -376,31 +376,61 @@ class CnstFunction(Constant):
       defined += d
     return v
 
-  def toAPInt(self):
-    if self.op == self.abs:
-      return self.args[0].toAPInt().dot('abs', [])
+  def _toCExpr(self):
+    if self.op == CnstFunction.abs:
+      return False, self.args[0].toAPInt().dot('abs', [])
 
-    if self.op == self.lshr:
-      return self.args[0].toAPInt().dot('lshr', [self.args[1].toAPIntOrLit()])
+    if self.op == CnstFunction.sbits:
+      return True, CFunctionCall('ComputeNumSignBits', self.args[0].toOperand())
 
-    if self.op == self.trunc:
-      return self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getScalarSizeInBits',[])])
+    if self.op == CnstFunction.obits:
+      return False, CFunctionCall('computeKnownOneBits', self.args[0].toOperand())
 
-    if self.op == self.umax:
-      return CFunctionCall('APIntOps::umax', *(arg.toAPInt() for arg in self.args))
+    if self.op == CnstFunction.zbits:
+      return False, CFunctionCall('computeKnownZeroBits', self.args[0].toOperand())
 
-    if self.op == self.width:
-      return CFunctionCall('APInt',
-        self.toCType().arr('getScalarSizeInBits', []),
-        self.args[0].toCType().arr('getScalarSizeInBits', []))
+    if self.op == CnstFunction.ctlz:
+      return True, self.args[0].toAPInt().dot('countLeadingZeros', [])
+
+    if self.op == CnstFunction.cttz:
+      return True, self.args[0].toAPInt().dot('countTrailingZeros', [])
+
+    if self.op == CnstFunction.log2:
+      return True, self.args[0].toAPInt().dot('logBase2', [])
+
+    if self.op == CnstFunction.lshr:
+      return False, self.args[0].toAPInt().dot('lshr', [self.args[1].toAPIntOrLit()])
+
+    if self.op == CnstFunction.max:
+      return False, CFunctionCall('APIntOps::smax', self.args[0].toAPInt(), self.args[1].toAPInt())
+
+    if self.op == CnstFunction.sext:
+      return False, self.args[0].toAPInt().dot('sext', [self.toCType().arr('getScalarSizeInBits',[])])
+
+    if self.op == CnstFunction.trunc:
+      return False, self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getScalarSizeInBits',[])])
+
+    if self.op == CnstFunction.umax:
+      return False, CFunctionCall('APIntOps::umax', self.args[0].toAPInt(), self.args[1].toAPInt())
+
+    if self.op == CnstFunction.width:
+      return True, self.args[0].toCType().arr('getScalarSizeInBits', [])
+
+    if self.op == CnstFunction.zext:
+      return False, self.args[0].toAPInt().dot('zext', [self.toCType().arr('getScalarSizeInBits',[])])
 
     raise AliveError(self.opnames[self.op] + ' not implemented')
 
-  def toAPIntOrLit(self):
-    if self.op == self.width:
-      return self.args[0].toCType().arr('getScalarSizeInBits',[])
+  def toAPInt(self):
+    wrap, cexpr = self._toCExpr()
+    if wrap:
+      return CFunctionCall('APInt', self.toCType().arr('getScalarSizeInBits',[]), cexpr)
 
-    return self.toAPInt()
+    return cexpr
+
+  def toAPIntOrLit(self):
+    _, cexpr = self._toCExpr()
+    return cexpr
 
   def setRepresentative(self, manager):
     self._manager = manager
@@ -409,14 +439,8 @@ class CnstFunction(Constant):
     for arg in self.args:
       arg.setRepresentative(manager)
 
-    if self.op == self.abs:
+    if self.op == self.abs or self.op == CnstFunction.obits or self.op == CnstFunction.zbits:
       manager.unify(self.getLabel(), self.args[0].getLabel())
 
-    elif self.op == self.lshr or self.op == self.umax:
+    elif self.op == self.lshr or self.op == self.max or self.op == self.umax:
       manager.unify(self.getLabel(), self.args[0].getLabel(), self.args[1].getLabel())
-
-    elif self.op == self.trunc or self.op == self.width:
-      pass
-
-    else:
-      raise AliveError('setRepresentative not implemented for' + self.opnames[self.op])
