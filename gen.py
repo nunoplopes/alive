@@ -156,21 +156,9 @@ def iter_pairs(iterable):
     yield (prev,next)
     prev = next
 
-opts = parse_opt_file(sys.stdin.read())
-
-# gather names of testcases
-if DO_STATS:
-  rule = 1
-  for opt in opts:
-    n = opt[0]
-    #FIXME: sanitize name
-    print 'STATISTIC(Rule{0}, "{0}. {1}");'.format(rule, n)
-    rule += 1
-
-print 'bool runOnInstruction(Instruction* I) {'
-
-rule = 1
-for n,p,sbb,tbb,s,t,us,ut in opts:
+def generate_optimization(rule, opt):
+  n,p,sbb,tbb,s,t,us,ut = opt
+  
   # transform the last instruction in the source
   context = GenContext()
   
@@ -281,8 +269,31 @@ for n,p,sbb,tbb,s,t,us,ut in opts:
 
   code = nest(2, line + '{ // ' + n + nest(2, decl_seg + line + line + cond.format()) + line + '}')
   code.pprint()
-  rule += 1
 
-print
-print '  return false;'
-print '}'
+def generate_suite(opts):
+  "Generate code for a list of transformations"
+
+  # gather names of testcases
+  if DO_STATS:
+    rule = 1
+    for opt in opts:
+      n = opt[0]
+      #FIXME: sanitize name
+      print 'STATISTIC(Rule{0}, "{0}. {1}");'.format(rule, n)
+      rule += 1
+
+  print 'bool runOnInstruction(Instruction* I) {'
+
+  rule = 1
+  for opt in opts:
+    generate_optimization(rule, opt)
+    rule += 1
+
+  print
+  print '  return false;'
+  print '}'
+
+
+if __name__ == '__main__':
+  opts = parse_opt_file(sys.stdin.read())
+  generate_suite(opts)
