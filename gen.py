@@ -3,7 +3,7 @@ from language import *
 from precondition import *
 from parser import parse_opt_file
 from codegen import *
-from itertools import combinations
+from itertools import combinations, izip, count
 
 HAS_SPECIFIC_INT = False
 DO_STATS = True
@@ -156,7 +156,7 @@ def iter_pairs(iterable):
     yield (prev,next)
     prev = next
 
-def generate_optimization(rule, opt):
+def generate_optimization(rule, opt, out):
   n,p,sbb,tbb,s,t,us,ut = opt
   
   # transform the last instruction in the source
@@ -268,32 +268,32 @@ def generate_optimization(rule, opt):
 
 
   code = nest(2, line + '{ // ' + n + nest(2, decl_seg + line + line + cond.format()) + line + '}')
-  code.pprint()
+  out.write(code.format())
 
-def generate_suite(opts):
+def generate_suite(opts, out):
   "Generate code for a list of transformations"
+
+  opts = list(izip(count(1), opts))
 
   # gather names of testcases
   if DO_STATS:
-    rule = 1
-    for opt in opts:
+    for rule, opt in opts:
       n = opt[0]
       #FIXME: sanitize name
-      print 'STATISTIC(Rule{0}, "{0}. {1}");'.format(rule, n)
-      rule += 1
+      out.write('STATISTIC(Rule{0}, "{0}. {1}");\n'.format(rule, n))
 
-  print 'bool runOnInstruction(Instruction* I) {'
+  out.write('\nbool runOnInstruction(Instruction* I) {\n')
 
-  rule = 1
-  for opt in opts:
-    generate_optimization(rule, opt)
-    rule += 1
+  for rule, opt in opts:
+    generate_optimization(rule, opt, out)
 
-  print
-  print '  return false;'
-  print '}'
+  out.write('''
+
+  return false;
+}
+''')
 
 
 if __name__ == '__main__':
   opts = parse_opt_file(sys.stdin.read())
-  generate_suite(opts)
+  generate_suite(opts, sys.stdout)

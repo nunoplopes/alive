@@ -17,6 +17,7 @@
 import argparse, glob, re, sys
 from language import *
 from parser import parse_llvm, parse_opt_file
+from gen import generate_suite
 
 
 def block_model(s, sneg, m):
@@ -484,23 +485,34 @@ def main():
   parser.add_argument('-V', '--verify', action='store_true', default=True,
     help='check correctness of optimizations (default: True)')
   parser.add_argument('--no-verify', action='store_false', dest='verify')
+  parser.add_argument('-o', '--output', type=argparse.FileType('w'), metavar='file',
+    help='Write generated code to <file> ("-" for stdout)')
   parser.add_argument('file', type=file, nargs='*', default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
+
+  if len(sys.argv) == 1:
+    sys.stderr.write('[Reading from stdin...]\n')
 
   args = parser.parse_args()
 
   set_infer_flags(args.infer_flags)
+
+  gen = []
 
   for f in args.file:
     opts = parse_opt_file(f.read())
 
     for opt in opts:
       if not args.match or any(pat in opt[0] for pat in args.match):
+        if args.output:
+          gen.append(opt)
         if args.verify:
           check_opt(opt)
-        else:
+        elif not args.output:
           print opt[0]
 
+  if args.output:
+    generate_suite(gen, args.output)
 
 if __name__ == "__main__":
   try:
