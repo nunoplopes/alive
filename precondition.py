@@ -359,6 +359,16 @@ class LLVMBoolPred(BoolPred):
     }[self.op](*args)
 
   def getPatternMatch(self):
+    if self.op == LLVMBoolPred.isPower2:
+      a = self.args[0]
+      if isinstance(a, Constant) or (isinstance(a, Input) and a.name[0] == 'C'):
+        return a.toAPInt().dot('isPowerOf2', [])
+        # NOTE: this really is just here to avoid producing longer code
+
+      return CFunctionCall('isKnownToBeAPowerOfTwo', a.toOperand())
+
+    if self.op == LLVMBoolPred.isPower2OrZ:
+      return CFunctionCall('isKnownToBeAPowerOfTwo', self.args[0].toOperand(), CVariable('true'))
 
     args = []
     for i in range(self.num_args[self.op]):
@@ -367,8 +377,15 @@ class LLVMBoolPred(BoolPred):
       else:
         args.append(self.args[i].toOperand())
 
-    if self.op in {self.isPower2, self.isSignBit}:
+    if self.op in {self.isShiftedMask, self.isSignBit}:
       return args[0].dot(self.opnames[self.op], [])
+
+    if self.op == LLVMBoolPred.OneUse:
+      return args[0].arr('hasOneUse', [])
+
+    # TODO: implement these
+    if self.op in {LLVMBoolPred.eqptrs, LLVMBoolPred.NSWMul, LLVMBoolPred.NUWMul, LLVMBoolPred.NUWShl}:
+      raise AliveError(LLVMBoolPred.opnames[self.op] + ' not supported')
 
     return CFunctionCall(self.opnames[self.op], *args)
 
