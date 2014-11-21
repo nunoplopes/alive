@@ -487,20 +487,19 @@ def main():
   parser.add_argument('--no-verify', action='store_false', dest='verify')
   parser.add_argument('-o', '--output', type=argparse.FileType('w'), metavar='file',
     help='Write generated code to <file> ("-" for stdout)')
-  parser.add_argument('file', type=file, nargs='*',
+  parser.add_argument('file', type=argparse.FileType('r'), nargs='*', default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
 
   args = parser.parse_args()
-
-  if not args.file:
-    args.file = [sys.stdin]
-    sys.stderr.write('[Reading from stdin...]\n')
 
   set_infer_flags(args.infer_flags)
 
   gen = []
 
   for f in args.file:
+    if f.isatty():
+      sys.stderr.write('[Reading from terminal...]\n')
+
     opts = parse_opt_file(f.read())
 
     for opt in opts:
