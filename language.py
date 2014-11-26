@@ -822,7 +822,7 @@ class Load(Instr):
     defined += [v != 0, mk_or(mustload)]
     if val is None:
       defined.append(BoolVal(False))
-      return 0
+      return BitVecVal(0, self.type.getSize())
     return val
 
   def getTypeConstraints(self):
