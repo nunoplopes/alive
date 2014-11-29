@@ -3,7 +3,6 @@ store %a, %p
 %g = i16* %p
 %b = load %g
   =>
-%p = alloca; i8 ;, %elems
 %x = bitcast i16* %p
 store %a, %x
 %b = load %x

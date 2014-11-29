@@ -47,7 +47,6 @@ Pre: C2 & (-1 << C1) == (-1 << C1)
 %op = shl %X, C1
 %r = and %op, C2
   =>
-%op = shl %X, C1
 %r = %op
 
 
@@ -56,7 +55,6 @@ Pre: C2 & (-1 << C1) != (-1 << C1) && C2 & (-1 << C1) != C2
 %op = shl %X, C1
 %r = and %op, C2
   =>
-%op = shl %X, C1
 %r = and %op, C2 & (-1 << C1)
 
 
@@ -65,7 +63,6 @@ Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
 %op = lshr %X, C1
 %r = and %op, C2
   =>
-%op = lshr %X, C1
 %r = %op
 
 
@@ -75,7 +72,6 @@ Pre: C2 & lshr(-1, C1) != lshr(-1, C1)
 %op = lshr %X, C1
 %r = and %op, C2
   =>
-%op = lshr %X, C1
 %r = and %op, C2 & lshr(-1, C1)
 
 
@@ -248,7 +244,6 @@ Pre: C1 & C2 == C1
 %op1 = icmp ne %a2, 0
 %r = and %op0, %op1
   =>
-%a1 = and %a, C1
 %r = icmp ne %a1, 0
 
 
@@ -260,7 +255,6 @@ Pre: C1 & C2 == C1
 %op1 = icmp ne %a2, C2
 %r = and %op0, %op1
   =>
-%a1 = and %a, C1
 %r = icmp ne %a1, C1
 
 
@@ -272,7 +266,6 @@ Pre: C1 | C2 == C1
 %op1 = icmp ne %a2, %a
 %r = and %op0, %op1
   =>
-%a1 = and %a, C1
 %r = icmp ne %a1, %a
 
 
@@ -352,7 +345,6 @@ Pre: C1 u< C2
 %op1 = icmp ne %a, C2
 %r = and %op0, %op1
   =>
-%op0 = icmp eq %a, C1
 %r = %op0
 
 
@@ -362,7 +354,6 @@ Pre: C1 u< C2
 %op1 = icmp ult %a, C2
 %r = and %op0, %op1
   =>
-%op0 = icmp eq %a, C1
 %r = %op0
 
 
@@ -372,7 +363,6 @@ Pre: C1 < C2
 %op1 = icmp slt %a, C2
 %r = and %op0, %op1
   =>
-%op0 = icmp eq %a, C1
 %r = %op0
 
 
@@ -400,7 +390,6 @@ Pre: C1 u< C2
 %op1 = icmp eq %a, C2
 %r = and %op0, %op1
   =>
-%op1 = icmp eq %a, C2
 %r = %op1
 
 
@@ -410,7 +399,6 @@ Pre: C1 u< C2
 %op1 = icmp ugt %a, C2
 %r = and %op0, %op1
   =>
-%op1 = icmp ugt %a, C2
 %r = %op1
 
 
@@ -420,7 +408,6 @@ Pre: C1 < C2
 %op1 = icmp sgt %a, C2
 %r = and %op0, %op1
   =>
-%op1 = icmp sgt %a, C2
 %r = %op1
 
 
@@ -458,7 +445,6 @@ Pre: C1 u< C2
 %op1 = icmp ne %a, C2
 %r = and %op0, %op1
   =>
-%op0 = icmp ult %a, C1
 %r = %op0
 
 
@@ -468,7 +454,6 @@ Pre: C1 u< C2
 %op1 = icmp ult %a, C2
 %r = and %op0, %op1
   =>
-%op0 = icmp ult %a, C1
 %r = %op0
 
 
@@ -478,7 +463,6 @@ Pre: C1 < C2
 %op1 = icmp ne %a, C2
 %r = and %op0, %op1
   =>
-%op0 = icmp slt %a, C1
 %r = %op0
 
 
@@ -488,7 +472,6 @@ Pre: C1 < C2
 %op1 = icmp slt %a, C2
 %r = and %op0, %op1
   =>
-%op0 = icmp slt %a, C1
 %r = %op0
 
 
@@ -498,7 +481,6 @@ Pre: C1 u< C2
 %op1 = icmp eq %a, C2
 %r = and %op0, %op1
   =>
-%op1 = icmp eq %a, C2
 %r = %op1
 
 
@@ -508,7 +490,6 @@ Pre: C1 u< C2
 %op1 = icmp ugt %a, C2
 %r = and %op0, %op1
   =>
-%op1 = icmp ugt %a, C2
 %r = %op1
 
 
@@ -527,7 +508,6 @@ Pre: C1 < C2
 %op1 = icmp eq %a, C2
 %r = and %op0, %op1
   =>
-%op1 = icmp eq %a, C2
 %r = %op1
 
 
@@ -537,7 +517,6 @@ Pre: C1 < C2
 %op1 = icmp sgt %a, C2
 %r = and %op0, %op1
   =>
-%op1 = icmp sgt %a, C2
 %r = %op1
 
 
@@ -669,7 +648,6 @@ Name: AndOrXor:1288 (A ^ B) & ((B ^ C) ^ A) -> (A ^ B) & ~C
 %op1 = xor %x, %A
 %r = and %op0, %op1
   =>
-%op0 = xor %A, %B
 %negC = xor %C, -1
 %r = and %op0, %negC
 
@@ -857,7 +835,6 @@ Pre: C2+C3 == C1
 %cmp2 = icmp eq %X, C2
 %r = or %cmp1, %cmp2
   =>
-%add = add %X, C3
 %r = icmp ule %add, C1
 
 
@@ -887,7 +864,6 @@ Pre: C1 u< C2
 %cmp2 = icmp ne %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp2 = icmp ne %X, C2
 %r = %cmp2
 
 
@@ -897,7 +873,6 @@ Pre: C1 u< C2
 %cmp2 = icmp ult %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp2 = icmp ult %X, C2
 %r = %cmp2
 
 
@@ -907,7 +882,6 @@ Pre: C1 < C2
 %cmp2 = icmp slt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp2 = icmp slt %X, C2
 %r = %cmp2
 
 
@@ -917,7 +891,6 @@ Pre: C1 u< C2
 %cmp2 = icmp eq %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp ne %X, C1
 %r = %cmp1
 
 
@@ -927,7 +900,6 @@ Pre: C1 u< C2
 %cmp2 = icmp ugt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp ne %X, C1
 %r = %cmp1
 
 
@@ -937,7 +909,6 @@ Pre: C1 < C2
 %cmp2 = icmp sgt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp ne %X, C1
 %r = %cmp1
 
 
@@ -974,7 +945,6 @@ Pre: C1 u< C2 && C2 == -1
 %cmp2 = icmp ugt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp ult %X, C1
 %r = %cmp1
 
 
@@ -984,7 +954,6 @@ Pre: C1 u< C2
 %cmp2 = icmp ne %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp2 = icmp ne %X, C2
 %r = %cmp2
 
 
@@ -994,7 +963,6 @@ Pre: C1 u< C2
 %cmp2 = icmp ult %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp2 = icmp ult %X, C2
 %r = %cmp2
 
 
@@ -1004,7 +972,6 @@ Pre: C1 < C2 && C2 == 1 << (width(C2)-1)
 %cmp2 = icmp sgt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp slt %X, C1
 %r = %cmp1
 
 
@@ -1014,7 +981,6 @@ Pre: C1 < C2
 %cmp2 = icmp ne %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp2 = icmp ne %X, C2
 %r = %cmp2
 
 
@@ -1024,7 +990,6 @@ Pre: C1 < C2
 %cmp2 = icmp slt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp2 = icmp slt %X, C2
 %r = %cmp2
 
 
@@ -1034,7 +999,6 @@ Pre: C1 u< C2
 %cmp2 = icmp eq %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp ugt %X, C1
 %r = %cmp1
 
 
@@ -1044,7 +1008,6 @@ Pre: C1 u< C2
 %cmp2 = icmp ugt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp ugt %X, C1
 %r = %cmp1
 
 
@@ -1072,7 +1035,6 @@ Pre: C1 < C2
 %cmp2 = icmp eq %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp sgt %X, C1
 %r = %cmp1
 
 
@@ -1082,7 +1044,6 @@ Pre: C1 < C2
 %cmp2 = icmp sgt %X, C2
 %r = or %cmp1, %cmp2
   =>
-%cmp1 = icmp sgt %X, C1
 %r = %cmp1
 
 
@@ -1165,7 +1126,6 @@ Name: AndOrXor:2118   ((A & B) | ~A) -> (~A | B)
 %op0 = and %A, %B
 %r = or %op0, %negA
   =>
-%negA = xor %A, -1
 %r = or %negA, %B
 
 
@@ -1185,7 +1145,6 @@ Pre: C1 & C2 == 0 && MaskedValueIsZero(%V2, ~C1)
 %op1 = and %B, C2
 %r = or %op0, %op1
   =>
-%A = or %B, %V2
 %r = and %A, (C1 | C2)
 
 
@@ -1217,7 +1176,6 @@ Name: AndOrXor:2231  (A ^ B) | ((B ^ C) ^ A) -> (A ^ B) | C
 %op1 = xor %x, %A
 %r = or %op0, %op1
   =>
-%op0 = xor %A, %B
 %r = or %op0, %C
 
 
@@ -1287,7 +1245,6 @@ Name: AndOrXor:2297
 %op1 = xor %na, %B
 %r = or %op0, %op1
   =>
-%na = xor %A, -1
 %r = xor %na, %B
 
 

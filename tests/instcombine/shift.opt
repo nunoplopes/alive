@@ -99,7 +99,6 @@ Name: InstCombineShift: 366-1
 %Op0 = trunc %TrOp
 %r = shl i17 %Op0, C2
   =>
-%TrOp = shl %X, C1
 %s1 = shl %TrOp, zext(C2)
 %and = and %s1, ((1<<width(C2))-1) << zext(C2)
 %r = trunc %and
@@ -110,7 +109,6 @@ Name: InstCombineShift: 366-2
 %Op0 = trunc %TrOp
 %r = shl i17 %Op0, C2
   =>
-%TrOp = lshr %X, C1
 %s1 = shl %TrOp, zext(C2)
 %and = and %s1, ((1<<width(C2))-1) << zext(C2)
 %r = trunc %and
@@ -121,7 +119,6 @@ Name: InstCombineShift: 366-3
 %Op0 = trunc %TrOp
 %r = shl i17 %Op0, C2
   =>
-%TrOp = ashr %X, C1
 %s1 = shl %TrOp, zext(C2)
 %and = and %s1, ((1<<width(C2))-1) << zext(C2)
 %r = trunc %and
@@ -132,7 +129,6 @@ Name: InstCombineShift: 366-4
 %Op0 = trunc %TrOp
 %r = lshr i17 %Op0, C2
   =>
-%TrOp = shl %X, C1
 %s1 = lshr %TrOp, zext(C2)
 %and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
 %r = trunc %and
@@ -143,7 +139,6 @@ Name: InstCombineShift: 366-5
 %Op0 = trunc %TrOp
 %r = lshr i17 %Op0, C2
   =>
-%TrOp = lshr %X, C1
 %s1 = lshr %TrOp, zext(C2)
 %and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
 %r = trunc %and
@@ -154,7 +149,6 @@ Name: InstCombineShift: 366-6
 %Op0 = trunc %TrOp
 %r = lshr i17 %Op0, C2
   =>
-%TrOp = ashr %X, C1
 %s1 = lshr %TrOp, zext(C2)
 %and = and %s1, ((1<<width(C2))-1) u>> zext(C2)
 %r = trunc %and

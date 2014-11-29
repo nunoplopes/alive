@@ -6,8 +6,6 @@ Name: icmp + zext
 %5 = or %2, %4
 %6 = icmp eq %5, 0
   =>
-%1 = icmp %n, %a
-%3 = icmp %n, %b
 %. = or %1, %3
 %6 = icmp eq %., 0
 

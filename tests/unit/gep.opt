@@ -12,7 +12,6 @@ Name: gep2
 %1 = sub i64 0, %0
 %r = getelementptr i1* %X, %1
   =>
-%0 = ptrtoint i1* %Y
 %2 = ptrtoint %X to i64
 %3 = sub %2, %0
 %r = inttoptr %3

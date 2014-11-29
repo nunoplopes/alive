@@ -2,5 +2,4 @@
 %x = ptrtoint %p to i64
 %b = inttoptr %x
   =>
-%p = alloca
 %b = i8* %p

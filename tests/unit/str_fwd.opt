@@ -3,6 +3,5 @@
 store %a, %p
 %b = load %p
   =>
-%p = alloca
 store %a, %p
 %b = %a
