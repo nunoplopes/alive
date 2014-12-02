@@ -454,6 +454,7 @@ class Value:
     return self.toAPInt()
 
   def toCType(self):
+    assert self._manager.rep_for(self.getLabel()) in self._manager.preferred
     return CVariable(self._manager.rep_for(self.getLabel())).arr('getType',[])
 
   def isConst(self):

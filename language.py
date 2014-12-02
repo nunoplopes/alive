@@ -467,6 +467,20 @@ class ConversionOp(Instr):
     Bitcast: 'BitCastInst',
   }
 
+  def toConstruct(self, is_root=False):
+    if self.op == ConversionOp.ZExtOrTrunc:
+      if is_root:
+        raise AliveError("Can't handle ZExtOrTrunc in root")
+
+      return [
+        CDefinition(CVariable('Value'),
+        CVariable(self.getCName()),
+        CVariable('Builder').arr('CreateZExtOrTrunc',
+          [self.v.toOperand(), self.toCType()]),
+        True)]
+
+    return Instr.toConstruct(self, is_root)
+
   def toInstruction(self):
     return CFunctionCall('new ' + self.constr[self.op],
       self.v.toOperand(),
@@ -508,6 +522,9 @@ class Icmp(Instr):
     self.stype = type.ensureIntPtrOrVector()
     self.v1 = v1
     self.v2 = v2
+
+  def getOpName(self):
+    return 'icmp'
 
   @staticmethod
   def getOpId(name):
@@ -645,6 +662,9 @@ class Select(Instr):
     return 'select i1 %s, %s%s, %s%s' % (self.c.getName(), t, self.v1.getName(),
                                          t, self.v2.getName())
 
+  def getOpName(self):
+    return 'select'
+
   def toSMT(self, defined, poison, state, qvars):
     return If(state.eval(self.c, defined, poison, qvars) == 1,
               state.eval(self.v1, defined, poison, qvars),
@@ -698,6 +718,9 @@ class Alloca(Instr):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'alloca %s%s%s' % (str(self.type.type), elems, align)
 
+  def getOpName(self):
+    return 'alloca'
+
   def toSMT(self, defined, poison, state, qvars):
     self.numElems.toSMT(defined, poison, state, qvars)
     ptr = BitVec(self.getName(), self.type.getSize())
@@ -749,6 +772,9 @@ class GEP(Instr):
     return 'getelementptr %s%s %s%s' % (inb, self.type, self.ptr.getName(),
                                         idxs)
 
+  def getOpName(self):
+    return 'getelementptr'
+
   def toSMT(self, defined, poison, state, qvars):
     ptr = state.eval(self.ptr, defined, poison, qvars)
     type = self.type
@@ -781,6 +807,9 @@ class Load(Instr):
   def __repr__(self):
     align = ', align %d' % self.align if self.align != 0 else ''
     return 'load %s %s%s' % (str(self.stype), self.v.getName(), align)
+
+  def getOpName(self):
+    return 'load'
 
   def extractBV(self, BV, offset, size):
     old_size = BV.size()
@@ -850,6 +879,9 @@ class Store(Instr):
 
   def getUniqueName(self):
     return self.getName() + '_' + self.id
+
+  def getOpName(self):
+    return 'store'
 
   def __repr__(self):
     t = str(self.stype)

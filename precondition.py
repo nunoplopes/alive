@@ -192,6 +192,16 @@ class BinaryBoolPred(BoolPred):
   }
 
   def getPatternMatch(self):
+    # FIXME: find less hacky way of comparing values of unconstrained types
+    def untyped(op):
+      return isinstance(op, ConstantVal) or \
+        (isinstance(op, CnstFunction) and op.op in {CnstFunction.ctlz, CnstFunction.cttz, CnstFunction.log2, CnstFunction.width})
+
+    if untyped(self.v1) and untyped(self.v2):
+      cmp = {self.EQ: '==', self.NE: '!=', self.SLT: '<', self.SLE: '<=', self.SGT: '>',
+             self.SGE: '>=', self.ULT: '<', self.ULE: '<=', self.UGT: '>', self.UGE: '>='}[self.op]
+      return CBinExpr(cmp, self.v1.toAPIntOrLit(), self.v2.toAPIntOrLit())
+
     return self.gens[self.op](self.v1.toAPInt(), self.v2.toAPIntOrLit())
 
   def setRepresentative(self, manager):
@@ -384,8 +394,12 @@ class LLVMBoolPred(BoolPred):
       return args[0].arr('hasOneUse', [])
 
     # TODO: implement these
-    if self.op in {LLVMBoolPred.eqptrs, LLVMBoolPred.NSWMul, LLVMBoolPred.NUWMul, LLVMBoolPred.NUWShl}:
+    if self.op in {LLVMBoolPred.eqptrs}:
       raise AliveError(LLVMBoolPred.opnames[self.op] + ' not supported')
+
+    if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NUWAdd, LLVMBoolPred.NSWSub,
+        LLVMBoolPred.NUWSub}:
+      return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('I'))
 
     return CFunctionCall(self.opnames[self.op], *args)
 

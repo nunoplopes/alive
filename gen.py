@@ -5,9 +5,10 @@ from parser import parse_opt_file
 from codegen import *
 from itertools import combinations, izip, count
 
-HAS_SPECIFIC_INT = False
+HAS_SPECIFIC_INT = True
 DO_STATS = True
 LIMITER = False
+SIMPLIFY = True
 
 class GenContext(object):
   def __init__(self):
@@ -294,13 +295,21 @@ def generate_suite(opts, out):
   # gather names of testcases
   if DO_STATS:
     for rule, opt in opts:
-      n = opt[0]
+      name = opt[0]
+      # TODO: abstract this
+      src_vals = opt[4].values()
+      root = src_vals.pop()
+      while not isinstance(root, Instr):
+        root = src_vals.pop()
+
       #FIXME: sanitize name
-      out.write('STATISTIC(Rule{0}, "{0}. {1}");\n'.format(rule, n))
+      out.write('STATISTIC(Rule{0}, "{0}. {1} {2}");\n'.format(rule, root.getOpName(), name))
 
-  out.write('''Instruction *InstCombiner::runOnInstruction(Instruction *I) {
+  out.write('Instruction *InstCombiner::runOnInstruction(Instruction *I) {\n')
 
-  if (Value *V = SimplifyInstruction(I, TD)) {
+  if SIMPLIFY:
+    out.write('''
+  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AT)) {
     return ReplaceInstUsesWith(*I, V);
   }
 ''')
