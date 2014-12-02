@@ -262,10 +262,10 @@ def generate_optimization(rule, opt, out):
     gen.append(CUnaryExpr('++', CVariable('Rule' + str(rule))))
 
   for (k,v) in t.iteritems():
-    if isinstance(v, Instr) and not k in s:
+    if isinstance(v, Instr) and k not in tgt_skip and k != root_name:
       if isinstance(v, CopyOperand):
         gen.append(CDefinition(CVariable('Value'), 
-          CVariable(self.getCName()), self.toInstruction(), True))
+          CVariable(v.getCName()), v.toInstruction(), True))
       else:
         gen.extend(v.toConstruct())
         #gen.append(CVariable('Worklist').dot('Add', [v.toOperand()]))
