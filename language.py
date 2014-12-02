@@ -1008,12 +1008,14 @@ class Ret(TerminatorInst):
 
 
 ################################
-def print_prog(p):
+def print_prog(p, skip):
   for bb, instrs in p.iteritems():
     if bb != "":
       print "%s:" % bb
 
     for k,v in instrs.iteritems():
+      if k in skip:
+        continue
       k = str(k)
       if k[0] == '%':
         print '  %s = %s' % (k, v)

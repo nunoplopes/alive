@@ -3,5 +3,4 @@ store %a, %p
 %b = load %p
   =>
 ; ERROR: Mismatch in final memory state
-%p = alloca
 %b = %a

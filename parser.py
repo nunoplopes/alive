@@ -62,9 +62,7 @@ def parseOperand(v, type):
     save_loc(loc)
 
   if isinstance(v, Value):
-    key = v.getUniqueName()
-    if not identifiers.has_key(key):
-      identifiers[key] = v
+    identifiers[v.getUniqueName()] = v
     return v
 
   # %var
@@ -206,11 +204,17 @@ def parseRet(toks):
 
 
 def parseInstr(toks):
-  global identifiers, BBs
+  global identifiers, skip_identifiers, BBs
 
   reg = toks[0]
   if identifiers.has_key(reg):
-    raise ParseError('Redefinition of register')
+    if reg in skip_identifiers:
+      skip_identifiers.remove(reg)
+      for instrs in BBs.itervalues():
+        instrs.pop(reg, None)
+      identifiers.pop(reg, None)
+    else:
+      raise ParseError('Redefinition of register')
 
   toks[1].setName(reg)
   identifiers[reg] = toks[1]
@@ -387,23 +391,37 @@ prog = instrc + ZeroOrMore(Suppress(OneOrMore(LineEnd())) + instrc) +\
 
 
 def parse_llvm(txt):
-  global identifiers, used_identifiers, used_bb_labels, BBs, bb_label
+  global identifiers, skip_identifiers, used_identifiers
+  global used_bb_labels, BBs, bb_label
   used_identifiers = set([])
+  skip_identifiers = set([])
   used_bb_labels = set([])
   bb_label = ""
-  BBs = collections.OrderedDict()
-  BBs[bb_label] = collections.OrderedDict()
 
   if parsing_phase == Target:
-    old_ids = identifiers
+    # Ensure regs defined in source are available in the target.
+    identifiers_old = identifiers
     identifiers = collections.OrderedDict()
-    for name, val in old_ids.iteritems():
-      if isinstance(val, Input):
-        identifiers[name] = val
+    for k,v in identifiers_old.iteritems():
+      if not isinstance(v, (Store, Unreachable)):
+        identifiers[k] = v
+
+    BBs_old = BBs
+    BBs = collections.OrderedDict()
+    for bb, instrs in BBs_old.iteritems():
+      BBs[bb] = collections.OrderedDict()
+      for k,v in instrs.iteritems():
+        if not isinstance(v, (Store, Unreachable)):
+          BBs[bb][k] = v
+    for i,v in identifiers.iteritems():
+      if not isinstance(v, Input):
+        skip_identifiers.add(i)
   else:
     identifiers = collections.OrderedDict()
+    BBs = collections.OrderedDict()
+    BBs[bb_label] = collections.OrderedDict()
   prog.parseString(txt)
-  return BBs, identifiers, used_identifiers
+  return BBs, identifiers, used_identifiers, skip_identifiers
 
 
 ##########################
@@ -506,16 +524,27 @@ def _parseOpt(s, loc, toks):
 
   parsing_phase = Source
   save_parse_str(src, src_line)
-  src, ident_src, used_src = parse_llvm(src)
+  src, ident_src, used_src, _ = parse_llvm(src)
 
   parsing_phase = Target
   save_parse_str(tgt, tgt_line)
-  tgt, ident_tgt, used_tgt = parse_llvm(tgt)
+  tgt, ident_tgt, used_tgt, skip_tgt = parse_llvm(tgt)
+
+  # Move unused target instrs (copied from source) to the end.
+  lst = []
+  for bb, instrs in tgt.iteritems():
+    lst = []
+    for k,v in instrs.iteritems():
+      if k not in used_tgt and not isinstance(v, Constant):
+        lst.append((k,v))
+        del instrs[k]
+    for k,v in lst:
+      tgt[bb][k] = v
 
   parsing_phase = Pre
   save_parse_str(pre, pre_line)
   pre = parse_pre(pre, ident_src)
-  return name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt
+  return name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt
 
 def parseOpt(s, loc, toks):
   try:

@@ -17,7 +17,6 @@ Name: LoadStoreAlloca:221
 %p = alloca Ty, 0
 %p2 = alloca Ty, 0
   =>
-%p = alloca Ty, 0
 %p2 = %p
 
 
@@ -34,7 +33,6 @@ Name: LoadStoreAlloca:256
 %p = alloca i3, 0
 %p2 = alloca i7, 0
   =>
-%p = alloca i3, 0
 %p2 = bitcast %p
 
 

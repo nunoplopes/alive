@@ -380,14 +380,14 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
 
 
 def check_opt(opt):
-  name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt = opt
+  name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
 
   print '----------------------------------------'
   print 'Optimization: ' + name
   print 'Precondition: ' + str(pre)
-  print_prog(src)
+  print_prog(src, set([]))
   print '=>'
-  print_prog(tgt)
+  print_prog(tgt, skip_tgt)
   print
 
   reset_pick_one_type()
@@ -427,7 +427,7 @@ def check_opt(opt):
   has_unreach = any(v.startswith('unreachable') for v in ident_tgt.iterkeys())
   for v in ident_src.iterkeys():
     if v[0] == '%' and v not in used_src and v not in used_tgt and\
-       v not in ident_tgt and not has_unreach:
+       v in skip_tgt and not has_unreach:
       print 'ERROR: Temporary register %s unused and not overwritten' % v
       exit(-1)
 

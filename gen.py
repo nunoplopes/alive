@@ -157,7 +157,7 @@ def iter_pairs(iterable):
     prev = next
 
 def generate_optimization(rule, opt, out):
-  n,p,sbb,tbb,s,t,us,ut = opt
+  n,p,sbb,tbb,s,t,us,ut,tgt_skip = opt
   
   # transform the last instruction in the source
   context = GenContext()

@@ -15,7 +15,6 @@ Pre: isPowerOf2(C1) && C1 == ~C2
 %F = and %X, C2
 %r = select %c, %X, %F
   =>
-%F = and %X, C2
 %r = %F
 
 
@@ -46,7 +45,6 @@ Pre: isPowerOf2(C1) && C1 == C2
 %T = or %X, C2
 %r = select %c, %T, %X
   =>
-%T = or %X, C2
 %r = %T
 
 
@@ -57,7 +55,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
 %F = or i11 %Y, C2
 %r = select %c, %Y, %F
   =>
-%and = and %X, C1
 %v = ZExtOrTrunc %and
 %v2 = shl %v, log2(C2)-log2(C1)
 %r = or %v2, %Y
@@ -70,7 +67,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
 %F = or i11 %Y, C2
 %r = select %c, %Y, %F
   =>
-%and = and %X, C1
 %v = ZExtOrTrunc %and
 %v2 = shl %v, log2(C2)-log2(C1)
 %v3 = xor %v2, C2
@@ -84,7 +80,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
 %F = or i11 %Y, C2
 %r = select %c, %Y, %F
   =>
-%and = and %X, C1
 %v = lshr %and, log2(C1)-log2(C2)
 %v2 =ZExtOrTrunc %v
 %r = or %v2, %Y
@@ -97,7 +92,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
 %F = or i11 %Y, C2
 %r = select %c, %Y, %F
   =>
-%and = and %X, C1
 %v = lshr %and, log2(C1)-log2(C2)
 %v2 =ZExtOrTrunc %v
 %v3 = xor %v2, C2
@@ -112,7 +106,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
 %T = or i11 %Y, C2
 %r = select %c, %T, %Y
   =>
-%and = and %X, C1
 %v = ZExtOrTrunc %and
 %v2 = shl %v, log2(C2)-log2(C1)
 %v3 = xor %v2, C2
@@ -126,7 +119,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) >= log2(C1)
 %T = or i11 %Y, C2
 %r = select %c, %T, %Y
   =>
-%and = and %X, C1
 %v = ZExtOrTrunc %and
 %v2 = shl %v, log2(C2)-log2(C1)
 %r = or %v2, %Y
@@ -139,7 +131,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
 %T = or i11 %Y, C2
 %r = select %c, %T, %Y
   =>
-%and = and %X, C1
 %v = lshr %and, log2(C1)-log2(C2)
 %v2 = ZExtOrTrunc %v
 %v3 = xor %v2, C2
@@ -153,7 +144,6 @@ Pre: isPowerOf2(C1) && isPowerOf2(C2) && log2(C2) < log2(C1)
 %T = or i11 %Y, C2
 %r = select %c, %T, %Y
   =>
-%and = and %X, C1
 %v = lshr %and, log2(C1)-log2(C2)
 %v2 = ZExtOrTrunc %v
 %r = or %v2, %Y
@@ -213,7 +203,6 @@ Pre: (C2 == sext(C+1)) && C != (1<<(width(%x)-1))-1
 %X = sext %x to i15
 %r = select %c, %X, C2
   =>
-%X = sext %x
 %c2 = icmp slt %X, C2
 %r = select %c2, C2, %X
 
@@ -224,7 +213,6 @@ Pre: (C2 == sext(C-1)) && !isSignBit(C)
 %X = sext %x to i15
 %r = select %c, %X, C2
   =>
-%X = sext %x
 %c2 = icmp sgt %X, C2
 %r = select %c2, C2, %X
 
@@ -235,7 +223,6 @@ Pre: (C2 == sext(C+1)) && C != -1
 %X = sext %x to i15
 %r = select %c, %X, C2
   =>
-%X = sext %x
 %c2 = icmp ult %X, C2
 %r = select %c2, C2, %X
 
@@ -246,7 +233,6 @@ Pre: (C2 == sext(C-1)) && C != 0
 %X = sext %x to i15
 %r = select %c, %X, C2
   =>
-%X = sext %x
 %c2 = icmp ugt %X, C2
 %r = select %c2, C2, %X
 
@@ -257,7 +243,6 @@ Pre: (C2 == zext(C+1)) && C != -1
 %X = zext %x to i15
 %r = select %c, %X, C2
   =>
-%X = zext %x
 %c2 = icmp ult %X, C2
 %r = select %c2, C2, %X
 
@@ -268,7 +253,6 @@ Pre: (C2 == zext(C-1)) && C != 0
 %X = zext %x to i15
 %r = select %c, %X, C2
   =>
-%X = zext %x
 %c2 = icmp ugt %X, C2
 %r = select %c2, C2, %X
 
@@ -311,7 +295,6 @@ Name: Select:637
 %c = icmp eq %X, C
 %r = select %c, %X, %Y
   =>
-%c = icmp eq %X, C
 %r = select %c, C, %Y
 
 
@@ -319,7 +302,6 @@ Name: Select:641
 %c = icmp ne %X, C
 %r = select %c, %Y, %X
   =>
-%c = icmp ne %X, C
 %r = select %c, %Y, C
 
 
@@ -330,7 +312,6 @@ Name: Select:699
 %c2 = icmp uge %umax, %B
 %umax2 = select %c2, %umax, %B
   =>
-%c = icmp uge %A, %B
 %umax2 = select %c, %A, %B
 
 
@@ -340,7 +321,6 @@ Name: Select:700
 %c2 = icmp slt %smin, %B
 %smin2 = select %c2, %smin, %B
   =>
-%c = icmp slt %A, %B
 %smin2 = select %c, %A, %B
 
 
@@ -369,7 +349,6 @@ Pre: C1 < C2
 %c2 = icmp slt %smin, C2
 %smin2 = select %c2, %smin, C2
   =>
-%c = icmp slt %A, C1
 %smin2 = select %c, %A, C1
 
 
@@ -380,7 +359,6 @@ Pre: C1 u> C2
 %c2 = icmp uge %umax, C2
 %umax2 = select %c2, %umax, C2
   =>
-%c = icmp uge %A, C1
 %umax2 = select %c, %A, C1
 
 
@@ -414,8 +392,6 @@ Name: Select:740
 %minus2 = sub 0, %abs
 %abs2 = select %c2, %abs, %minus2
   =>
-%c = icmp sgt %A, 0
-%minus = sub 0, %A
 %abs2 = select %c, %A, %minus
 
 
@@ -427,8 +403,6 @@ Name: Select:741
 %minus2 = sub 0, %abs
 %abs2 = select %c2, %minus2, %abs
   =>
-%c = icmp sgt %A, 0
-%minus = sub 0, %A
 %abs2 = select %c, %minus, %A
 
 
@@ -441,7 +415,6 @@ Name: Select:746
 %abs2 = select %c2, %abs, %minus2
   =>
 %c3 = icmp sgt %A, 0
-%minus = sub 0, %A
 %abs2 = select %c3, %A, %minus
 
 
@@ -454,7 +427,6 @@ Name: Select:747
 %abs2 = select %c2, %abs, %minus2
   =>
 %c3 = icmp slt %A, 0
-%minus = sub 0, %A
 %abs2 = select %c3, %A, %minus
 
 
@@ -465,7 +437,6 @@ Pre: isPowerOf2(C) && isPowerOf2(C2-C3) && log2(C) < width(C2)
 %c = icmp eq %lhs, 0
 %s = select %c, C2, C3
   =>
-%lhs = and %Op, C
 %v0 = ZExtOrTrunc %lhs to i11
 %v = shl %v0, max(0, log2(C2-C3) - log2(C))
 %v2 = lshr %v, max(0, log2(C) - log2(C2-C3))
@@ -479,7 +450,6 @@ Pre: isPowerOf2(C) && isPowerOf2(C2-C3) && log2(C) < width(C2)
 %c = icmp ne %lhs, 0
 %s = select %c, C2, C3
   =>
-%lhs = and %Op, C
 %v0 = ZExtOrTrunc %lhs to i11
 %v = shl %v0, max(0, log2(C2-C3) - log2(C))
 %v2 = lshr %v, max(0, log2(C) - log2(C2-C3))
@@ -492,7 +462,6 @@ Pre: isPowerOf2(C) && isPowerOf2(C3-C2) && log2(C) < width(C2)
 %c = icmp eq %lhs, 0
 %s = select %c, C2, C3
   =>
-%lhs = and %Op, C
 %v0 = ZExtOrTrunc %lhs to i11
 %v = shl %v0, max(0, log2(C3-C2) - log2(C))
 %v2 = lshr %v, max(0, log2(C) - log2(C3-C2))
@@ -505,7 +474,6 @@ Pre: isPowerOf2(C) && isPowerOf2(C3-C2) && log2(C) < width(C2)
 %c = icmp ne %lhs, 0
 %s = select %c, C2, C3
   =>
-%lhs = and %Op, C
 %v0 = ZExtOrTrunc %lhs to i11
 %v = shl %v0, max(0, log2(C3-C2) - log2(C))
 %v2 = lshr %v, max(0, log2(C) - log2(C3-C2))
@@ -553,14 +521,12 @@ Name: Select:858
 %nota = xor %a, -1
 %r = select %a, %nota, %b
   =>
-%nota = xor %a, -1
 %r = and %nota, %b
 
 Name: Select:859
 %nota = xor %a, -1
 %r = select %a, %b, %nota
   =>
-%nota = xor %a, -1
 %r = or %nota, %b
 
 Name: Select:869
