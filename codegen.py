@@ -107,7 +107,7 @@ class CBinExpr(CExpression):
 		
 		
 		fmt = self.x.formatExpr(p) + line + self.op + ' ' + self.y.formatExpr(rp)
-		if prec < p:
+		if prec < p or (10 <= prec and prec <= 12 and p <= 6):
 			fmt = group(nest(2, '(' + fmt + ')'))
 		elif prec > p:
 			fmt = group(fmt).nest(2)
