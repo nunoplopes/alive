@@ -1880,7 +1880,7 @@ Name: AndOrXor:2417
 %ny = xor %y, -1
 %r = and %nx, %ny
 
-
+; ; undoes AndOrXor:2247
 ; ame: AndOrXor:2429
 ; %op0 = and %x, %y
 ; %r = xor %op0, -1
@@ -1890,6 +1890,7 @@ Name: AndOrXor:2417
 ; %r = or %nx, %ny
 
 
+; ; undoes AndOrXor:1230
 ; ame: AndOrXor:2430
 ; %op0 = or %x, %y
 ; %r = xor %op0, -1
