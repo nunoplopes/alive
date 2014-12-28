@@ -75,7 +75,7 @@ Pre: C2 == -C1 && isPowerOf2(C2) && MaskedValueIsZero(%Y, -1 << (log2(C2) + 1))
 
 
 Name: AddSub:1131
-Pre: isPowerOf2(C2+1) && (C2 | computeKnownZeroBits(%Y)) == -1
+Pre: hasOneUse(%LHS) && isPowerOf2(C2+1) && (C2 | computeKnownZeroBits(%Y)) == -1
 %LHS = xor %Y, C2
 %r = add %LHS, C1
   =>
@@ -152,7 +152,7 @@ Name: AddSub:1202
 
 
 Name: AddSub:1206
-Pre: ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
+Pre: hasOneUse(%xc2) && ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
 %xc2 = and %x, C2
 %r = add %xc2, C1
   =>
@@ -161,6 +161,7 @@ Pre: ~((C1 & -C1)-1) == ~((C1 & -C1)-1) & C2
 
 
 Name: AddSub:1251
+Pre: hasOneUse(%s)
 %na = sub %n, %a
 %s = select %x, 0, %na
 %r = add %s, %a
@@ -169,6 +170,7 @@ Name: AddSub:1251
 
 
 Name: AddSub:1255
+Pre: hasOneUse(%s)
 %na = sub %n, %a
 %s = select %x, %na, 0
 %r = add %s, %a
@@ -177,7 +179,7 @@ Name: AddSub:1255
 
 
 Name: AddSub:1265
-Pre: WillNotOverflowSignedAdd(%x,trunc(C)) && (C & (-1 << (width(%x) - 1))) == 0
+Pre: hasOneUse(%sx) && WillNotOverflowSignedAdd(%x,trunc(C)) && (C & (-1 << (width(%x) - 1))) == 0
 %sx = sext %x
 %c = add %sx, C
   =>
@@ -186,7 +188,7 @@ Pre: WillNotOverflowSignedAdd(%x,trunc(C)) && (C & (-1 << (width(%x) - 1))) == 0
 
 
 Name: AddSub:1278
-Pre: WillNotOverflowSignedAdd(%x,%y)
+Pre: (hasOneUse(%sx) || hasOneUse(%sy)) && WillNotOverflowSignedAdd(%x,%y)
 %sx = sext %x
 %sy = sext %y
 %c = add %sx, %sy
@@ -348,7 +350,17 @@ Name: AddSub:1624
 %r = and %A, %B
 
 
-Name: AddSub:1638
+Name: AddSub:1633
+Pre: hasOneUse(%Op0)
+%Op0 = or %Y, %Op1 ; TODO: commute
+%r = sub %Op0, %Op1
+  =>
+%not = xor %Op1, -1
+%r = and %not, %Y
+
+
+Name: AddSub:1648
+Pre: hasOneUse(%Op1)
 %Op1 = sub %Y, %Z
 %r = sub %X, %Op1
   =>
@@ -356,30 +368,33 @@ Name: AddSub:1638
 %r = add %X, %s
 
 
-Name: AddSub:1643
-%Op1 = and %X, %Y
+Name: AddSub:1654
+Pre: hasOneUse(%Op1)
+%Op1 = and %X, %Y ; TODO: commute
 %r = sub %X, %Op1
   =>
 %not = xor %Y, -1
 %r = and %X, %not
 
 
-Name: AddSub:1650
-Pre: C != 1 && C != 1 << (width(C)-1)
+Name: AddSub:1660
+Pre: hasOneUse(%Op1) && C != 1 && C != 1 << (width(C)-1)
 %Op1 = sdiv i9 %X, C
 %r = sub 0, %Op1
   =>
 %r = sdiv %X, -C
 
 
-Name: AddSub:1655
+Name: AddSub:1665
+Pre: hasOneUse(%Op1)
 %Op1 = shl C, %Y
 %r = sub 0, %Op1
   =>
 %r = shl -C, %Y
 
 
-Name: AddSub:1655-2
+Name: AddSub:1665-2
+Pre: hasOneUse(%Op1)
 %neg = sub 0, %X
 %Op1 = shl %neg, %Y
 %r = sub 0, %Op1
@@ -387,17 +402,19 @@ Name: AddSub:1655-2
 %r = shl %X, %Y
 
 
-Name: AddSub:1660
+Name: AddSub:1672
+Pre: hasOneUse(%Op1)
 %neg = sub 0, %B
-%Op1 = mul %A, %neg
+%Op1 = mul %A, %neg ; TODO: commute
 %r = sub %X, %Op1
   =>
 %m = mul %A, %B
 %r = add %X, %m
 
 
-Name: AddSub:1667
-%Op1 = mul %A, C
+Name: AddSub:1678
+Pre: hasOneUse(%Op1)
+%Op1 = mul %A, C ; TODO: commute
 %r = sub %X, %Op1
   =>
 %m = mul %A, -C
