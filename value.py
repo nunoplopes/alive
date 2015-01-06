@@ -422,41 +422,6 @@ class Value:
   def getUniqueName(self):
     return self.name
 
-  @staticmethod
-  def _mungeCName(name):
-    '''Translate an Alive variable name into a legal C equivalent.
-    
-    '.' and '_' become 'p_' and 'u_'. Temporaries starting with digits, 'C', or 'V'
-    gain a 'V' prefix.
-    '''
-    s = name.replace('_', 'u_').replace('.', 'p_')
-    
-    if s[0] == '%':
-      s = s[1:]
-      if s[0] in '0123456789C':
-        s = 'V_' + s
-
-    if s in {'and', 'or', 'not', 'if', 'auto', 'bool'}: #FIXME: add all C++ keywords
-      s = 'V_' + s
-
-    return s
-
-  def getCName(self):
-    return self._mungeCName(self.getName())
-  
-  def getLabel(self):
-    return self.getCName()
-
-  def toOperand(self):
-    return CVariable(self.getCName())
-
-  def toAPIntOrLit(self):
-    return self.toAPInt()
-
-  def toCType(self):
-    assert self._manager.rep_for(self.getLabel()) in self._manager.preferred
-    return CVariable(self._manager.rep_for(self.getLabel())).arr('getType',[])
-
   def isConst(self):
     return False
 
@@ -593,20 +558,27 @@ class Input(Value):
     mem = BitVec('mem_' + self.name, size)
     state.addInputMem(ptr, mem, (block_size, num_elems, 1))
     return ptr
-# <<<<<<< HEAD
-#     allOnes = BitVecVal((1 << size) - 1, size)
-#     state.addAlloca(ptr, mem, (block_size, num_elems, 1, allOnes))
-#     return [], ptr
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type)
+  def register_types(self, manager):
+    if self.name[0] == 'C':
+      min = IntType()
+    else:
+      min = UnknownType()
 
-  def toAPInt(self):
+    manager.register_type(self, self.type, min)
+
+  def _ensure_constant(self):
     name = self.getName()
     if name[0] != 'C':
       raise AliveError('Input {0} used in an expression'.format(name))
-    
-    return self.toOperand().arr('getValue',[])
-# =======
-# >>>>>>> upstream
+
+  def get_APInt_or_u64(self, manager):
+    return self.get_APInt(manager)
+
+  def get_APInt(self, manager):
+    self._ensure_constant()
+    return manager.get_cexp(self).arr('getValue', [])
+
+  def get_Value(self, manager):
+    assert False
+    # this should have been called through the manager

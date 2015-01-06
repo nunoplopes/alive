@@ -24,18 +24,17 @@ class Constant(Value):
 
   def getUniqueName(self):
     return self.getName() + '_' + self.id
-  
-  def getCName(self):
-    raise AliveError('Called getCName on constant {}'.format(self.getUniqueName()))
 
-  def getLabel(self):
-    return self.id
+  def get_APInt(self, manager):
+    return CFunctionCall('APInt',
+      manager.get_llvm_type(self).arr('getScalarSizeInBits', []), #TODO: add to manager API?
+      self.get_APInt_or_u64(manager))
 
-  def toAPInt(self):
-    return CTest('<APInt>')
+  def get_Value(self, manager):
+    return CFunctionCall('ConstantInt::get',
+      manager.get_llvm_type(self),
+      self.get_APInt_or_u64(manager))
 
-  def toOperand(self):
-    return CFunctionCall('ConstantInt::get', self.toCType(), self.toAPIntOrLit())
 
 ################################
 class ConstantVal(Constant):
@@ -67,24 +66,14 @@ class ConstantVal(Constant):
   def toSMT(self, defined, poison, state, qvars):
     return BitVecVal(self.val, self.type.getSize())
 
-  def toOperand(self):
-    return CFunctionCall('ConstantInt::get', self.toCType(), CVariable(str(self.val)))
-    # NOTE: address sign for >64-bit ints
+  def register_types(self, manager):
+    if isinstance(self.type, PtrType):
+      manager.register_type(self, self.type, PtrType())
+    else:
+      manager.register_type(self, self.type, IntType())
 
-  def toAPInt(self):
-    # FIXME: ensure value is integral
-
-    return CFunctionCall('APInt',
-      self.toCType().arr('getScalarSizeInBits', []),
-      CVariable(self.val))
-
-  def toAPIntOrLit(self):
+  def get_APInt_or_u64(self, manager):
     return CVariable(str(self.val))
-
-  def setRepresentative(self, manager):
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type, anon=True)
-    # TODO: handle non-integers?
 
 ################################
 class UndefVal(Constant):
@@ -105,16 +94,14 @@ class UndefVal(Constant):
     qvars += [v]
     return v
 
-  def setRepresentative(self, manager):
-    # FIXME: handle defined types
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type, anon=True)
+  def register_types(self, manager):
+    manager.register_type(self, self.type, UnknownType())
 
-  def toAPInt(self):
-    raise AliveError("Can't represent undef as APInt")
+  def get_APInt_or_u64(self, manager):
+    raise AliveError('undef cannot be an APInt')
 
-  def toOperand(self):
-    return CFunctionCall('UndefValue::get', self.toCType())
+  def get_Value(self, manager):
+    return CFunctionCall('UndefValue::get', manager.get_llvm_type(self))
 
 ################################
 class CnstUnaryOp(Constant):
@@ -155,14 +142,16 @@ class CnstUnaryOp(Constant):
       self.Neg: lambda a: -a,
     }[self.op](v)
 
-  def toAPInt(self):
-    return CUnaryExpr(self.opnames[self.op], self.v.toAPInt())
+  def register_types(self, manager):
+    self.v.register_types(manager)
+    manager.register_type(self, self.type, IntType())
+    manager.unify(self, self.v)
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    self.v.setRepresentative(manager)
-    manager.add_label(self.getLabel(), self.type, anon=True)
-    manager.unify(self.getLabel(), self.v.getLabel())
+  def get_APInt_or_u64(self, manager):
+    return CUnaryExpr(self.opnames[self.op], self.v.get_APInt_or_u64(manager))
+
+  def get_APInt(self, manager):
+    return CUnaryExpr(self.opnames[self.op], self.v.get_APInt(manager))
 
 
 ################################
@@ -218,40 +207,41 @@ class CnstBinaryOp(Constant):
       self.Shl:  lambda a,b: a << b,
     }[self.op](v1, v2)
 
-  def toOperand(self):
-    if self.op == self.Or:
-      return CFunctionCall('ConstantExpr::getOr', self.v1.toOperand(), self.v2.toOperand())
+  def register_types(self, manager):
+    self.v1.register_types(manager)
+    self.v2.register_types(manager)
+    manager.register_type(self, self.type, IntType())
+    manager.unify(self, self.v1, self.v2)
 
-    return Constant.toOperand(self)
+  def get_APInt_or_u64(self, manager):
+    return self.get_APInt(manager)
 
-  def toAPInt(self):
-    op = {
-      CnstBinaryOp.And:  lambda a,b: CBinExpr('&', a, b),
-      CnstBinaryOp.Or:   lambda a,b: CBinExpr('|', a, b),
-      CnstBinaryOp.Xor:  lambda a,b: CBinExpr('^', a, b),
-      CnstBinaryOp.Add:  lambda a,b: CBinExpr('+', a, b),
-      CnstBinaryOp.Sub:  lambda a,b: CBinExpr('-', a, b),
-      CnstBinaryOp.Mul:  lambda a,b: CBinExpr('*', a, b),
-      CnstBinaryOp.Div:  lambda a,b: a.dot('sdiv', [b]),
-      CnstBinaryOp.DivU: lambda a,b: a.dot('udiv', [b]),
-      CnstBinaryOp.Rem:  lambda a,b: a.dot('srem', [b]),
-      CnstBinaryOp.RemU: lambda a,b: a.dot('urem', [b]),
-      CnstBinaryOp.AShr: lambda a,b: a.dot('ashr', [b]),
-      CnstBinaryOp.LShr: lambda a,b: a.dot('lshr', [b]),
-      CnstBinaryOp.Shl:  lambda a,b: CBinExpr('<<', a,  b),
-    }[self.op]
+  _cfun = {
+      And:  lambda a,b: CBinExpr('&', a, b),
+      Or:   lambda a,b: CBinExpr('|', a, b),
+      Xor:  lambda a,b: CBinExpr('^', a, b),
+      Add:  lambda a,b: CBinExpr('+', a, b),
+      Sub:  lambda a,b: CBinExpr('-', a, b),
+      Mul:  lambda a,b: CBinExpr('*', a, b),
+      Div:  lambda a,b: a.dot('sdiv', [b]),
+      DivU: lambda a,b: a.dot('udiv', [b]),
+      Rem:  lambda a,b: a.dot('srem', [b]),
+      RemU: lambda a,b: a.dot('urem', [b]),
+      AShr: lambda a,b: a.dot('ashr', [b]),
+      LShr: lambda a,b: a.dot('lshr', [b]),
+      Shl:  lambda a,b: CBinExpr('<<', a,  b),
+    }
 
-    if self.op in {CnstBinaryOp.Add, CnstBinaryOp.Sub, CnstBinaryOp.AShr, CnstBinaryOp.LShr, CnstBinaryOp.Shl}:
-      return op(self.v1.toAPInt(), self.v2.toAPIntOrLit())
+  _overloaded_rhs = {Add, Sub, AShr, LShr, Shl}
 
-    return op(self.v1.toAPInt(), self.v2.toAPInt())
+  def get_APInt(self, manager):
+    op = CnstBinaryOp._cfun[self.op]
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    self.v1.setRepresentative(manager)
-    self.v2.setRepresentative(manager)
-    manager.add_label(self.getLabel(), self.type, anon=True)
-    manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
+    if self.op in CnstBinaryOp._overloaded_rhs:
+      return op(self.v1.get_APInt(manager), self.v2.get_APInt_or_u64(manager))
+
+    return op(self.v1.get_APInt(manager), self.v2.get_APInt(manager))
+
 
 ################################
 class CnstFunction(Constant):
@@ -376,71 +366,77 @@ class CnstFunction(Constant):
       defined += d
     return v
 
-  def _toCExpr(self):
+  def register_types(self, manager):
+    for arg in self.args:
+      arg.register_types(manager)
+
+    manager.register_type(self, self.type, IntType())
+
+    if self.op in {CnstFunction.abs, CnstFunction.obits, CnstFunction.zbits}:
+      manager.unify(self, self.args[0])
+
+    elif self.op in {CnstFunction.lshr, CnstFunction.max, CnstFunction.umax}:
+      manager.unify(self, self.args[0], self.args[1])
+
+  def _get_cexp(self, manager):
     if self.op == CnstFunction.abs:
-      return False, self.args[0].toAPInt().dot('abs', [])
+      return False, self.args[0].get_APInt(manager).dot('abs', [])
 
     if self.op == CnstFunction.sbits:
-      return True, CFunctionCall('ComputeNumSignBits', self.args[0].toOperand())
+      return True, CFunctionCall('ComputeNumSignBits', manager.get_cexp(self.args[0]))
 
     if self.op == CnstFunction.obits:
-      return False, CFunctionCall('computeKnownOneBits', self.args[0].toOperand())
+      return False, CFunctionCall('computeKnownOneBits', manager.get_cexp(self.args[0]))
 
     if self.op == CnstFunction.zbits:
-      return False, CFunctionCall('computeKnownZeroBits', self.args[0].toOperand())
+      return False, CFunctionCall('computeKnownZeroBits', manager.get_cexp(self.args[0]))
 
     if self.op == CnstFunction.ctlz:
-      return True, self.args[0].toAPInt().dot('countLeadingZeros', [])
+      return True, self.args[0].get_APInt(manager).dot('countLeadingZeros', [])
 
     if self.op == CnstFunction.cttz:
-      return True, self.args[0].toAPInt().dot('countTrailingZeros', [])
+      return True, self.args[0].get_APInt(manager).dot('countTrailingZeros', [])
 
     if self.op == CnstFunction.log2:
-      return True, self.args[0].toAPInt().dot('logBase2', [])
+      return True, self.args[0].get_APInt(manager).dot('logBase2', [])
 
     if self.op == CnstFunction.lshr:
-      return False, self.args[0].toAPInt().dot('lshr', [self.args[1].toAPIntOrLit()])
+      return False, self.args[0].get_APInt(manager).dot('lshr',
+        [self.args[1].get_APInt_or_u64(manager)])
 
     if self.op == CnstFunction.max:
-      return False, CFunctionCall('APIntOps::smax', self.args[0].toAPInt(), self.args[1].toAPInt())
+      return False, CFunctionCall('APIntOps::smax',
+        self.args[0].get_APInt(manager), self.args[1].get_APInt(manager))
 
     if self.op == CnstFunction.sext:
-      return False, self.args[0].toAPInt().dot('sext', [self.toCType().arr('getScalarSizeInBits',[])])
+      return False, self.args[0].get_APInt(manager).dot('sext',
+        [manager.get_llvm_type(self).arr('getScalarSizeInBits', [])])
 
     if self.op == CnstFunction.trunc:
-      return False, self.args[0].toAPInt().dot('trunc', [self.toCType().arr('getScalarSizeInBits',[])])
+      return False, self.args[0].get_APInt(manager).dot('trunc',
+        [manager.get_llvm_type(self).arr('getScalarSizeInBits', [])])
 
     if self.op == CnstFunction.umax:
-      return False, CFunctionCall('APIntOps::umax', self.args[0].toAPInt(), self.args[1].toAPInt())
+      return False, CFunctionCall('APIntOps::umax', 
+        self.args[0].get_APInt(manager), self.args[1].get_APInt(manager))
 
     if self.op == CnstFunction.width:
-      return True, self.args[0].toCType().arr('getScalarSizeInBits', [])
+      return True, manager.get_llvm_type(self.args[0]).arr('getScalarSizeInBits', [])
 
     if self.op == CnstFunction.zext:
-      return False, self.args[0].toAPInt().dot('zext', [self.toCType().arr('getScalarSizeInBits',[])])
+      return False, self.args[0].get_APInt(manager).dot('zext', 
+        [manager.get_llvm_type(self).arr('getScalarSizeInBits',[])])
 
     raise AliveError(self.opnames[self.op] + ' not implemented')
 
-  def toAPInt(self):
-    wrap, cexpr = self._toCExpr()
+  def get_APInt(self, manager):
+    wrap, cexp = self._get_cexp(manager)
     if wrap:
-      return CFunctionCall('APInt', self.toCType().arr('getScalarSizeInBits',[]), cexpr)
+      return CFunctionCall('APInt', 
+        manager.get_llvm_type(self).arr('getScalarSizeInBits',[]), cexp)
 
-    return cexpr
+    return cexp
+    return self.get_Value(manager).arr('getValue',[])
 
-  def toAPIntOrLit(self):
-    _, cexpr = self._toCExpr()
-    return cexpr
-
-  def setRepresentative(self, manager):
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type, anon=True)
-
-    for arg in self.args:
-      arg.setRepresentative(manager)
-
-    if self.op == self.abs or self.op == CnstFunction.obits or self.op == CnstFunction.zbits:
-      manager.unify(self.getLabel(), self.args[0].getLabel())
-
-    elif self.op == self.lshr or self.op == self.max or self.op == self.umax:
-      manager.unify(self.getLabel(), self.args[0].getLabel(), self.args[1].getLabel())
+  def get_APInt_or_u64(self, manager):
+    return self._get_cexp(manager)[1]

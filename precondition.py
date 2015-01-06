@@ -27,10 +27,6 @@ class BoolPred:
           if isinstance(v, (Type, Value, BoolPred)):
             v.fixupTypes(types)
 
-  # TODO: remove this
-  def getPatternMatch(self):
-    return CTest('<Pred:{0}>'.format(self))
-
 
 ################################
 class TruePred(BoolPred):
@@ -43,12 +39,11 @@ class TruePred(BoolPred):
   def toSMT(self, state):
     return [], []
 
-  def getPatternMatch(self):
-    return CVariable('TRUE') # FIXME
-
-  def setRepresentative(self, context):
+  def register_types(self, manager):
     pass
 
+  def visit_pre(self, manager):
+    return CVariable('true')
 
 
 ################################
@@ -67,12 +62,11 @@ class PredNot(BoolPred):
     d, v = self.v.toSMT(state)
     return d, [mk_not(mk_and(v))]
 
-  def getPatternMatch(self):
-    return CUnaryExpr('!', self.v.getPatternMatch())
+  def register_types(self, manager):
+    self.v.register_types(manager)
 
-  def setRepresentative(self, context):
-    self.v.setRepresentative(context)
-
+  def visit_pre(self, manager):
+    return CUnaryExpr('!', self.v.visit_pre(manager))
 
 ################################
 class PredAnd(BoolPred):
@@ -95,13 +89,12 @@ class PredAnd(BoolPred):
       r += v
     return d, r
 
-  def getPatternMatch(self):
-    return CBinExpr.reduce('&&', (arg.getPatternMatch() for arg in self.args))
-
-  def setRepresentative(self, context):
+  def register_types(self, manager):
     for arg in self.args:
-      arg.setRepresentative(context)
+      arg.register_types(manager)
 
+  def visit_pre(self, manager):
+    return CBinExpr.reduce('&&', (arg.visit_pre(manager) for arg in self.args))
 
 ################################
 class PredOr(BoolPred):
@@ -124,13 +117,12 @@ class PredOr(BoolPred):
       r.append(mk_and(v))
     return d, [mk_or(r)]
 
-  def getPatternMatch(self):
-    return CBinExpr.reduce('||', (arg.getPatternMatch() for arg in self.args))
-
-  def setRepresentative(self, context):
+  def register_types(self, manager):
     for arg in self.args:
-      arg.setRepresentative(context)
+      arg.register_types(manager)
 
+  def visit_pre(self, manager):
+    return CBinExpr.reduce('||', (arg.visit_pre(manager) for arg in self.args))
 
 ################################
 class BinaryBoolPred(BoolPred):
@@ -191,7 +183,12 @@ class BinaryBoolPred(BoolPred):
     UGE: lambda a,b: a.dot('uge', [b]),
   }
 
-  def getPatternMatch(self):
+  def register_types(self, manager):
+    self.v1.register_types(manager)
+    self.v2.register_types(manager)
+    manager.unify(self.v1, self.v2)
+
+  def visit_pre(self, manager):
     # FIXME: find less hacky way of comparing values of unconstrained types
     def untyped(op):
       return isinstance(op, ConstantVal) or \
@@ -200,15 +197,10 @@ class BinaryBoolPred(BoolPred):
     if untyped(self.v1) and untyped(self.v2):
       cmp = {self.EQ: '==', self.NE: '!=', self.SLT: '<', self.SLE: '<=', self.SGT: '>',
              self.SGE: '>=', self.ULT: '<', self.ULE: '<=', self.UGT: '>', self.UGE: '>='}[self.op]
-      return CBinExpr(cmp, self.v1.toAPIntOrLit(), self.v2.toAPIntOrLit())
+      return CBinExpr(cmp, self.v1.get_APInt_or_u64(manager), self.v2.get_APInt_or_u64(manager))
 
-    return self.gens[self.op](self.v1.toAPInt(), self.v2.toAPIntOrLit())
+    return self.gens[self.op](self.v1.get_APInt(manager), self.v2.get_APInt_or_u64(manager))
 
-  def setRepresentative(self, manager):
-    self.v1.setRepresentative(manager)
-    self.v2.setRepresentative(manager)
-    # unify both sides, but not ourself because we have no type
-    manager.unify(self.v1.getLabel(), self.v2.getLabel())
 
 ################################
 class LLVMBoolPred(BoolPred):
@@ -368,44 +360,48 @@ class LLVMBoolPred(BoolPred):
                           [get_users_var(self.args[0].getUniqueName()) == 1]),
     }[self.op](*args)
 
-  def getPatternMatch(self):
+  def register_types(self, manager):
+    for arg in self.args:
+      arg.register_types(manager)
+
+    if self.op in {LLVMBoolPred.maskZero, LLVMBoolPred.NSWAdd}:
+      manager.unify(self.args[0], self.args[1])
+
+  def visit_pre(self, manager):
+    #TODO: reduce use of Alive-specific functions in generated code
+    # e.g., WillNotOverflow* mul/shl
+
+    if self.op == LLVMBoolPred.eqptrs:
+      raise AliveError('eqptrs not currently supported')
+
     if self.op == LLVMBoolPred.isPower2:
       a = self.args[0]
-      if isinstance(a, Constant) or (isinstance(a, Input) and a.name[0] == 'C'):
-        return a.toAPInt().dot('isPowerOf2', [])
-        # NOTE: this really is just here to avoid producing longer code
+      if isinstance(a, Constant):
+        return a.get_APInt(manager).dot('isPowerOf2', [])
 
-      return CFunctionCall('isKnownToBeAPowerOfTwo', a.toOperand())
+      return CFunctionCall('isKnownToBeAPowerOfTwo', manager.get_cexp(a))
 
     if self.op == LLVMBoolPred.isPower2OrZ:
-      return CFunctionCall('isKnownToBeAPowerOfTwo', self.args[0].toOperand(), CVariable('true'))
+      return CFunctionCall('isKnownToBeAPowerOfTwo',
+        manager.get_cexp(self.args[0]), CVariable('true'))
 
+    opname = LLVMBoolPred.opnames[self.op]
     args = []
     for i in range(self.num_args[self.op]):
       if self.arg_types[self.op][i] == 'const':
-        args.append(self.args[i].toAPInt())
+        args.append(self.args[i].get_APInt(manager))
       else:
-        args.append(self.args[i].toOperand())
+        args.append(manager.get_cexp(self.args[i]))
 
-    if self.op in {self.isShiftedMask, self.isSignBit}:
-      return args[0].dot(self.opnames[self.op], [])
+    if self.op in {LLVMBoolPred.isShiftedMask, LLVMBoolPred.isSignBit}:
+      return args[0].dot(LLVMBoolPred.opnames[self.op], [])
 
     if self.op == LLVMBoolPred.OneUse:
       return args[0].arr('hasOneUse', [])
 
-    # TODO: implement these
-    if self.op in {LLVMBoolPred.eqptrs}:
-      raise AliveError(LLVMBoolPred.opnames[self.op] + ' not supported')
-
     if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NUWAdd, LLVMBoolPred.NSWSub,
         LLVMBoolPred.NUWSub}:
       return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('I'))
+      # TODO: obtain root from manager?
 
     return CFunctionCall(self.opnames[self.op], *args)
-
-  def setRepresentative(self, manager):
-    for arg in self.args:
-      arg.setRepresentative(manager)
-
-    if self.op in {self.maskZero, self.NSWAdd}:
-      manager.unify(self.args[0].getLabel(), self.args[1].getLabel())

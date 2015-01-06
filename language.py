@@ -94,13 +94,7 @@ class State:
 
 ################################
 class Instr(Value):
-  def toConstruct(self, is_root = False):
-    if is_root:
-      return [CDefinition(CVariable('Instruction'), CVariable(self.getCName()), self.toInstruction(), True)]
-    else:
-      return [CDefinition(CVariable('Instruction'), CVariable(self.getCName()),
-                CVariable('Builder').arr('Insert', [self.toInstruction()]), True)]
-
+  pass
 
 ################################
 class CopyOperand(Instr):
@@ -123,13 +117,22 @@ class CopyOperand(Instr):
     return And(self.type == self.v.type,
                self.type.getTypeConstraints())
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type)
-    manager.unify(self.getLabel(), self.v.getLabel())
+  def register_types(self, manager):
+    manager.register_type(self, self.type, UnknownType())
+    manager.unify(self, self.v)
 
-  def toInstruction(self):
-    return self.v.toOperand()
+  # TODO: visit_source?
+
+  def visit_target(self, manager, use_builder=False):
+    instr = manager.get_cexp(self.v)
+
+    if use_builder:
+      isntr = CVariable('Builder').arr('Insert', [instr])
+
+    return [CDefinition.init(
+      manager.PtrValue,
+      manager.get_cexp(self),
+      instr)]
 
 ################################
 class BinOp(Instr):
@@ -163,7 +166,7 @@ class BinOp(Instr):
     self.type = type
     self.v1 = v1
     self.v2 = v2
-    self.flags = flags
+    self.flags = list(flags)
     self._check_op_flags()
 
   def getOpName(self):
@@ -289,23 +292,6 @@ class BinOp(Instr):
                self.type == self.v2.type,
                self.type.getTypeConstraints())
 
-  flag_method = {
-    'nsw':   'hasNoSignedWrap',
-    'nuw':   'hasNoUnsignedWrap',
-    'exact': 'isExact',
-  }
-
-  def getPatternMatch(self, context, name = None):
-    if name == None: name = self.getCName()
-
-    match = context.match(name, 'm_' + self.caps[self.op], self.v1, self.v2)
-
-    for flag in self.flags:
-      # TODO: find better way to match flags
-      match = CBinExpr('&&', match, CFunctionCall(self.flag_method[flag], CVariable(name)))
-
-    return match
-
   caps = {
     Add:  'Add',
     Sub:  'Sub',
@@ -322,26 +308,53 @@ class BinOp(Instr):
     Xor:  'Xor',
   }
 
-  def toConstruct(self, is_root = False):
-    cons = CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
-        self.v1.toOperand(), self.v2.toOperand())
+  def register_types(self, manager):
+    manager.register_type(self, self.type, IntType())
+    manager.unify(self, self.v1, self.v2)
 
-    if is_root:
-      gen = [CDefinition(CVariable('BinaryOperator'), CVariable(self.getCName()), cons, True)]
-    else:
-      gen = [CDefinition(CVariable('BinaryOperator'), CVariable(self.getCName()), 
-        CVariable('Builder').arr('Insert', [cons]), True)]
+  def visit_source(self, mb):
+    r1 = mb.subpattern(self.v1)
+    r2 = mb.subpattern(self.v2)
+
+    op = BinOp.caps[self.op]
+
+    if 'nsw' in self.flags and 'nuw' in self.flags:
+      return CFunctionCall('match',
+        mb.get_my_ref(),
+        CFunctionCall('m_CombineAnd',
+          CFunctionCall('m_NSW' + op, r1, r2),
+          CFunctionCall('m_NUW' + op,
+            CFunctionCall('m_Value'),
+            CFunctionCall('m_Value'))))
+
+    if 'nsw' in self.flags:
+      return mb.simple_match('m_NSW' + op, r1, r2)
+
+    if 'nuw' in self.flags:
+      return mb.simple_match('m_NUW' + op, r1, r2)
+
+    if 'exact' in self.flags:
+      return CFunctionCall('match',
+        mb.get_my_ref(),
+        CFunctionCall('m_Exact', CFunctionCall('m_' + op, r1, r2)))
+
+    return mb.simple_match('m_' + op, r1, r2)
+
+  def visit_target(self, manager, use_builder=False):
+    cons = CFunctionCall('BinaryOperator::Create' + self.caps[self.op],
+      manager.get_cexp(self.v1), manager.get_cexp(self.v2))
+
+    if use_builder:
+      cons = CVariable('Builder').arr('Insert', [cons])
+
+    gen = [CDefinition.init(CPtrType(CTypeName('BinaryOperator')), manager.get_cexp(self), cons)]
 
     for f in self.flags:
       setter = {'nsw': 'setHasNoSignedWrap', 'nuw': 'setHasNoUnsignedWrap', 'exact': 'setIsExact'}[f]
-      gen.append(CVariable(self.getCName()).arr(setter, [CVariable('true')]))
+      gen.append(manager.get_cexp(self).arr(setter, [CVariable('true')]))
 
     return gen
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type)
-    manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
 
 ################################
 class ConversionOp(Instr):
@@ -448,15 +461,6 @@ class ConversionOp(Instr):
     Bitcast: 'm_BitCast',
   }
 
-  def getPatternMatch(self, context, name = None):
-    if name == None: name = self.getCName();
-
-    if self.op == self.Int2Ptr:
-      raise AliveError('inttoptr not supported?')
-
-    matcher = self.matcher[self.op]
-
-    return context.match(name, matcher, self.v)
 
   constr = {
     Trunc:   'TruncInst',
@@ -467,29 +471,55 @@ class ConversionOp(Instr):
     Bitcast: 'BitCastInst',
   }
 
-  def toConstruct(self, is_root=False):
+  def register_types(self, manager):
+    if self.enforceIntSrc(self.op):
+      manager.register_type(self.v, self.stype, IntType())
+    elif self.enforcePtrSrc(self.op):
+      manager.register_type(self.v, self.stype, PtrType())
+    else:
+      manager.register_type(self.v, self.stype, UnknownType())
+
+    if self.enforceIntTgt(self.op):
+      manager.register_type(self, self.type, IntType())
+    elif self.enforcePtrTgt(self.op):
+      manager.register_type(self, self.type, PtrType())
+    else:
+      manager.register_type(self, self.type, UnknownType())
+    # TODO: inequalities for trunc/sext/zext
+
+  def visit_source(self, mb):
+    r = mb.subpattern(self.v)
+
     if self.op == ConversionOp.ZExtOrTrunc:
-      if is_root:
-        raise AliveError("Can't handle ZExtOrTrunc in root")
+      return CFunctionCall('match',
+        mb.get_my_ref(),
+        CFunctionCall('m_CombineOr',
+          CFunctionCall('m_ZExt', r),
+          CFunctionCall('m_ZTrunc', r)))
 
-      return [
-        CDefinition(CVariable('Value'),
-        CVariable(self.getCName()),
-        CVariable('Builder').arr('CreateZExtOrTrunc',
-          [self.v.toOperand(), self.toCType()]),
-        True)]
+    return mb.simple_match(ConversionOp.matcher[self.op], r)
 
-    return Instr.toConstruct(self, is_root)
+  def visit_target(self, manager, use_builder=False):
+    if self.op == ConversionOp.ZExtOrTrunc:
+      assert use_builder  #TODO: handle ZExtOrTrunk in root position
+      instr = CVariable('Builder').arr('CreateZExtOrTrunc',
+        [manager.get_cexp(self.v), manager.get_llvm_type(self)])
+      return [CDefinition.init(
+        manager.PtrValue,
+        manager.get_cexp(self),
+        instr)]
 
-  def toInstruction(self):
-    return CFunctionCall('new ' + self.constr[self.op],
-      self.v.toOperand(),
-      self.toCType())
+    else:
+      instr = CFunctionCall('new ' + ConversionOp.constr[self.op],
+        manager.get_cexp(self.v), manager.get_llvm_type(self))
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type)
-    manager.add_label(self.v.getLabel(), self.stype)
+      if use_builder:
+        instr = CVariable('Builder').arr('Insert', [instr])
+
+    return [CDefinition.init(
+      manager.PtrValue,
+      manager.get_cexp(self),
+      instr)]
 
 
 ################################
@@ -589,58 +619,53 @@ class Icmp(Instr):
     SLE: 'ICmpInst::ICMP_SLE',
   }
 
-  def getPatternMatch(self, context, name = None):
-    if name == None: name = self.getCName()
+  def register_types(self, manager):
+    manager.register_type(self, self.type, IntType(1))
+    manager.register_type(self.v1, self.stype, UnknownType().ensureIntPtrOrVector())
+    manager.unify(self.v1, self.v2)
 
-    # We need a unique variable so that m_ICmp can bind it to the predicate.
-    # If this instruction has a fixed predicate, we will constrain it to be equal
-    # to the bound value. Otherwise, we will refer to it later.
-    #
-    # Named comparisons can occur more than once. We name the first one based on
-    # the comparison name, so that comparisons in the target can use it.
-    # Subsequent references use new names (based on the instruction) which are
-    # constrained to be equal to the comparison name.
-    # NOTE: Anonymous named comparisons are named after their instruction. This
-    # may lead to unexpected collisions
+  PredType = CTypeName('CmpInst::Predicate')
+
+  def visit_source(self, mb):
+    r1 = mb.subpattern(self.v1)
+    r2 = mb.subpattern(self.v2)
+
     if self.op == Icmp.Var:
-      cmpName = 'P_' + self._mungeCName(self.opname)
-      if context.checkNewComparison(cmpName):
-        pred = cmpName
-        extra = None
-      else:
-        pred = 'P_' + name
-        extra = CBinExpr('==', CVariable(pred), CVariable(cmpName))
-    else:
-      pred = 'P_' + name
-      extra = CBinExpr('==', CVariable(pred), CVariable(Icmp.op_enum[self.op]))
+      opname = self.opname if self.opname else 'Pred ' + self.name
+      name = mb.manager.get_key_name(opname)  #FIXME: call via mb?
+      rp = mb.binding(name, self.PredType)
 
-    context.addVar(pred, 'CmpInst::Predicate')
+      return mb.simple_match('m_ICmp', rp, r1, r2)
 
-    mICmp = context.match(name, 'm_ICmp', CVariable(pred), self.v1, self.v2)
+    pvar = mb.new_name('P')
+    rp = mb.binding(pvar, self.PredType)
 
-    if extra:
-      return CBinExpr('&&', mICmp, extra)
-    else:
-      return mICmp
+    return CBinExpr('&&',
+      mb.simple_match('m_ICmp', rp, r1, r2),
+      CBinExpr('==', CVariable(pvar), CVariable(Icmp.op_enum[self.op])))
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    if manager.in_source:
-      manager.add_label(self.getLabel(), IntType())
-    else:
-      manager.add_label(self.getLabel(), self.type)
-    manager.unify(self.v1.getLabel(), self.v2.getLabel())
+  def visit_target(self, manager, use_builder=False):
 
-  def toInstruction(self):
+    # determine the predicate
     if self.op == Icmp.Var:
-      opname = 'P_' + self._mungeCName(self.opname)
+      key = self.opname if self.opname else 'Pred ' + self.name
+      opname = manager.get_key_name(key)
+      assert manager.bound(opname)
+      # TODO: confirm type
+
     else:
       opname = Icmp.op_enum[self.op]
 
-    return CFunctionCall('new ICmpInst',
-      CVariable(opname),
-      self.v1.toOperand(),
-      self.v2.toOperand())
+    instr = CFunctionCall('new ICmpInst', CVariable(opname),
+      manager.get_cexp(self.v1), 
+      manager.get_cexp(self.v2))
+
+    if use_builder:
+      instr = CVariable('Builder').arr('Insert', [instr])
+
+    return [
+      CDefinition.init(manager.PtrInstruction, manager.get_cexp(self), instr)]
+
 
 ################################
 class Select(Instr):
@@ -676,25 +701,28 @@ class Select(Instr):
                self.c.type == 1,
                self.type.getTypeConstraints())
 
-  def getPatternMatch(self, context, name = None):
-    if name == None: name = self.getCName()
+  def register_types(self, manager):
+    manager.register_type(self, self.type, UnknownType().ensureFirstClass())
+    manager.register_type(self.c, self.c.type, IntType(1))
+    manager.unify(self, self.v1, self.v2)
 
-    return context.match(name, 'm_Select', self.c, self.v1, self.v2)
+  def visit_source(self, mb):
+    c = mb.subpattern(self.c)
+    v1 = mb.subpattern(self.v1)
+    v2 = mb.subpattern(self.v2)
 
-  def setRepresentative(self, manager):
-    self._manager = manager
-    manager.add_label(self.getLabel(), self.type)
-    manager.unify(self.getLabel(), self.v1.getLabel(), self.v2.getLabel())
-    if not manager.in_source:
-      manager.add_label(self.c.getLabel(), IntType(1))
-    #FIXME: explicit types
+    return mb.simple_match('m_Select', c, v1, v2)
 
+  def visit_target(self, manager, use_builder=False):
+    instr = CFunctionCall('SelectInst::Create',
+      manager.get_cexp(self.c),
+      manager.get_cexp(self.v1),
+      manager.get_cexp(self.v2))
 
-  def toInstruction(self):
-    return CFunctionCall('SelectInst::Create',
-      self.c.toOperand(),
-      self.v1.toOperand(),
-      self.v2.toOperand())
+    if use_builder:
+      instr = CVariable('Builder').arr('Insert', [instr])
+
+    return [CDefinition.init(manager.PtrInstruction, manager.get_cexp(self), instr)]
 
 ################################
 class Alloca(Instr):

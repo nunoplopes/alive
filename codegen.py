@@ -1,9 +1,11 @@
 from pretty import *
+from collections import defaultdict
 
 class CFragment(object):
 	'Common superclass for C statements and expressions.'
-	pass
-	
+
+  INDENT=2
+
 class CTest(CFragment):
 	def __init__(self, string):
 		self.s = string
@@ -13,6 +15,48 @@ class CTest(CFragment):
 	
 	def formatExpr(self, prec):
 		return text(self.s)
+
+class CType(CFragment):
+  pass
+
+class CPtrType(CType):
+  def __init__(self, pointee):
+    self.pointee = pointee
+
+  def __str__(self):
+    return str(self.pointee) + '*'
+
+  def __repr__(self):
+    return 'CPtrType({0.pointee!r})'.format(self)
+
+  def decorate(self, exp):
+    return CUnaryExpr('*', self.pointee.decorate(exp))
+
+  def underlying_type(self):
+    return self.pointee.underlying_type()
+
+  def format(self):
+    return self.pointee.format() + '*'
+
+class CTypeName(CType):
+  def __init__(self, name):
+    self.name = name
+
+  def __str__(self):
+    return self.name
+
+  def __repr__(self):
+    return 'CTypeName({0.name!r})'.format(self)
+
+  def decorate(self, exp):
+    return exp
+
+  def underlying_type(self):
+    return self.name
+
+  def format(self):
+    return text(self.name)
+
 
 class CExpression(CFragment):
 	def pprint(self, width=80, prec=0):
@@ -97,6 +141,8 @@ class CBinExpr(CExpression):
 		'|': 12,
 		'&&': 13,
 		'||': 14,
+		'=': 15,
+		',': 17,
 	}
 	_lassoc = {'/', '%', '-', '<<', '>>', '<', '<=', '>', '>=', '==', '!='}
 	
@@ -113,7 +159,22 @@ class CBinExpr(CExpression):
 			fmt = group(fmt).nest(2)
 
 		return fmt
-		
+
+class CAssign(CExpression):
+  def __init__(self, x, y):
+    self.x = x
+    self.y = y
+
+  _prec = 15
+  def formatExpr(self, prec=18):
+
+    fmt = seq(self.x.formatExpr(14), ' =', line, self.y.formatExpr(15))
+    if prec < self._prec:
+      fmt = seq('(', fmt, ')')
+    if prec != self._prec:
+      fmt = nest(self.INDENT, group(fmt))
+
+    return fmt
 
 class CStatement(CFragment):
 	def pprint(self, width=80):
@@ -134,17 +195,42 @@ class CIf(CStatement):
 		
 		return f
 
+
 class CDefinition(CStatement):
-	def __init__(self, ty, var, val, isPtr=False):
-		assert isinstance(val, CExpression)
-		self.ty = ty
-		self.var = var
-		self.val = val
-		self.isPtr = isPtr
-	
-	def format(self):
-		star = '*' if self.isPtr else ''
-		return group(nest(4, seq(self.ty.formatExpr(18), ' ', star, self.var.formatExpr(0), ' =', line, self.val.formatExpr(18), ';')))
+  @classmethod
+  def init(cls, ctype, lval, init):
+    return cls(
+      CTypeName(ctype.underlying_type()),
+      CAssign(ctype.decorate(lval), init))
+
+  @classmethod
+  def block(cls, var_types):
+    '[CType * CVariable] -> [CDefinition]'
+
+    decls = defaultdict(list)
+    for ctype, var in var_types:
+      decls[ctype.underlying_type()].append(ctype.decorate(var))
+
+    for ctype, vars in decls.iteritems():
+      yield cls(CTypeName(ctype), *vars)
+
+  def __init__(self, ctype, *inits):
+    assert isinstance(ctype, CType)
+    assert all(isinstance(init, CExpression) for init in inits)
+
+    self.ctype = ctype
+    self.inits = inits
+
+  def format(self):
+    inits = (i.formatExpr(17) for i in self.inits)
+    return nest(self.INDENT,
+      group(
+        seq(
+          self.ctype.format(),
+          ' ',
+          iter_seq(joinit(inits, ',' + line)),
+          ';')))
+
 
 class CReturn(CStatement):
 	def __init__(self, ret = None):
