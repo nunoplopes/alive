@@ -129,8 +129,16 @@ class CopyOperand(Instr):
     if use_builder:
       isntr = CVariable('Builder').arr('Insert', [instr])
 
+    # TODO: this probably should use manager.get_ctype,
+    # but that currently doesn't distinguish source instructions (Value)
+    # from target instructions (Instruction)
+    if isinstance(self.v, Instruction):
+      ctype = manager.PtrInstruction
+    else:
+      ctype = manager.PtrValue
+
     return [CDefinition.init(
-      manager.PtrValue,
+      ctype,
       manager.get_cexp(self),
       instr)]
 
@@ -517,7 +525,7 @@ class ConversionOp(Instr):
         instr = CVariable('Builder').arr('Insert', [instr])
 
     return [CDefinition.init(
-      manager.PtrValue,
+      manager.PtrInstruction,
       manager.get_cexp(self),
       instr)]
 
