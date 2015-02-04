@@ -575,6 +575,7 @@ Pre: hasOneUse(%Op1)
 ;   =>
 ; %r = sub nuw %A, %B
 
+; undoes AndOrXor:2587
 ; ame: AndOrXor:135
 ; %op = xor %X, C1
 ; %r = and %op, C2
