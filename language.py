@@ -132,7 +132,7 @@ class CopyOperand(Instr):
     # TODO: this probably should use manager.get_ctype,
     # but that currently doesn't distinguish source instructions (Value)
     # from target instructions (Instruction)
-    if isinstance(self.v, Instruction):
+    if isinstance(self.v, Instr):
       ctype = manager.PtrInstruction
     else:
       ctype = manager.PtrValue
