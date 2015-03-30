@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-# Copyright 2014 The Alive authors.
+# Copyright 2014-2015 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,10 +83,6 @@ def simplify_pre(f):
   return pre_tactic.apply(f)[0].as_expr()
 
 
-def get_z3_id(x):
-  return Z3_get_ast_id(x.ctx.ref(), x.as_ast())
-
-
 def z3_solver_to_smtlib(s):
   a = s.assertions()
   size = len(a) - 1
@@ -138,7 +134,7 @@ tactic = AndThen(
 correct_exprs = {}
 def check_expr(qvars, expr, error):
   expr = mk_forall(qvars, mk_and(expr))
-  id = get_z3_id(expr)
+  id = expr.get_id()
   if id in correct_exprs:
     return
   correct_exprs[id] = expr
@@ -308,7 +304,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
   if s.check() == unsat:
     # optimization is incorrect. Run the normal procedure for nice diagnostics.
     check_refinement(srcv, tgtv, types, extra_cnstrs, users)
-    exit()
+    assert False
 
   # enumerate all models (all possible flag assignments)
   models = []
@@ -421,6 +417,10 @@ def check_opt(opt):
     print 'Source and Target programs do not type check'
     exit(-1)
 
+  # Pointers are assumed to be either 32 or 64 bits
+  ptrsize = Int('ptrsize')
+  s.add(Or(ptrsize == 32, ptrsize == 64))
+
   sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
@@ -458,6 +458,7 @@ def check_opt(opt):
     types = s.model()
     fixupTypes(ident_src, types)
     fixupTypes(ident_tgt, types)
+    set_ptr_size(types)
     pre.fixupTypes(types)
     check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users)
     block_model(s, sneg, types)
@@ -487,12 +488,17 @@ def main():
   parser.add_argument('--no-verify', action='store_false', dest='verify')
   parser.add_argument('-o', '--output', type=argparse.FileType('w'), metavar='file',
     help='Write generated code to <file> ("-" for stdout)')
-  parser.add_argument('file', type=argparse.FileType('r'), nargs='*', default=[sys.stdin],
+  parser.add_argument('--use-array-th', action='store_true', default=False,
+    help='Use array theory to encode memory operations (default: False)',
+    dest='array_th')
+  parser.add_argument('file', type=argparse.FileType('r'), nargs='*',
+    default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
 
   args = parser.parse_args()
 
   set_infer_flags(args.infer_flags)
+  set_use_array_theory(args.array_th)
 
   gen = []
 

@@ -1,4 +1,4 @@
-# Copyright 2014 The Alive authors.
+# Copyright 2014-2015 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,15 @@ def mk_unique_id():
   id = str(gbl_unique_id)
   gbl_unique_id += 1
   return id
+
+
+def fold_ite_list(l):
+  if len(l) == 0:
+    return None
+  cond, val = l[0]
+  if len(l) == 1:
+    return val
+  return If(cond, val, fold_ite_list(l[1:]))
 
 
 def freshBV(prefix, size):
@@ -240,6 +249,24 @@ def set_infer_flags(f):
 
 def do_infer_flags():
   return gbl_infer_flags
+
+gbl_use_array_theory = False
+def set_use_array_theory(f):
+  global gbl_use_array_theory
+  gbl_use_array_theory = f
+
+def use_array_theory():
+  return gbl_use_array_theory
+
+gbl_ptr_size = 32
+def set_ptr_size(m):
+  global gbl_ptr_size
+  sz = m.get_interp(Int('ptrsize'))
+  if sz is not None:
+    gbl_ptr_size = sz.as_long()
+
+def get_ptr_size():
+  return gbl_ptr_size
 
 
 ##########################

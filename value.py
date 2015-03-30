@@ -1,4 +1,4 @@
-# Copyright 2014 The Alive authors.
+# Copyright 2014-2015 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ class UnknownType(Type):
     return self.types[self.myType].getUnderlyingType()
 
   def fixupTypes(self, types):
-    self.myType = types.evaluate(self.typevar).as_long()
+    self.myType = types.get_interp(self.typevar).as_long()
     self.types[self.myType].fixupTypes(types)
 
   def __eq__(self, other):
@@ -252,7 +252,7 @@ class IntType(Type):
     return self.bitsvar
 
   def fixupTypes(self, types):
-    size = types.evaluate(self.bitsvar).as_long()
+    size = types.get_interp(self.bitsvar).as_long()
     assert self.defined == False or self.size == size
     self.size = size
 
@@ -347,17 +347,14 @@ class PtrType(Type):
     return BoolVal(False)
 
   def fixupTypes(self, types):
-    self.size = types.evaluate(Int('ptrsize')).as_long()
+    self.size = types.get_interp(Int('ptrsize')).as_long()
     self.type.fixupTypes(types)
 
   def ensureTypeDepth(self, depth):
     return BoolVal(False) if depth == 0 else self.type.ensureTypeDepth(depth-1)
 
   def getTypeConstraints(self):
-    # Pointers are assumed to be either 32 or 64 bits
-    v = Int('ptrsize')
-    return And(Or(v == 32, v == 64),
-               self.typevar == Type.Ptr,
+    return And(self.typevar == Type.Ptr,
                self.type.getTypeConstraints())
 
 
@@ -528,7 +525,7 @@ class TypeFixedValue(Value):
 
   def fixupTypes(self, types):
     self.v.fixupTypes(types)
-    self.val = types.evaluate(self.smtvar).as_long()
+    self.val = types.get_interp(self.smtvar).as_long()
 
 
 ################################
