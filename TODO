@@ -1,7 +1,5 @@
 ----------------------------------------------------------------------
 
-inference of nsw, nuw, exact on both the LHS and RHS
-
 support for debugging / understanding optimizations
 - inference of undefs on the RHS (and LHS?) to help spot badly specified
   optimizations
@@ -13,7 +11,6 @@ support for debugging / understanding optimizations
     are the same across the two
 - optionally print example operands for correct optimizations, not just
   incorrect ones
-- increment an LLVM Statistic each time a generated optimziation fires
 
 support sets of things as previously implemented by David
 
@@ -23,8 +20,6 @@ figure out ways to deal wtih solver timeout
 
 support definition of new symbols such as INT_MAX, John suggests macro semantics
 - make these available by default via an implicit include file, perhaps
-
-generation of C++ code that can be pasted into LLVM
 
 documentation
 

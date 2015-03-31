@@ -76,6 +76,13 @@ def mk_implies(a, b):
     return Not(a)
   return Implies(a, b)
 
+
+def mk_concat(l):
+  if len(l) == 1:
+    return l[0]
+  return Concat(l)
+
+
 def mk_forall(l, f):
   if l == []:
     return f

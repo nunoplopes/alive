@@ -37,15 +37,17 @@ def getPtrAlignCnstr(ptr, align):
 
 
 def defined_align_access(state, defined, access_size, req_align, aptr):
-  if req_align == 0:
-    return
-  for (ptr, mem, qvs, info) in state.ptrs:
+  must_access = []
+  for (ptr, mem, qvars, info) in state.ptrs:
     (block_size, num_elems, align) = info
     size = block_size * num_elems
-    if size >= access_size:
+    inbounds = And(UGE(aptr, ptr), UGE((size - access_size)/8, aptr - ptr))
+    if req_align != 0 and size >= access_size:
       # overestimating the alignment is undefined behavior.
-      inbounds = And(UGE(aptr, ptr), UGE((size - access_size)/8, aptr - ptr))
       defined.append(Implies(inbounds, align >= req_align))
+    if access_size <= size:
+      must_access.append(inbounds if qvars != [] else True)
+  defined.append(mk_or(must_access))
 
 
 ################################
@@ -785,8 +787,9 @@ class Alloca(Instr):
       qvars.append(ptr)
       return ptr
 
-    defined += [ULT(ptr, ptr + (size >> 3)),
-                ptr != 0,
+    if size > 8:
+      defined.append(ULT(ptr, ptr + ((size >> 3) - 1)))
+    defined += [ptr != 0,
                 getPtrAlignCnstr(ptr, self.align)]
 
     mem = freshBV('alloca' + self.getName(), size)
@@ -830,6 +833,7 @@ class GEP(Instr):
 
   def toSMT(self, defined, poison, state, qvars):
     ptr = state.eval(self.ptr, defined, poison, qvars)
+    defined.append(ptr != 0)
     type = self.type
     for i in range(len(self.idxs)):
       idx = truncateOrSExt(state.eval(self.idxs[i], defined, poison, qvars),ptr)
@@ -869,7 +873,7 @@ class Load(Instr):
     BV = BV << offset
     return Extract(old_size - 1, old_size - size, BV)
 
-  def _recPtrLoad(self, l, v, defined, mustload, qvars):
+  def _recPtrLoad(self, l, v, defined, qvars):
     if len(l) == 0:
       return None
 
@@ -886,10 +890,9 @@ class Load(Instr):
       return self._recPtrLoad(l[1:], v, defined, mustload, qvars)
 
     inbounds = And(UGE(v, ptr), UGE((size - read_size)/8, v - ptr))
-    mustload += [inbounds]
     qvars += qvs
 
-    mem2 = self._recPtrLoad(l[1:], v, defined, mustload, qvars)
+    mem2 = self._recPtrLoad(l[1:], v, defined, qvars)
     return mem if mem2 is None else If(inbounds, mem, mem2)
 
   def _mkArrayLoad(self, mem, ptr, sz):
@@ -902,18 +905,17 @@ class Load(Instr):
     for i in range(0, sz/8):
       # FIXME: assumes little-endian
       bytes = [mem[ptr + i]] + bytes
-    return Concat(bytes)
+    return mk_concat(bytes)
 
   def toSMT(self, defined, poison, state, qvars):
     v = state.eval(self.v, defined, poison, qvars)
     defined.append(v != 0)
-    defined_align_access(state, defined, self.type.getSize(), self.align, v)
+    access_sz = getAllocSize(self.type)
+    defined_align_access(state, defined, access_sz, self.align, v)
     if use_array_theory():
       val = self._mkArrayLoad(state.mem, v, self.type.getSize())
     else:
-      mustload = []
-      val = self._recPtrLoad(state.ptrs, v, defined, mustload, qvars)
-      defined.append(mk_or(mustload))
+      val = self._recPtrLoad(state.ptrs, v, defined, qvars)
       if val is None:
         defined.append(BoolVal(False))
         return BitVecVal(0, self.type.getSize())
@@ -982,15 +984,12 @@ class Store(Instr):
         continue
 
       inbounds = And(UGE(tgt, ptr), UGE((size - write_size)/8, tgt - ptr))
-      mustwrite += [inbounds]
-
       writes = mk_and(state.defined + [inbounds])
       mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
       qvs += qvars_new
       newmem += [(ptr, mem, qvs, (block_size, num_elems, align))]
 
     state.ptrs = newmem
-    defined.append(mk_or(mustwrite))
 
   def _arrayVcGen(self, defined, state, src, tgt, write_size):
     src_size = self.stype.getSize()
@@ -1023,7 +1022,7 @@ class Store(Instr):
     defined_align_access(state, defined, write_size, self.align, tgt)
 
     # cutpoint; record BB definedness
-    state.defined = state.defined + defined
+    state.defined += defined
     return None
 
   def getTypeConstraints(self):
