@@ -972,7 +972,7 @@ class Store(Instr):
     old = mem & (m1 | m2)
     return new | old
 
-  def _bvVcGen(self, defined, state, src, tgt, write_size, qvars_new):
+  def _bvVcGen(self, state, src, tgt, write_size, qvars_new):
     newmem = []
     mustwrite = []
     for (ptr, mem, qvs, info) in state.ptrs:
@@ -991,7 +991,7 @@ class Store(Instr):
 
     state.ptrs = newmem
 
-  def _arrayVcGen(self, defined, state, src, tgt, write_size):
+  def _arrayVcGen(self, state, src, tgt, write_size):
     src_size = self.stype.getSize()
     src_idx = 0
     # FIXME: assumes little-endian
@@ -999,12 +999,16 @@ class Store(Instr):
       rem = src_size % 8
       rest = Extract(rem-1, 0, src)
       rest_old = Extract(7, rem, state.mem[tgt])
-      state.mem = Update(state.mem, tgt, Concat(rest_old, rest))
+      state.mem = If(mk_and(state.defined),
+                     Update(state.mem, tgt, Concat(rest_old, rest)),
+                     state.mem)
       tgt += 1
       write_size -= 8
       src_idx = rem
     for i in range(0, write_size/8):
-      state.mem = Update(state.mem, tgt+i, Extract(src_idx+7, src_idx, src))
+      state.mem = If(mk_and(state.defined),
+                     Update(state.mem, tgt+i, Extract(src_idx+7, src_idx, src)),
+                     state.mem)
       src_idx += 8
 
   def toSMT(self, defined, poison, state, qvars):
@@ -1013,16 +1017,15 @@ class Store(Instr):
     tgt = state.eval(self.dst, defined, poison, qvars_new)
     qvars += qvars_new
     defined.append(tgt != 0)
+    # cutpoint; record BB definedness
+    state.defined += defined
 
     write_size = getAllocSize(self.stype)
     if use_array_theory():
-      self._arrayVcGen(defined, state, src, tgt, write_size)
+      self._arrayVcGen(state, src, tgt, write_size)
     else:
-      self._bvVcGen(defined, state, src, tgt, write_size, qvars_new)
+      self._bvVcGen(state, src, tgt, write_size, qvars_new)
     defined_align_access(state, defined, write_size, self.align, tgt)
-
-    # cutpoint; record BB definedness
-    state.defined += defined
     return None
 
   def getTypeConstraints(self):
