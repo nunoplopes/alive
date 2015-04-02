@@ -794,6 +794,11 @@ class Alloca(Instr):
 
     mem = freshBV('alloca' + self.getName(), size)
     state.addAlloca(ptr, mem, (block_size, num_elems, self.align))
+
+    if use_array_theory():
+      for i in range(0, size/8):
+        idx = 8*i
+        state.mem = Update(state.mem, ptr + i, Extract(idx+7, idx, mem))
     return ptr
 
   def getTypeConstraints(self):
@@ -833,7 +838,6 @@ class GEP(Instr):
 
   def toSMT(self, defined, poison, state, qvars):
     ptr = state.eval(self.ptr, defined, poison, qvars)
-    defined.append(ptr != 0)
     type = self.type
     for i in range(len(self.idxs)):
       idx = truncateOrSExt(state.eval(self.idxs[i], defined, poison, qvars),ptr)
@@ -873,7 +877,7 @@ class Load(Instr):
     BV = BV << offset
     return Extract(old_size - 1, old_size - size, BV)
 
-  def _recPtrLoad(self, l, v, defined, qvars):
+  def _mkBVLoad(self, l, v, defined, qvars):
     if len(l) == 0:
       return None
 
@@ -887,24 +891,27 @@ class Load(Instr):
       mem = self.extractBV(mem, offset, read_size)
     elif size < read_size:
       # undef behavior; skip this block
-      return self._recPtrLoad(l[1:], v, defined, mustload, qvars)
+      return self._mkBVLoad(l[1:], v, defined, mustload, qvars)
 
     inbounds = And(UGE(v, ptr), UGE((size - read_size)/8, v - ptr))
     qvars += qvs
 
-    mem2 = self._recPtrLoad(l[1:], v, defined, qvars)
+    mem2 = self._mkBVLoad(l[1:], v, defined, qvars)
     return mem if mem2 is None else If(inbounds, mem, mem2)
 
-  def _mkArrayLoad(self, mem, ptr, sz):
+  def _mkArrayLoad(self, state, ptr, sz, qvars):
+    for (p, m, qvs, info) in state.ptrs:
+      qvars += qvs
+
     bytes = []
     rem = sz % 8
     if rem != 0:
       sz = sz - rem
-      bytes = [Extract(rem-1, 0, mem[ptr])]
+      bytes = [Extract(rem-1, 0, state.mem[ptr])]
       ptr += 1
     for i in range(0, sz/8):
       # FIXME: assumes little-endian
-      bytes = [mem[ptr + i]] + bytes
+      bytes = [state.mem[ptr + i]] + bytes
     return mk_concat(bytes)
 
   def toSMT(self, defined, poison, state, qvars):
@@ -913,9 +920,9 @@ class Load(Instr):
     access_sz = getAllocSize(self.type)
     defined_align_access(state, defined, access_sz, self.align, v)
     if use_array_theory():
-      val = self._mkArrayLoad(state.mem, v, self.type.getSize())
+      val = self._mkArrayLoad(state, v, self.type.getSize(), qvars)
     else:
-      val = self._recPtrLoad(state.ptrs, v, defined, qvars)
+      val = self._mkBVLoad(state.ptrs, v, defined, qvars)
       if val is None:
         defined.append(BoolVal(False))
         return BitVecVal(0, self.type.getSize())
@@ -1004,6 +1011,7 @@ class Store(Instr):
                      state.mem)
       tgt += 1
       write_size -= 8
+      assert (src_size-rem) == write_size
       src_idx = rem
     for i in range(0, write_size/8):
       state.mem = If(mk_and(state.defined),
