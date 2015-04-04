@@ -88,8 +88,23 @@ class State:
     self.current_bb = name
 
   def getAllocaConstraints(self):
-    ptrs = [ptr for (ptr, mem, qvars, info) in self.ptrs]
-    return [mk_distinct(ptrs)]
+    # generate the following constraints:
+    # 1) Alloca ptrs are never null
+    # 2) Allocated regions do not overlap with each other and with input blocks
+    cnstr = []
+    for (ptr, mem, qvars, info) in self.ptrs:
+      if qvars == []: # input mem
+        continue
+      cnstr.append(ptr != 0)
+      (block_size, num_elems, align) = info
+      size = block_size * num_elems
+      for (ptr2, mem2, qvars2, info2) in self.ptrs:
+        if ptr.eq(ptr2):
+          continue
+        (block_size2, num_elems2, align2) = info
+        size2 = block_size2 * num_elems2
+        cnstr.append(Or(UGE(ptr2, ptr+size), ULE(ptr2+size2, ptr)))
+    return cnstr
 
   def eval(self, v, defined, poison, qvars):
     (smt, d, p, q) = self.vars[v.getUniqueName()]

@@ -347,7 +347,7 @@ class PtrType(Type):
     return BoolVal(False)
 
   def fixupTypes(self, types):
-    self.size = types.get_interp(Int('ptrsize')).as_long()
+    self.size = get_ptr_size()
     self.type.fixupTypes(types)
 
   def ensureTypeDepth(self, depth):

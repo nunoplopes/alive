@@ -4,8 +4,6 @@ Alive: Automatic LLVM's Instcombine Verifier
 Alive is a tool that can prove the correctness of InstCombine optimizations
 specified in a high-level language.
 
-WARNING: This tool is not complete and its results should not be relied upon.
-
 
 Requirements
 ------------

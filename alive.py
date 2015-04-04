@@ -365,6 +365,18 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
     check_refinement(srcv, tgtv, types, extra_cnstrs, users)
 
   # 3) check that the final memory state is similar in both programs
+  if use_array_theory():
+    qvars = []
+    for (ptr, mem, qvs, info) in srcv.ptrs:
+      qvars += qvs
+    mem  = srcv.mem
+    memb = tgtv.mem
+    idx = BitVec('idx', get_ptr_size())
+    check_expr(qvars, extra_cnstrs + [mem[idx] != memb[idx]], lambda s :
+      ('Mismatch in final memory state in idx %s' % str_model(s, idx),
+       str_model(s, mem[idx]), str_model(s,memb[idx]), None, srcv, tgtv, types))
+    return
+
   memsb = {str(ptr) : mem for (ptr, mem, qvars, info) in tgtv.ptrs}
   for (ptr, mem, qvars, info) in srcv.ptrs:
     memb = memsb.get(str(ptr))
@@ -458,9 +470,9 @@ def check_opt(opt):
   proofs = 0
   while res == sat:
     types = s.model()
+    set_ptr_size(types)
     fixupTypes(ident_src, types)
     fixupTypes(ident_tgt, types)
-    set_ptr_size(types)
     pre.fixupTypes(types)
     check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users)
     block_model(s, sneg, types)

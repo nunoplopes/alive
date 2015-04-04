@@ -41,6 +41,7 @@ Pre: equivalentAddressValues(%p1, %p2)
 store %x, %p1
 %y = load %p2
   =>
+store %x, %p1
 %y = bitcast %x
 
 
