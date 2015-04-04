@@ -38,19 +38,39 @@ def getPtrAlignCnstr(ptr, align):
 
 def defined_align_access(state, defined, access_size, req_align, aptr):
   must_access = []
-  for (ptr, mem, qvars, info) in state.ptrs:
-    (block_size, num_elems, align) = info
-    size = block_size * num_elems
+  for blck in state.ptrs:
+    ptr  = blck.ptr
+    size = blck.size()
     inbounds = And(UGE(aptr, ptr), UGE((size - access_size)/8, aptr - ptr))
     if req_align != 0 and size >= access_size:
       # overestimating the alignment is undefined behavior.
-      defined.append(Implies(inbounds, align >= req_align))
+      defined.append(Implies(inbounds, blck.align >= req_align))
     if access_size <= size:
-      must_access.append(inbounds if qvars != [] else True)
+      must_access.append(inbounds if blck.isAlloca() else BoolVal(True))
   defined.append(mk_or(must_access))
 
 
 ################################
+class MemInfo:
+  def __init__(self, ptr, mem, qvars, ty, block_size, num_elems, align):
+    self.ptr = ptr
+    self.mem = mem
+    self.qvars = qvars
+    self.ty = ty
+    self.block_size = block_size
+    self.num_elems = num_elems
+    self.align = align
+
+  def isAlloca(self):
+    return self.ty == 'alloca'
+
+  def size(self):
+    return self.block_size * self.num_elems
+
+  def __eq__(self, b):
+    return self.ptr.eq(b.ptr)
+
+
 class State:
   def __init__(self):
     self.vars = collections.OrderedDict()
@@ -72,11 +92,15 @@ class State:
         self.bb_pres[bb] += [cond]
         self.bb_mem[bb].append((cond, self.mem))
 
-  def addAlloca(self, ptr, mem, info):
-    self.ptrs += [(ptr, mem, [mem], info)]
+  def addAlloca(self, ptr, mem, block_size, num_elems, align):
+    self.ptrs.append(MemInfo(ptr, mem, [mem], 'alloca', block_size, num_elems,
+                             align))
 
-  def addInputMem(self, ptr, mem, info):
-    self.ptrs += [(ptr, mem, [], info)]
+  def addInputMem(self, ptr, mem, qvars, block_size, num_elems):
+    # precondition vcgen can call this function spuriously
+    if any(ptr.eq(blck.ptr) for blck in self.ptrs):
+      return
+    self.ptrs.append(MemInfo(ptr, mem, qvars, 'in', block_size, num_elems, 1))
 
   def newBB(self, name):
     if name in self.bb_pres:
@@ -92,18 +116,17 @@ class State:
     # 1) Alloca ptrs are never null
     # 2) Allocated regions do not overlap with each other and with input blocks
     cnstr = []
-    for (ptr, mem, qvars, info) in self.ptrs:
-      if qvars == []: # input mem
+    for mem1 in self.ptrs:
+      if mem1.ty == 'in':
         continue
+      ptr = mem1.ptr
+      size = mem1.size()
       cnstr.append(ptr != 0)
-      (block_size, num_elems, align) = info
-      size = block_size * num_elems
-      for (ptr2, mem2, qvars2, info2) in self.ptrs:
-        if ptr.eq(ptr2):
+      for mem2 in self.ptrs:
+        if mem1 == mem2:
           continue
-        (block_size2, num_elems2, align2) = info
-        size2 = block_size2 * num_elems2
-        cnstr.append(Or(UGE(ptr2, ptr+size), ULE(ptr2+size2, ptr)))
+        cnstr.append(Or(UGE(mem2.ptr, ptr + size),
+                        ULE(mem2.ptr + mem2.size(), ptr)))
     return cnstr
 
   def eval(self, v, defined, poison, qvars):
@@ -808,7 +831,7 @@ class Alloca(Instr):
                 getPtrAlignCnstr(ptr, self.align)]
 
     mem = freshBV('alloca' + self.getName(), size)
-    state.addAlloca(ptr, mem, (block_size, num_elems, self.align))
+    state.addAlloca(ptr, mem, block_size, num_elems, self.align)
 
     if use_array_theory():
       for i in range(0, size/8):
@@ -896,9 +919,10 @@ class Load(Instr):
     if len(l) == 0:
       return None
 
-    (ptr, mem, qvs, info) = l[0]
-    (block_size, num_elems, align) = info
-    size = mem.size()
+    blck = l[0]
+    mem = blck.mem
+    ptr = blck.ptr
+    size = blck.size()
     read_size = self.type.getSize()
 
     if size > read_size:
@@ -909,14 +933,14 @@ class Load(Instr):
       return self._mkBVLoad(l[1:], v, defined, mustload, qvars)
 
     inbounds = And(UGE(v, ptr), UGE((size - read_size)/8, v - ptr))
-    qvars += qvs
+    qvars += blck.qvars
 
     mem2 = self._mkBVLoad(l[1:], v, defined, qvars)
     return mem if mem2 is None else If(inbounds, mem, mem2)
 
   def _mkArrayLoad(self, state, ptr, sz, qvars):
-    for (p, m, qvs, info) in state.ptrs:
-      qvars += qvs
+    for blck in state.ptrs:
+      qvars += blck.qvars
 
     bytes = []
     rem = sz % 8
@@ -995,23 +1019,18 @@ class Store(Instr):
     return new | old
 
   def _bvVcGen(self, state, src, tgt, write_size, qvars_new):
-    newmem = []
-    mustwrite = []
-    for (ptr, mem, qvs, info) in state.ptrs:
-      (block_size, num_elems, align) = info
-      size = block_size * num_elems
+    for blck in state.ptrs:
+      size = blck.size()
       # skip block if it is too small
       if size < write_size:
-        newmem += [(ptr, mem, qvs, info)]
         continue
 
+      ptr = blck.ptr
+      mem = blck.mem
       inbounds = And(UGE(tgt, ptr), UGE((size - write_size)/8, tgt - ptr))
       writes = mk_and(state.defined + [inbounds])
-      mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
-      qvs += qvars_new
-      newmem += [(ptr, mem, qvs, (block_size, num_elems, align))]
-
-    state.ptrs = newmem
+      blck.mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
+      blck.qvars += qvars_new
 
   def _arrayVcGen(self, state, src, tgt, write_size):
     src_size = self.stype.getSize()

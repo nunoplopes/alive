@@ -367,8 +367,8 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
   # 3) check that the final memory state is similar in both programs
   if use_array_theory():
     qvars = []
-    for (ptr, mem, qvs, info) in srcv.ptrs:
-      qvars += qvs
+    for blck in srcv.ptrs:
+      qvars += blck.qvars
     mem  = srcv.mem
     memb = tgtv.mem
     idx = BitVec('idx', get_ptr_size())
@@ -377,15 +377,16 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
        str_model(s, mem[idx]), str_model(s,memb[idx]), None, srcv, tgtv, types))
     return
 
-  memsb = {str(ptr) : mem for (ptr, mem, qvars, info) in tgtv.ptrs}
-  for (ptr, mem, qvars, info) in srcv.ptrs:
+  memsb = {str(blck.ptr) : blck.mem for blck in tgtv.ptrs}
+  for blck in srcv.ptrs:
+    ptr = blck.ptr
+    mem = blck.mem
     memb = memsb.get(str(ptr))
     if memb == None:
       memb = freshBV('mem', mem.size())
 
-    check_expr(qvars, [mem != memb] + extra_cnstrs, lambda s :
-      ('Mismatch in final memory state for %s (%d bits)' %
-         (ptr, mem.sort().size()),
+    check_expr(blck.qvars, [mem != memb] + extra_cnstrs, lambda s :
+      ('Mismatch in final memory state for %s (%d bits)' % (ptr, mem.size()),
        str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
 
 

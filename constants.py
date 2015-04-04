@@ -92,6 +92,7 @@ class UndefVal(Constant):
   def toSMT(self, defined, poison, state, qvars):
     v = BitVec('undef' + self.id, self.type.getSize())
     qvars += [v]
+    create_mem_if_needed(v, self, state, [v])
     return v
 
   def register_types(self, manager):
