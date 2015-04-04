@@ -497,7 +497,8 @@ def main():
     default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
 
-  args = parser.parse_args()
+  args = os.getenv('ALIVE_EXTRA_ARGS', '').split() + sys.argv[1:]
+  args = parser.parse_args(args)
 
   set_infer_flags(args.infer_flags)
   set_use_array_theory(args.array_th)
