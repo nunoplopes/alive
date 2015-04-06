@@ -117,7 +117,7 @@ store %x2, %p0
 
 Name: LoadStoreAlloca:646
 Pre: hasOneUse(%Ptr)
-%Ptr = alloca
+%Ptr = alloca i9
 store %x, %Ptr
   =>
 skip

@@ -67,6 +67,14 @@ def mk_distinct(l):
   return Distinct(l)
 
 
+def mk_if(c, a, b):
+  if is_true(c):
+    return a
+  if is_false(c):
+    return b
+  return If(c, a, b)
+
+
 def mk_implies(a, b):
   if is_true(a):
     return b

@@ -125,10 +125,10 @@ def check_incomplete_solver(res, s):
 
 tactic = AndThen(
   Repeat(AndThen(Tactic('simplify'), Tactic('propagate-values'))),
-  #Tactic('ctx-simplify')
-  Tactic('elim-term-ite'),
-  Tactic('simplify'),
-  Tactic('propagate-values'),
+  #Tactic('ctx-simplify'),
+  #Tactic('elim-term-ite'),
+  #Tactic('simplify'),
+  #Tactic('propagate-values'),
   Tactic('solve-eqs'),
   Cond(Probe('is-qfbv'), Tactic('qfbv'), Tactic('bv'))
 )
@@ -365,29 +365,12 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
     check_refinement(srcv, tgtv, types, extra_cnstrs, users)
 
   # 3) check that the final memory state is similar in both programs
-  if use_array_theory():
-    qvars = []
-    for blck in srcv.ptrs:
-      qvars += blck.qvars
-    mem  = srcv.mem
-    memb = tgtv.mem
-    idx = BitVec('idx', get_ptr_size())
-    check_expr(qvars, extra_cnstrs + [mem[idx] != memb[idx]], lambda s :
-      ('Mismatch in final memory state in idx %s' % str_model(s, idx),
-       str_model(s, mem[idx]), str_model(s,memb[idx]), None, srcv, tgtv, types))
-    return
-
-  memsb = {str(blck.ptr) : blck.mem for blck in tgtv.ptrs}
-  for blck in srcv.ptrs:
-    ptr = blck.ptr
-    mem = blck.mem
-    memb = memsb.get(str(ptr))
-    if memb == None:
-      memb = freshBV('mem', mem.size())
-
-    check_expr(blck.qvars, [mem != memb] + extra_cnstrs, lambda s :
-      ('Mismatch in final memory state for %s (%d bits)' % (ptr, mem.size()),
-       str_model(s, mem), str_model(s, memb), None, srcv, tgtv, types))
+  idx = BitVec('idx', get_ptr_size())
+  val1 = srcv.load(idx)
+  val2 = tgtv.load(idx)
+  check_expr(srcv.mem_qvars, extra_cnstrs + [val1 != val2], lambda s :
+    ('Mismatch in final memory state in ptr %s' % str_model(s, idx),
+     str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
 
 
 def check_opt(opt):

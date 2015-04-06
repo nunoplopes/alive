@@ -38,8 +38,7 @@ def create_mem_if_needed(ptr, val, state, qvars):
 
     num_elems = 7
     size = block_size * num_elems
-    mem = BitVec('mem_' + val.name, size)
-    state.addInputMem(ptr, mem, qvars, block_size, num_elems)
+    state.addInputMem(ptr, qvars, block_size, num_elems)
 
 
 class Type:

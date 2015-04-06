@@ -1,7 +1,7 @@
 Name: alloca equivalence
-%p = alloca [5 x Ty], 3
+%p = alloca [1 x Ty], 2
   =>
-%p = alloca [5 x Ty], 3
+%p = alloca [1 x Ty], 2
 
 
 Name: introduce store

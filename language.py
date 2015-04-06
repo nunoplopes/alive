@@ -37,6 +37,7 @@ def getPtrAlignCnstr(ptr, align):
 
 
 def defined_align_access(state, defined, access_size, req_align, aptr):
+  defined.append(aptr != 0)
   must_access = []
   for blck in state.ptrs:
     ptr  = blck.ptr
@@ -48,14 +49,14 @@ def defined_align_access(state, defined, access_size, req_align, aptr):
     if access_size <= size:
       must_access.append(inbounds if blck.isAlloca() else BoolVal(True))
   defined.append(mk_or(must_access))
+  # load/store are cutpoints; record BB definedness
+  state.defined += defined
 
 
 ################################
 class MemInfo:
-  def __init__(self, ptr, mem, qvars, ty, block_size, num_elems, align):
+  def __init__(self, ptr, ty, block_size, num_elems, align):
     self.ptr = ptr
-    self.mem = mem
-    self.qvars = qvars
     self.ty = ty
     self.block_size = block_size
     self.num_elems = num_elems
@@ -76,6 +77,7 @@ class State:
     self.vars = collections.OrderedDict()
     self.defined = [] # definedness so far in the BB
     self.ptrs = []
+    self.mem_qvars = []
     self.bb_pres = {}
     self.bb_mem = {}
 
@@ -93,14 +95,26 @@ class State:
         self.bb_mem[bb].append((cond, self.mem))
 
   def addAlloca(self, ptr, mem, block_size, num_elems, align):
-    self.ptrs.append(MemInfo(ptr, mem, [mem], 'alloca', block_size, num_elems,
-                             align))
+    self.mem_qvars.append(mem)
+    self.ptrs.append(MemInfo(ptr, 'alloca', block_size, num_elems, align))
 
-  def addInputMem(self, ptr, mem, qvars, block_size, num_elems):
+  def addInputMem(self, ptr, qvars, block_size, num_elems):
     # precondition vcgen can call this function spuriously
     if any(ptr.eq(blck.ptr) for blck in self.ptrs):
       return
-    self.ptrs.append(MemInfo(ptr, mem, qvars, 'in', block_size, num_elems, 1))
+    self.mem_qvars += qvars
+    self.ptrs.append(MemInfo(ptr, 'in', block_size, num_elems, 1))
+
+  def store(self, cnstr, idx, val):
+    if use_array_theory():
+      self.mem = mk_if(mk_and(cnstr), Update(self.mem, idx, val), self.mem)
+    else:
+      self.mem = If(mk_and(cnstr + [self.idx_var == idx]), val, self.mem)
+
+  def load(self, idx):
+    if use_array_theory():
+      return self.mem[idx]
+    return substitute(self.mem, (self.idx_var, idx))
 
   def newBB(self, name):
     if name in self.bb_pres:
@@ -108,7 +122,11 @@ class State:
       self.mem = fold_ite_list(self.bb_mem[name])
     else:
       self.defined = []
-      self.mem = Array('mem0', BitVecSort(get_ptr_size()), BitVecSort(8))
+      if use_array_theory():
+        self.mem = Array('mem0', BitVecSort(get_ptr_size()), BitVecSort(8))
+      else:
+        self.mem = BitVec('mem0', 8)
+        self.idx_var = BitVec('idx', get_ptr_size())
     self.current_bb = name
 
   def getAllocaConstraints(self):
@@ -833,10 +851,9 @@ class Alloca(Instr):
     mem = freshBV('alloca' + self.getName(), size)
     state.addAlloca(ptr, mem, block_size, num_elems, self.align)
 
-    if use_array_theory():
-      for i in range(0, size/8):
-        idx = 8*i
-        state.mem = Update(state.mem, ptr + i, Extract(idx+7, idx, mem))
+    for i in range(0, size/8):
+      idx = 8*i
+      state.store([], ptr + i, Extract(idx+7, idx, mem))
     return ptr
 
   def getTypeConstraints(self):
@@ -910,62 +927,23 @@ class Load(Instr):
   def getOpName(self):
     return 'load'
 
-  def extractBV(self, BV, offset, size):
-    old_size = BV.size()
-    BV = BV << offset
-    return Extract(old_size - 1, old_size - size, BV)
-
-  def _mkBVLoad(self, l, v, defined, qvars):
-    if len(l) == 0:
-      return None
-
-    blck = l[0]
-    mem = blck.mem
-    ptr = blck.ptr
-    size = blck.size()
-    read_size = self.type.getSize()
-
-    if size > read_size:
-      offset = truncateOrZExt((v - ptr) << 3, mem)
-      mem = self.extractBV(mem, offset, read_size)
-    elif size < read_size:
-      # undef behavior; skip this block
-      return self._mkBVLoad(l[1:], v, defined, mustload, qvars)
-
-    inbounds = And(UGE(v, ptr), UGE((size - read_size)/8, v - ptr))
-    qvars += blck.qvars
-
-    mem2 = self._mkBVLoad(l[1:], v, defined, qvars)
-    return mem if mem2 is None else If(inbounds, mem, mem2)
-
-  def _mkArrayLoad(self, state, ptr, sz, qvars):
-    for blck in state.ptrs:
-      qvars += blck.qvars
+  def toSMT(self, defined, poison, state, qvars):
+    qvars += state.mem_qvars
+    ptr = state.eval(self.v, defined, poison, qvars)
+    access_sz = getAllocSize(self.type)
+    defined_align_access(state, defined, access_sz, self.align, ptr)
 
     bytes = []
+    sz = self.type.getSize()
     rem = sz % 8
     if rem != 0:
       sz = sz - rem
-      bytes = [Extract(rem-1, 0, state.mem[ptr])]
+      bytes = [Extract(rem-1, 0, state.load(ptr))]
       ptr += 1
     for i in range(0, sz/8):
       # FIXME: assumes little-endian
-      bytes = [state.mem[ptr + i]] + bytes
+      bytes = [state.load(ptr + i)] + bytes
     return mk_concat(bytes)
-
-  def toSMT(self, defined, poison, state, qvars):
-    v = state.eval(self.v, defined, poison, qvars)
-    defined.append(v != 0)
-    access_sz = getAllocSize(self.type)
-    defined_align_access(state, defined, access_sz, self.align, v)
-    if use_array_theory():
-      val = self._mkArrayLoad(state, v, self.type.getSize(), qvars)
-    else:
-      val = self._mkBVLoad(state.ptrs, v, defined, qvars)
-      if val is None:
-        defined.append(BoolVal(False))
-        return BitVecVal(0, self.type.getSize())
-    return val
 
   def getTypeConstraints(self):
     return And(self.stype == self.v.type,
@@ -1004,70 +982,31 @@ class Store(Instr):
     return 'store %s%s, %s %s%s' % (t, self.src.getName(), str(self.type),
                                     self.dst.getName(), align)
 
-  def _mkMem(self, src, tgt, ptr, size, mem):
-    write_size = self.stype.getSize()
-    if write_size == size:
-      return src
-    offset = (tgt - ptr) << 3
-    new = LShR(truncateOrPad(src, mem), truncateOrZExt(offset, mem))
-
-    # mask out bits that will be written
-    mask = BitVecVal((1 << size) - 1, size)
-    m1 = mask << truncateOrZExt(size - offset, mem)
-    m2 = LShR(mask, truncateOrZExt(write_size + offset, mem))
-    old = mem & (m1 | m2)
-    return new | old
-
-  def _bvVcGen(self, state, src, tgt, write_size, qvars_new):
-    for blck in state.ptrs:
-      size = blck.size()
-      # skip block if it is too small
-      if size < write_size:
-        continue
-
-      ptr = blck.ptr
-      mem = blck.mem
-      inbounds = And(UGE(tgt, ptr), UGE((size - write_size)/8, tgt - ptr))
-      writes = mk_and(state.defined + [inbounds])
-      blck.mem = If(writes, self._mkMem(src, tgt, ptr, size, mem), mem)
-      blck.qvars += qvars_new
-
-  def _arrayVcGen(self, state, src, tgt, write_size):
-    src_size = self.stype.getSize()
-    src_idx = 0
-    # FIXME: assumes little-endian
-    if src_size != write_size:
-      rem = src_size % 8
-      rest = Extract(rem-1, 0, src)
-      rest_old = Extract(7, rem, state.mem[tgt])
-      state.mem = If(mk_and(state.defined),
-                     Update(state.mem, tgt, Concat(rest_old, rest)),
-                     state.mem)
-      tgt += 1
-      write_size -= 8
-      assert (src_size-rem) == write_size
-      src_idx = rem
-    for i in range(0, write_size/8):
-      state.mem = If(mk_and(state.defined),
-                     Update(state.mem, tgt+i, Extract(src_idx+7, src_idx, src)),
-                     state.mem)
-      src_idx += 8
-
   def toSMT(self, defined, poison, state, qvars):
     qvars_new = []
     src = state.eval(self.src, defined, poison, qvars_new)
     tgt = state.eval(self.dst, defined, poison, qvars_new)
     qvars += qvars_new
-    defined.append(tgt != 0)
-    # cutpoint; record BB definedness
-    state.defined += defined
+    state.mem_qvars += qvars_new
 
+    src_size = self.stype.getSize()
     write_size = getAllocSize(self.stype)
-    if use_array_theory():
-      self._arrayVcGen(state, src, tgt, write_size)
-    else:
-      self._bvVcGen(state, src, tgt, write_size, qvars_new)
     defined_align_access(state, defined, write_size, self.align, tgt)
+
+    src_idx = 0
+    # FIXME: assumes little-endian
+    if src_size != write_size:
+      rem = src_size % 8
+      rest = Extract(rem-1, 0, src)
+      rest_old = Extract(7, rem, state.load(tgt))
+      state.store(state.defined, tgt, Concat(rest_old, rest))
+      tgt += 1
+      write_size -= 8
+      assert (src_size-rem) == write_size
+      src_idx = rem
+    for i in range(0, write_size/8):
+      state.store(state.defined, tgt+i, Extract(src_idx+7, src_idx, src))
+      src_idx += 8
     return None
 
   def getTypeConstraints(self):
