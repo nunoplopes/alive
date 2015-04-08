@@ -353,8 +353,14 @@ class MatchBuilder(object):
 
     if isinstance(value, ConstantVal):
       self.bound.append(value)
-      return CFunctionCall('m_SpecificInt', CVariable(str(value.val)))
+      #return CFunctionCall('m_SpecificInt', CVariable(str(value.val)))
       # NOTE: using m_Zero is unadvisable here, because it matches null
+
+      # LLVM 3.5 compat: create new variable and constrain it to equal the constant
+      name = self.manager.new_name()
+      self.manager.bind_name(name, self.manager.PtrConstantInt)
+      self.extras.append(CBinExpr('==', CVariable(name).arr('getValue',[]), CVariable(str(value.val))))
+      return CFunctionCall('m_ConstantInt', CVariable(name))
 
     assert isinstance(value, (Instr, Input))
 
@@ -567,7 +573,7 @@ def generate_suite(opts, out):
 
   if SIMPLIFY:
     out.write('''
-  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AT)) {
+  if (Value *V = SimplifyInstruction(I)) {
     return ReplaceInstUsesWith(*I, V);
   }
 ''')

@@ -401,7 +401,8 @@ class LLVMBoolPred(BoolPred):
 
     if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NUWAdd, LLVMBoolPred.NSWSub,
         LLVMBoolPred.NUWSub}:
-      return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('I'))
+      return CFunctionCall(self.opnames[self.op], args[0], args[1]) # LLVM 3.5 compatible
+      #return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('I'))
       # TODO: obtain root from manager?
 
     return CFunctionCall(self.opnames[self.op], *args)
