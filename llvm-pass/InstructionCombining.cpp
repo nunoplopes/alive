@@ -39,7 +39,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/Analysis/AssumptionTracker.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/InstructionSimplify.h"
@@ -84,7 +84,7 @@ void LLVMInitializeInstCombine(LLVMPassRegistryRef R) {
 char InstCombiner::ID = 0;
 INITIALIZE_PASS_BEGIN(InstCombiner, "instcombine",
                 "Combine redundant instructions", false, false)
-INITIALIZE_PASS_DEPENDENCY(AssumptionTracker)
+INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfo)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_END(InstCombiner, "instcombine",
@@ -92,7 +92,7 @@ INITIALIZE_PASS_END(InstCombiner, "instcombine",
 
 void InstCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
-  AU.addRequired<AssumptionTracker>();
+  AU.addRequired<AssumptionCacheTracker>();
   AU.addRequired<TargetLibraryInfo>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addPreserved<DominatorTreeWrapperPass>();
@@ -1316,14 +1316,11 @@ Value *InstCombiner::SimplifyVectorOp(BinaryOperator &Inst) {
   return nullptr;
 }
 
-STATISTIC(VisitGEP, "visit gep");
 Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
   SmallVector<Value*, 8> Ops(GEP.op_begin(), GEP.op_end());
 
-  if (Value *V = SimplifyGEPInst(Ops, DL, TLI, DT, AT)) {
-    ++VisitGEP;
+  if (Value *V = SimplifyGEPInst(Ops, DL, TLI, DT, AC))
     return ReplaceInstUsesWith(GEP, V);
-  }
 
   Value *PtrOp = GEP.getOperand(0);
 
@@ -1358,7 +1355,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
         MadeChange = true;
       }
     }
-    if (MadeChange) ++VisitGEP;
     if (MadeChange) return &GEP;
   }
 
@@ -1497,7 +1493,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
       if (Src->getNumOperands() == 2) {
         GEP.setOperand(0, Src->getOperand(0));
         GEP.setOperand(1, Sum);
-        ++VisitGEP;
         return &GEP;
       }
       Indices.append(Src->op_begin()+1, Src->op_end()-1);
@@ -1512,7 +1507,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
     }
 
     if (!Indices.empty())
-      ++VisitGEP;
       return (GEP.isInBounds() && Src->isInBounds()) ?
         GetElementPtrInst::CreateInBounds(Src->getOperand(0), Indices,
                                           GEP.getName()) :
@@ -1552,7 +1546,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
           Operator *Index = cast<Operator>(V);
           Value *PtrToInt = Builder->CreatePtrToInt(PtrOp, Index->getType());
           Value *NewSub = Builder->CreateSub(PtrToInt, Index->getOperand(1));
-          ++VisitGEP;
           return CastInst::Create(Instruction::IntToPtr, NewSub, GEP.getType());
         }
         // Canonicalize (gep i8* X, (ptrtoint Y)-(ptrtoint X))
@@ -1560,7 +1553,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
         Value *Y;
         if (match(V, m_Sub(m_PtrToInt(m_Value(Y)),
                            m_PtrToInt(m_Specific(GEP.getOperand(0)))))) {
-          ++VisitGEP;
           return CastInst::CreatePointerBitCastOrAddrSpaceCast(Y,
                                                                GEP.getType());
         }
@@ -1599,17 +1591,14 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
           GetElementPtrInst *Res =
             GetElementPtrInst::Create(StrippedPtr, Idx, GEP.getName());
           Res->setIsInBounds(GEP.isInBounds());
-          if (StrippedPtrTy->getAddressSpace() == GEP.getAddressSpace()) {
-            ++VisitGEP;
+          if (StrippedPtrTy->getAddressSpace() == GEP.getAddressSpace())
             return Res;
-          }
           // Insert Res, and create an addrspacecast.
           // e.g.,
           // GEP (addrspacecast i8 addrspace(1)* X to [0 x i8]*), i32 0, ...
           // ->
           // %0 = GEP i8 addrspace(1)* X, ...
           // addrspacecast i8 addrspace(1)* %0 to i8*
-          ++VisitGEP;
           return new AddrSpaceCastInst(Builder->Insert(Res), GEP.getType());
         }
 
@@ -1624,7 +1613,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             // is a leading zero) we can fold the cast into this GEP.
             if (StrippedPtrTy->getAddressSpace() == GEP.getAddressSpace()) {
               GEP.setOperand(0, StrippedPtr);
-              ++VisitGEP;
               return &GEP;
             }
             // Cannot replace the base pointer directly because StrippedPtr's
@@ -1640,7 +1628,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
             Value *NewGEP = GEP.isInBounds() ?
               Builder->CreateInBoundsGEP(StrippedPtr, Idx, GEP.getName()) :
               Builder->CreateGEP(StrippedPtr, Idx, GEP.getName());
-            ++VisitGEP;
             return new AddrSpaceCastInst(NewGEP, GEP.getType());
           }
         }
@@ -1661,7 +1648,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
           Builder->CreateGEP(StrippedPtr, Idx, GEP.getName());
 
         // V and GEP are both pointer types --> BitCast
-        ++VisitGEP;
         return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
                                                              GEP.getType());
       }
@@ -1695,7 +1681,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
               Builder->CreateGEP(StrippedPtr, NewIdx, GEP.getName());
 
             // The NewGEP must be pointer typed, so must the old one -> BitCast
-            ++VisitGEP;
             return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
                                                                  GEP.getType());
           }
@@ -1737,7 +1722,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
               Builder->CreateInBoundsGEP(StrippedPtr, Off, GEP.getName()) :
               Builder->CreateGEP(StrippedPtr, Off, GEP.getName());
             // The NewGEP must be pointer typed, so must the old one -> BitCast
-            ++VisitGEP;
             return CastInst::CreatePointerBitCastOrAddrSpaceCast(NewGEP,
                                                                  GEP.getType());
           }
@@ -1787,12 +1771,10 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
               BCI->getParent()->getInstList().insert(BCI, I);
               ReplaceInstUsesWith(*BCI, I);
             }
-            ++VisitGEP;
             return &GEP;
           }
         }
 
-        ++VisitGEP;
         if (Operand->getType()->getPointerAddressSpace() != GEP.getAddressSpace())
           return new AddrSpaceCastInst(Operand, GEP.getType());
         return new BitCastInst(Operand, GEP.getType());
@@ -1806,8 +1788,6 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
         Value *NGEP = GEP.isInBounds() ?
           Builder->CreateInBoundsGEP(Operand, NewIndices) :
           Builder->CreateGEP(Operand, NewIndices);
-
-        ++VisitGEP;
 
         if (NGEP->getType() == GEP.getType())
           return ReplaceInstUsesWith(GEP, NGEP);
@@ -1996,9 +1976,7 @@ tryToMoveFreeBeforeNullTest(CallInst &FI) {
 }
 
 
-STATISTIC(VisitFree, "visit free");
 Instruction *InstCombiner::visitFree(CallInst &FI) {
-  ++VisitFree;
   Value *Op = FI.getArgOperand(0);
 
   // free undef -> unreachable.
@@ -2024,7 +2002,6 @@ Instruction *InstCombiner::visitFree(CallInst &FI) {
     if (Instruction *I = tryToMoveFreeBeforeNullTest(FI))
       return I;
 
-  --VisitFree;
   return nullptr;
 }
 
@@ -2048,9 +2025,7 @@ Instruction *InstCombiner::visitReturnInst(ReturnInst &RI) {
   return nullptr;
 }
 
-STATISTIC(VisitBranch, "visit branch");
 Instruction *InstCombiner::visitBranchInst(BranchInst &BI) {
-  ++VisitBranch;
   // Change br (not X), label True, label False to: br X, label False, True
   Value *X = nullptr;
   BasicBlock *TrueDest;
@@ -2095,13 +2070,10 @@ Instruction *InstCombiner::visitBranchInst(BranchInst &BI) {
       return &BI;
     }
 
-  --VisitBranch;
   return nullptr;
 }
 
-STATISTIC(VisitSwitch, "visit switch");
 Instruction *InstCombiner::visitSwitchInst(SwitchInst &SI) {
-  ++VisitSwitch;
   Value *Cond = SI.getCondition();
   unsigned BitWidth = cast<IntegerType>(Cond->getType())->getBitWidth();
   APInt KnownZero(BitWidth, 0), KnownOne(BitWidth, 0);
@@ -2123,8 +2095,10 @@ Instruction *InstCombiner::visitSwitchInst(SwitchInst &SI) {
   // the largest legal integer type. We need to be conservative here since
   // x86 generates redundant zero-extenstion instructions if the operand is
   // truncated to i8 or i16.
+  bool TruncCond = false;
   if (DL && BitWidth > NewWidth &&
       NewWidth >= DL->getLargestLegalIntTypeSize()) {
+    TruncCond = true;
     IntegerType *Ty = IntegerType::get(SI.getContext(), NewWidth);
     Builder->SetInsertPoint(&SI);
     Value *NewCond = Builder->CreateTrunc(SI.getCondition(), Ty, "trunc");
@@ -2143,8 +2117,12 @@ Instruction *InstCombiner::visitSwitchInst(SwitchInst &SI) {
         for (SwitchInst::CaseIt i = SI.case_begin(), e = SI.case_end();
              i != e; ++i) {
           ConstantInt* CaseVal = i.getCaseValue();
-          Constant* NewCaseVal = ConstantExpr::getSub(cast<Constant>(CaseVal),
-                                                      AddRHS);
+          Constant *LHS = CaseVal;
+          if (TruncCond)
+            LHS = LeadingKnownZeros
+                      ? ConstantExpr::getZExt(CaseVal, Cond->getType())
+                      : ConstantExpr::getSExt(CaseVal, Cond->getType());
+          Constant* NewCaseVal = ConstantExpr::getSub(LHS, AddRHS);
           assert(isa<ConstantInt>(NewCaseVal) &&
                  "Result of expression should be constant");
           i.setValue(cast<ConstantInt>(NewCaseVal));
@@ -2154,8 +2132,8 @@ Instruction *InstCombiner::visitSwitchInst(SwitchInst &SI) {
         return &SI;
       }
   }
-  --VisitSwitch;
-  return nullptr;
+
+  return TruncCond ? &SI : nullptr;
 }
 
 Instruction *InstCombiner::visitExtractValueInst(ExtractValueInst &EV) {
@@ -3011,11 +2989,13 @@ bool isExact(Value *I) {
 }
 
 
+/*
 bool WillNotOverflowSignedMul(const APInt &x, const APInt &y) {
   bool Overflow;
   APInt z = x.smul_ov(y, Overflow);
   return !Overflow;
 }
+*/
 
 bool WillNotOverflowUnsignedMul(const APInt &x, const APInt &y) {
   bool Overflow;
@@ -3046,6 +3026,7 @@ APInt InstCombiner::computeKnownOneBits(Value *V) {
 // ----------------------------
 // Insert InstCombiner::runOnInstruction here
 // ----------------------------
+#include "alive.inc"
 
 
 
@@ -3053,7 +3034,7 @@ bool InstCombiner::runOnFunction(Function &F) {
   if (skipOptnoneFunction(F))
     return false;
 
-  AT = &getAnalysis<AssumptionTracker>();
+  AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   DL = DLP ? &DLP->getDataLayout() : nullptr;
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
@@ -3065,9 +3046,8 @@ bool InstCombiner::runOnFunction(Function &F) {
 
   /// Builder - This is an IRBuilder that automatically inserts new
   /// instructions into the worklist when they are created.
-  IRBuilder<true, TargetFolder, InstCombineIRInserter>
-    TheBuilder(F.getContext(), TargetFolder(DL),
-               InstCombineIRInserter(Worklist, AT));
+  IRBuilder<true, TargetFolder, InstCombineIRInserter> TheBuilder(
+      F.getContext(), TargetFolder(DL), InstCombineIRInserter(Worklist, AC));
   Builder = &TheBuilder;
 
   InstCombinerLibCallSimplifier TheSimplifier(DL, TLI, this);

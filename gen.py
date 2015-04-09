@@ -581,7 +581,7 @@ def generate_suite(opts, out):
 
   if SIMPLIFY:
     out.write('''
-  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AT)) {
+  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AC)) {
     return ReplaceInstUsesWith(*I, V);
   }
 ''')
@@ -633,7 +633,7 @@ def generate_switched_suite(opts, out):
 
   if SIMPLIFY:
     out.write('''
-  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AT)) {
+  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AC)) {
     return ReplaceInstUsesWith(*I, V);
   }
 ''')

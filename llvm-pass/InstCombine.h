@@ -11,7 +11,7 @@
 #define LLVM_LIB_TRANSFORMS_INSTCOMBINE_INSTCOMBINE_H
 
 #include "InstCombineWorklist.h"
-#include "llvm/Analysis/AssumptionTracker.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/TargetFolder.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Dominators.h"
@@ -75,11 +75,11 @@ static inline Constant *SubOne(Constant *C) {
 class LLVM_LIBRARY_VISIBILITY InstCombineIRInserter
     : public IRBuilderDefaultInserter<true> {
   InstCombineWorklist &Worklist;
-  AssumptionTracker *AT;
+  AssumptionCache *AC;
 
 public:
-  InstCombineIRInserter(InstCombineWorklist &WL, AssumptionTracker *AT)
-    : Worklist(WL), AT(AT) {}
+  InstCombineIRInserter(InstCombineWorklist &WL, AssumptionCache *AC)
+      : Worklist(WL), AC(AC) {}
 
   void InsertHelper(Instruction *I, const Twine &Name, BasicBlock *BB,
                     BasicBlock::iterator InsertPt) const {
@@ -88,7 +88,7 @@ public:
 
     using namespace llvm::PatternMatch;
     if (match(I, m_Intrinsic<Intrinsic::assume>()))
-      AT->registerAssumption(cast<CallInst>(I));
+      AC->registerAssumption(cast<CallInst>(I));
   }
 };
 
@@ -96,7 +96,7 @@ public:
 class LLVM_LIBRARY_VISIBILITY InstCombiner
     : public FunctionPass,
       public InstVisitor<InstCombiner, Instruction *> {
-  AssumptionTracker *AT;
+  AssumptionCache *AC;
   const DataLayout *DL;
   TargetLibraryInfo *TLI;
   DominatorTree *DT;
@@ -122,13 +122,14 @@ public:
 
 public:
   bool runOnFunction(Function &F) override;
+  //ALIVE
   Instruction *runOnInstruction(Instruction *I);
 
   bool DoOneIteration(Function &F, unsigned ItNum);
 
   void getAnalysisUsage(AnalysisUsage &AU) const override;
 
-  AssumptionTracker *getAssumptionTracker() const { return AT; }
+  AssumptionCache *getAssumptionCache() const { return AC; }
 
   const DataLayout *getDataLayout() const { return DL; }
   
@@ -163,6 +164,7 @@ public:
   Instruction *visitUDiv(BinaryOperator &I);
   Instruction *visitSDiv(BinaryOperator &I);
   Instruction *visitFDiv(BinaryOperator &I);
+  Value *simplifyRangeCheck(ICmpInst *Cmp0, ICmpInst *Cmp1, bool Inverted);
   Value *FoldAndOfICmps(ICmpInst *LHS, ICmpInst *RHS);
   Value *FoldAndOfFCmps(FCmpInst *LHS, FCmpInst *RHS);
   Instruction *visitAnd(BinaryOperator &I);
@@ -282,9 +284,9 @@ private:
                                  bool DoXform = true);
   Instruction *transformSExtICmp(ICmpInst *ICI, Instruction &CI);
   bool WillNotOverflowSignedAdd(Value *LHS, Value *RHS, Instruction *CxtI);
-  bool WillNotOverflowUnsignedAdd(Value *LHS, Value *RHS, Instruction *CxtI);
   bool WillNotOverflowSignedSub(Value *LHS, Value *RHS, Instruction *CxtI);
   bool WillNotOverflowUnsignedSub(Value *LHS, Value *RHS, Instruction *CxtI);
+  bool WillNotOverflowSignedMul(Value *LHS, Value *RHS, Instruction *CxtI);
   Value *EmitGEPOffset(User *GEP);
   Instruction *scalarizePHI(ExtractElementInst &EI, PHINode *PN);
   Value *EvaluateInDifferentElementOrder(Value *V, ArrayRef<int> Mask);
@@ -331,6 +333,20 @@ public:
     return &I;
   }
 
+  /// Creates a result tuple for an overflow intrinsic \p II with a given
+  /// \p Result and a constant \p Overflow value. If \p ReUseName is true the
+  /// \p Result's name is taken from \p II.
+  Instruction *CreateOverflowTuple(IntrinsicInst *II, Value *Result,
+                                    bool Overflow, bool ReUseName = true) {
+    if (ReUseName)
+      Result->takeName(II);
+    Constant *V[] = { UndefValue::get(Result->getType()),
+                      Overflow ? Builder->getTrue() : Builder->getFalse() };
+    StructType *ST = cast<StructType>(II->getType());
+    Constant *Struct = ConstantStruct::get(ST, V);
+    return InsertValueInst::Create(Struct, Result, 0);
+  }
+        
   // EraseInstFromFunction - When dealing with an instruction that has side
   // effects or produces a void value, we can't rely on DCE to delete the
   // instruction.  Instead, visit methods should return the value returned by
@@ -354,21 +370,35 @@ public:
 
   void computeKnownBits(Value *V, APInt &KnownZero, APInt &KnownOne,
                         unsigned Depth = 0, Instruction *CxtI = nullptr) const {
-    return llvm::computeKnownBits(V, KnownZero, KnownOne, DL, Depth,
-                                  AT, CxtI, DT);
+    return llvm::computeKnownBits(V, KnownZero, KnownOne, DL, Depth, AC, CxtI,
+                                  DT);
   }
 
+  //ALIVE
   APInt computeKnownZeroBits(Value *V);
   APInt computeKnownOneBits(Value *V);
 
   bool MaskedValueIsZero(Value *V, const APInt &Mask,
                          unsigned Depth = 0,
                          Instruction *CxtI = nullptr) const {
-    return llvm::MaskedValueIsZero(V, Mask, DL, Depth, AT, CxtI, DT);
+    return llvm::MaskedValueIsZero(V, Mask, DL, Depth, AC, CxtI, DT);
   }
   unsigned ComputeNumSignBits(Value *Op, unsigned Depth = 0,
                               Instruction *CxtI = nullptr) const {
-    return llvm::ComputeNumSignBits(Op, DL, Depth, AT, CxtI, DT);
+    return llvm::ComputeNumSignBits(Op, DL, Depth, AC, CxtI, DT);
+  }
+  void ComputeSignBit(Value *V, bool &KnownZero, bool &KnownOne,
+                      unsigned Depth = 0, Instruction *CxtI = nullptr) const {
+    return llvm::ComputeSignBit(V, KnownZero, KnownOne, DL, Depth, AC, CxtI,
+                                DT);
+  }
+  OverflowResult computeOverflowForUnsignedMul(Value *LHS, Value *RHS,
+                                               const Instruction *CxtI) {
+    return llvm::computeOverflowForUnsignedMul(LHS, RHS, DL, AC, CxtI, DT);
+  }
+  OverflowResult computeOverflowForUnsignedAdd(Value *LHS, Value *RHS,
+                                               const Instruction *CxtI) {
+    return llvm::computeOverflowForUnsignedAdd(LHS, RHS, DL, AC, CxtI, DT);
   }
 
 private:
@@ -405,6 +435,7 @@ private:
                                     APInt &UndefElts, unsigned Depth = 0);
 
   Value *SimplifyVectorOp(BinaryOperator &Inst);
+  Value *SimplifyBSwap(BinaryOperator &Inst);
 
   // FoldOpIntoPhi - Given a binary operator, cast instruction, or select
   // which has a PHI node as operand #0, see if we can fold the instruction

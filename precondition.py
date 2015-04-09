@@ -385,6 +385,28 @@ class LLVMBoolPred(BoolPred):
       return CFunctionCall('isKnownToBeAPowerOfTwo',
         manager.get_cexp(self.args[0]), CVariable('true'))
 
+    if self.op == LLVMBoolPred.NUWAdd:
+      return CBinExpr('==',
+        CFunctionCall('computeOverflowForUnsignedAdd',
+          manager.get_cexp(self.args[0]),
+          manager.get_cexp(self.args[1]),
+          CVariable('I')),
+        CVariable('OverflowResult::NeverOverflows'))
+
+    if self.op == LLVMBoolPred.NUWMul:
+      return CBinExpr('==',
+        CFunctionCall('computeOverflowForUnsignedMul',
+          manager.get_cexp(self.args[0]),
+          manager.get_cexp(self.args[1]),
+          CVariable('I')),
+        CVariable('OverflowResult::NeverOverflows'))
+
+    if self.op == LLVMBoolPred.NSWMul:
+      return CFunctionCall(self.opnames[self.op], 
+        manager.get_cexp(self.args[0]),
+        manager.get_cexp(self.args[1]),
+        CVariable('I'))
+
     opname = LLVMBoolPred.opnames[self.op]
     args = []
     for i in range(self.num_args[self.op]):
@@ -399,7 +421,7 @@ class LLVMBoolPred(BoolPred):
     if self.op == LLVMBoolPred.OneUse:
       return args[0].arr('hasOneUse', [])
 
-    if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NUWAdd, LLVMBoolPred.NSWSub,
+    if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NSWSub,
         LLVMBoolPred.NUWSub}:
       return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('I'))
       # TODO: obtain root from manager?
