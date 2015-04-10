@@ -561,7 +561,7 @@ Name: Select:962
 %r = add %x, %yz
 
 Name: Select:967a
-%sum = add %x, %y
+%sum = add i9 %x, %y
 %dif = sub %x, %y
 %r = select %c, %sum, %dif
   =>
@@ -570,7 +570,7 @@ Name: Select:967a
 %r = add %x, %sel
 
 Name: Select:967b
-%sum = sub %x, %y
+%sum = sub i9 %x, %y
 %dif = add %x, %y
 %r = select %c, %sum, %dif
   =>
