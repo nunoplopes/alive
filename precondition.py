@@ -278,8 +278,8 @@ class LLVMBoolPred(BoolPred):
     NUWAdd:      ['input', 'input'],
     NSWSub:      ['input', 'input'],
     NUWSub:      ['input', 'input'],
-    NSWMul:      ['const', 'const'],
-    NUWMul:      ['const', 'const'],
+    NSWMul:      ['input', 'input'],
+    NUWMul:      ['input', 'input'],
     NUWShl:      ['const', 'const'],
     OneUse:      ['var'],
   }
@@ -323,7 +323,7 @@ class LLVMBoolPred(BoolPred):
     c += [v.getTypeConstraints() for v in self.args]
     return mk_and(c)
 
-  def _mkMayAnalysis(self, d, vars, expr):
+  def _mkMustAnalysis(self, d, vars, expr):
     # If all vars are constant, then analysis is precise.
     if all(str(v)[0] == 'C' for v in vars):
       return d, [expr]
@@ -338,23 +338,25 @@ class LLVMBoolPred(BoolPred):
       args.append(a)
 
     return {
-      self.eqptrs:      lambda a,b: self._mkMayAnalysis(d, [a,b], a == b),
-      self.isPower2:    lambda a: self._mkMayAnalysis(d, [a],
+      self.eqptrs:      lambda a,b: self._mkMustAnalysis(d, [a,b], a == b),
+      self.isPower2:    lambda a: self._mkMustAnalysis(d, [a],
                           And(a != 0, a & (a-1) == 0)),
-      self.isPower2OrZ: lambda a: self._mkMayAnalysis(d, [a], a & (a-1) == 0),
+      self.isPower2OrZ: lambda a: self._mkMustAnalysis(d, [a], a & (a-1) == 0),
       self.isShiftedMask: lambda a: (d, isShiftedMask(a)),
       self.isSignBit:   lambda a: (d, [a == (1 << (a.sort().size()-1))]),
-      self.maskZero:    lambda a,b: self._mkMayAnalysis(d, [a], a & b == 0),
-      self.NSWAdd:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+      self.maskZero:    lambda a,b: self._mkMustAnalysis(d, [a], a & b == 0),
+      self.NSWAdd:      lambda a,b: self._mkMustAnalysis(d, [a,b],
                           SignExt(1,a) + SignExt(1,b) == SignExt(1, a+b)),
-      self.NUWAdd:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+      self.NUWAdd:      lambda a,b: self._mkMustAnalysis(d, [a,b],
                           ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1, a+b)),
-      self.NSWSub:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+      self.NSWSub:      lambda a,b: self._mkMustAnalysis(d, [a,b],
                           SignExt(1,a)-SignExt(1,b) == SignExt(1, a-b)),
-      self.NUWSub:      lambda a,b: self._mkMayAnalysis(d, [a,b],
+      self.NUWSub:      lambda a,b: self._mkMustAnalysis(d, [a,b],
                           ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1, a-b)),
-      self.NSWMul:      lambda a,b: (d, [no_overflow_smul(a, b)]),
-      self.NUWMul:      lambda a,b: (d, [no_overflow_umul(a, b)]),
+      self.NSWMul:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+                          no_overflow_smul(a, b)),
+      self.NUWMul:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+                          no_overflow_umul(a, b)),
       self.NUWShl:      lambda a,b: (d, [LShR(a << b, b) == a]),
       self.OneUse:      lambda a: (d,
                           [get_users_var(self.args[0].getUniqueName()) == 1]),
@@ -385,6 +387,28 @@ class LLVMBoolPred(BoolPred):
       return CFunctionCall('isKnownToBeAPowerOfTwo',
         manager.get_cexp(self.args[0]), CVariable('true'))
 
+    if self.op == LLVMBoolPred.NUWAdd:
+      return CBinExpr('==',
+        CFunctionCall('computeOverflowForUnsignedAdd',
+          manager.get_cexp(self.args[0]),
+          manager.get_cexp(self.args[1]),
+          CVariable('I')),
+        CVariable('OverflowResult::NeverOverflows'))
+
+    if self.op == LLVMBoolPred.NUWMul:
+      return CBinExpr('==',
+        CFunctionCall('computeOverflowForUnsignedMul',
+          manager.get_cexp(self.args[0]),
+          manager.get_cexp(self.args[1]),
+          CVariable('I')),
+        CVariable('OverflowResult::NeverOverflows'))
+
+    if self.op == LLVMBoolPred.NSWMul:
+      return CFunctionCall(self.opnames[self.op], 
+        manager.get_cexp(self.args[0]),
+        manager.get_cexp(self.args[1]),
+        CVariable('I'))
+
     opname = LLVMBoolPred.opnames[self.op]
     args = []
     for i in range(self.num_args[self.op]):
@@ -399,7 +423,7 @@ class LLVMBoolPred(BoolPred):
     if self.op == LLVMBoolPred.OneUse:
       return args[0].arr('hasOneUse', [])
 
-    if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NUWAdd, LLVMBoolPred.NSWSub,
+    if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NSWSub,
         LLVMBoolPred.NUWSub}:
       return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('I'))
       # TODO: obtain root from manager?

@@ -17,7 +17,7 @@
 import argparse, glob, re, sys
 from language import *
 from parser import parse_llvm, parse_opt_file
-from gen import generate_suite
+from gen import generate_switched_suite
 
 
 def block_model(s, sneg, m):
@@ -517,7 +517,7 @@ def main():
           print opt[0]
 
   if args.output:
-    generate_suite(gen, args.output)
+    generate_switched_suite(gen, args.output)
 
 if __name__ == "__main__":
   try:
