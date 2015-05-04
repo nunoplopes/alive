@@ -302,8 +302,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
     gen_benchmark(s)
 
   res = s.check()
-  check_incomplete_solver(res, s)
-  if s.check() == unsat:
+  if res == unsat:
     # optimization is incorrect. Run the normal procedure for nice diagnostics.
     check_refinement(srcv, tgtv, types, extra_cnstrs, users)
     assert False
@@ -311,6 +310,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
   # enumerate all models (all possible flag assignments)
   models = []
   while True:
+    check_incomplete_solver(res, s)
     m = s.model()
     min_model = []
     for v in flag_vars_src.itervalues():
@@ -329,8 +329,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
       gen_benchmark(s)
 
     res = s.check()
-    check_incomplete_solver(res, s)
-    if s.check() == unsat:
+    if res == unsat:
       return mk_or(models)
 
 
