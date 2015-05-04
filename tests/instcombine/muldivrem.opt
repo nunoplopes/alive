@@ -613,8 +613,6 @@ Pre: MaskedValueIsZero(%Op0, 1<<(width(%Op0)-1)) && isPowerOf2(C)
 %Op1 = shl i23 C, %X
 %r = sdiv %Op0, %Op1
   =>
-; FIXME: we shouldnt require Op1 to be typed here
-%Op1 = shl C, %X
 %r = udiv %Op0, %Op1
 
 
