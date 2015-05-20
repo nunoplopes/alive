@@ -414,7 +414,7 @@ def parse_llvm(txt):
         if not isinstance(v, (Store, Unreachable)):
           BBs[bb][k] = v
     for i,v in identifiers.iteritems():
-      if not isinstance(v, Input):
+      if not isinstance(v, (Input, Ret)):
         skip_identifiers.add(i)
   else:
     identifiers = collections.OrderedDict()
