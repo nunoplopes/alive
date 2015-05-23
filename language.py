@@ -313,7 +313,10 @@ class BinOp(Instr):
                 },
       self.URem:{},
       self.SRem:{},
-      self.Shl: {'nsw': lambda a,b: (a << b) >> b == a,
+      self.Shl: {'nsw': lambda a,b: Or((a << b) >> b == a,
+                                       And(a == 1, b == (bits-1)))
+                                    if use_new_semantics()
+                                    else (a << b) >> b == a,
                  'nuw': lambda a,b: LShR(a << b, b) == a,
                 },
       self.AShr:{'exact': lambda a,b: (a >> b) << b == a,

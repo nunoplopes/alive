@@ -39,11 +39,18 @@ def readFile(path):
 class AliveTest(FileBasedTest):
   def __init__(self):
     self.regex = re.compile(r";\s*(ERROR:.*)")
+    self.regex_args = re.compile(r";\s*TEST-ARGS:(.*)")
 
   def execute(self, test, litConfig):
     test = test.getSourcePath()
     cmd = ['python', 'alive.py']
     input = readFile(test)
+
+    # add test-specific args
+    m = self.regex_args.search(input)
+    if m != None:
+      cmd += m.group(1).split()
+
     out, err, exitCode = executeCommand(cmd, input)
 
     m = self.regex.search(input)

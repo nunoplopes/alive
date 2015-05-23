@@ -488,6 +488,8 @@ def main():
   parser.add_argument('--use-array-th', action='store_true', default=False,
     help='Use array theory to encode memory operations (default: False)',
     dest='array_th')
+  parser.add_argument('--new-sema', action='store_true', default=False,
+    help='Use new semantics (default: False)', dest='new_sem')
   parser.add_argument('file', type=argparse.FileType('r'), nargs='*',
     default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
@@ -497,6 +499,7 @@ def main():
 
   set_infer_flags(args.infer_flags)
   set_use_array_theory(args.array_th)
+  set_use_new_semantics(args.new_sem)
 
   gen = []
 
