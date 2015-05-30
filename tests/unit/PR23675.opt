@@ -1,0 +1,6 @@
+; ERROR: Domain of poisoness of Target is smaller
+%1 = mul nsw i4 -2, %2
+%r = add i4 %1, 3
+  =>
+%3 = mul nsw i4 %2, 2
+%r = sub i4 3, %3

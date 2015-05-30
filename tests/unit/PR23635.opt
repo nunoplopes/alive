@@ -1,0 +1,7 @@
+; ERROR: Domain of poisoness of Target is smaller
+%13 = mul nsw i2 %0, %3
+%14 = mul nsw i2 %6, %0
+%r = sub nuw nsw i2 %13, %14
+  =>
+%p13 = sub i2 %3, %6
+%r = mul nsw i2 %p13, %0
