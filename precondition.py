@@ -155,8 +155,9 @@ class BinaryBoolPred(BoolPred):
 
   def toSMT(self, state):
     defined = []
-    v1 = self.v1.toSMT(defined, [], state, [])
-    v2 = self.v2.toSMT(defined, [], state, [])
+    v1, u1 = self.v1.toSMT(defined, state, [])
+    v2, u2 = self.v2.toSMT(defined, state, [])
+    assert is_true(u1) and is_true(u2)
     return defined, [{
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
@@ -334,7 +335,8 @@ class LLVMBoolPred(BoolPred):
     d = []
     args = []
     for v in self.args:
-      a = v.toSMT(d, [], state, [])
+      a, u = v.toSMT(d, state, [])
+      assert is_true(u)
       args.append(a)
 
     return {

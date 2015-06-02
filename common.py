@@ -273,14 +273,6 @@ def set_use_array_theory(f):
 def use_array_theory():
   return gbl_use_array_theory
 
-gbl_new_semantics = False
-def set_use_new_semantics(f):
-  global gbl_new_semantics
-  gbl_new_semantics = f
-
-def use_new_semantics():
-  return gbl_new_semantics
-
 gbl_ptr_size = 32
 def set_ptr_size(m):
   global gbl_ptr_size

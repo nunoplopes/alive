@@ -63,8 +63,8 @@ class ConstantVal(Constant):
       return And(c, self.type >= bits)
     return c
 
-  def toSMT(self, defined, poison, state, qvars):
-    return BitVecVal(self.val, self.type.getSize())
+  def toSMT(self, defined, state, qvars):
+    return BitVecVal(self.val, self.type.getSize()), BoolVal(True)
 
   def register_types(self, manager):
     if isinstance(self.type, PtrType):
@@ -89,11 +89,11 @@ class UndefVal(Constant):
     # overload Constant's method
     return self.type.getTypeConstraints()
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
+    # FIXME: should have a it stating when a byte is undef?
     v = BitVec('undef' + self.id, self.type.getSize())
-    qvars += [v]
     create_mem_if_needed(v, self, state, [v])
-    return v
+    return BitVecVal(0, self.type.getSize()), BoolVal(False)
 
   def register_types(self, manager):
     manager.register_type(self, self.type, UnknownType())
@@ -136,12 +136,13 @@ class CnstUnaryOp(Constant):
                    self.v.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, defined, poison, state, qvars):
-    v = self.v.toSMT(defined, poison, state, qvars)
+  def toSMT(self, defined, state, qvars):
+    v, u = self.v.toSMT(defined, state, qvars)
+    assert is_true(u)
     return {
       self.Not: lambda a: ~a,
       self.Neg: lambda a: -a,
-    }[self.op](v)
+    }[self.op](v), BoolVal(True)
 
   def register_types(self, manager):
     self.v.register_types(manager)
@@ -189,9 +190,10 @@ class CnstBinaryOp(Constant):
                    self.v2.getTypeConstraints(),
                    self.type.getTypeConstraints()])
 
-  def toSMT(self, defined, poison, state, qvars):
-    v1 = self.v1.toSMT(defined, poison, state, qvars)
-    v2 = self.v2.toSMT(defined, poison, state, qvars)
+  def toSMT(self, defined, state, qvars):
+    v1, u1 = self.v1.toSMT(defined, state, qvars)
+    v2, u2 = self.v2.toSMT(defined, state, qvars)
+    assert is_true(u1) and is_true(u2)
     return {
       self.And:  lambda a,b: a & b,
       self.Or:   lambda a,b: a | b,
@@ -206,7 +208,7 @@ class CnstBinaryOp(Constant):
       self.AShr: lambda a,b: a >> b,
       self.LShr: lambda a,b: LShR(a, b),
       self.Shl:  lambda a,b: a << b,
-    }[self.op](v1, v2)
+    }[self.op](v1, v2), BoolVal(True)
 
   def register_types(self, manager):
     self.v1.register_types(manager)
@@ -333,11 +335,12 @@ class CnstFunction(Constant):
     return mk_and([v.getTypeConstraints() for v in self.args] +\
                   [self.type.getTypeConstraints()] + c)
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
     size = self.type.getSize()
     args = []
     for v in self.args:
-      a = v.toSMT(defined, poison, state, qvars)
+      a, u = v.toSMT(defined, state, qvars)
+      assert is_true(u)
       args.append(a)
 
     d, v = {
@@ -365,7 +368,7 @@ class CnstFunction(Constant):
       del defined[:]
     else:
       defined += d
-    return v
+    return v, BoolVal(True)
 
   def register_types(self, manager):
     for arg in self.args:

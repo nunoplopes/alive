@@ -1,4 +1,4 @@
-; ERROR: Domain of poisoness of Target is smaller
+; ERROR: Domain of undefinedness of Target is smaller
 Pre: isPowerOf2(C1)
 %r = mul nsw %x, C1
   =>

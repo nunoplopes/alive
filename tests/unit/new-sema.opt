@@ -1,5 +1,0 @@
-; TEST-ARGS: --new-sema
-Pre: isPowerOf2(C)
-%a = mul nsw i13 %x, C
-  =>
-%a = shl nsw %x, log2(C)

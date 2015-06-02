@@ -197,7 +197,7 @@ def _print_var_vals(s, vars, stopv, seen, types):
     if k in seen:
       continue
     seen |= set([k])
-    print "%s %s = %s" % (k, var_type(k, types), str_model(s, v[0]))
+    print "%s %s = %s" % (k, var_type(k, types), str_model(s, v[0][0]))
 
 
 def print_var_vals(s, vs1, vs2, stopv, types):
@@ -229,28 +229,26 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
     if k[0] == 'C' or not tgtv.has_key(k):
       continue
 
-    (a, defa, poisona, qvars) = v
-    (b, defb, poisonb, qvarsb) = tgtv[k]
-    defb = mk_and(defb)
-    poisonb = mk_and(poisonb)
+    ((a, notundefa), defa, qvars) = v
+    ((b, notundefb), defb, qvarsb) = tgtv[k]
 
     n_users = users[k]
-    base_cnstr = defa + poisona + extra_cnstrs + n_users
+    base_cnstr = defa + extra_cnstrs + n_users
 
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, base_cnstr + [mk_not(defb)], lambda s :
+    check_expr(qvars, base_cnstr + [mk_not(mk_and(defb))], lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
+         % (var_type(k, types), k),
+       str_model(s, a), 'UB', k, srcv, tgtv, types))
+
+    # Check if domain of undef values of Src implies that of Tgt.
+    check_expr(qvars, base_cnstr + [notundefa, mk_not(notundefb)], lambda s :
+      ("Domain of undefinedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
        str_model(s, a), 'undef', k, srcv, tgtv, types))
 
-    # Check if domain of poison values of Src implies that of Tgt.
-    check_expr(qvars, base_cnstr + [mk_not(poisonb)], lambda s :
-      ("Domain of poisoness of Target is smaller than Source's for %s %s\n"
-         % (var_type(k, types), k),
-       str_model(s, a), 'poison', k, srcv, tgtv, types))
-
     # Check that final values of vars are equal.
-    check_expr(qvars, base_cnstr + [a != b], lambda s :
+    check_expr(qvars, base_cnstr + [notundefa, a != b], lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 
@@ -488,8 +486,6 @@ def main():
   parser.add_argument('--use-array-th', action='store_true', default=False,
     help='Use array theory to encode memory operations (default: False)',
     dest='array_th')
-  parser.add_argument('--new-sema', action='store_true', default=False,
-    help='Use new semantics (default: False)', dest='new_sem')
   parser.add_argument('file', type=argparse.FileType('r'), nargs='*',
     default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
@@ -499,7 +495,6 @@ def main():
 
   set_infer_flags(args.infer_flags)
   set_use_array_theory(args.array_th)
-  set_use_new_semantics(args.new_sem)
 
   gen = []
 

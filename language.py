@@ -81,10 +81,10 @@ class State:
     self.bb_pres = {}
     self.bb_mem = {}
 
-  def add(self, v, smt, defined, poison, qvars):
+  def add(self, v, smt, defined, qvars):
     if v.getUniqueName() == '':
       return
-    self.vars[v.getUniqueName()] = (smt, self.defined + defined, poison, qvars)
+    self.vars[v.getUniqueName()] = (smt, self.defined + defined, qvars)
     if isinstance(v, TerminatorInst):
       for (bb,cond) in v.getSuccessors(self):
         bb = bb[1:]
@@ -147,10 +147,9 @@ class State:
                         ULE(mem2.ptr + mem2.size(), ptr)))
     return cnstr
 
-  def eval(self, v, defined, poison, qvars):
-    (smt, d, p, q) = self.vars[v.getUniqueName()]
+  def eval(self, v, defined, qvars):
+    (smt, d, q) = self.vars[v.getUniqueName()]
     defined += d
-    poison += p
     qvars += q
     return smt
 
@@ -185,8 +184,8 @@ class CopyOperand(Instr):
       t += ' '
     return t + self.v.getName()
 
-  def toSMT(self, defined, poison, state, qvars):
-    return state.eval(self.v, defined, poison, qvars)
+  def toSMT(self, defined, state, qvars):
+    return state.eval(self.v, defined, qvars)
 
   def getTypeConstraints(self):
     return And(self.type == self.v.type,
@@ -294,10 +293,8 @@ class BinOp(Instr):
       if f not in allowed_flags:
         raise ParseError('Flag not supported by ' + self.getOpName(), f)
 
-  def _genSMTDefConds(self, v1, v2, poison):
-    bits = self.type.getSize()
-
-    poison_conds = {
+  def _genUndefValConds(self, v1, v2, bits):
+    undef_conds = {
       self.Add: {'nsw': lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1,a+b),
                  'nuw': lambda a,b: ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1,a+b),
                 },
@@ -313,10 +310,7 @@ class BinOp(Instr):
                 },
       self.URem:{},
       self.SRem:{},
-      self.Shl: {'nsw': lambda a,b: Or((a << b) >> b == a,
-                                       And(a == 1, b == (bits-1)))
-                                    if use_new_semantics()
-                                    else (a << b) >> b == a,
+      self.Shl: {'nsw': lambda a,b: (a << b) >> b == a,
                  'nuw': lambda a,b: LShR(a << b, b) == a,
                 },
       self.AShr:{'exact': lambda a,b: (a >> b) << b == a,
@@ -328,14 +322,17 @@ class BinOp(Instr):
       self.Xor: {},
     }[self.op]
 
+    undef = []
     if do_infer_flags():
-      for flag,fn in poison_conds.iteritems():
+      for flag,fn in undef_conds.iteritems():
         bit = get_flag_var(flag, self.getName())
-        poison += [Implies(bit == 1, fn(v1, v2))]
+        undef += [Implies(bit == 1, fn(v1, v2))]
     else:
       for f in self.flags:
-        poison += [poison_conds[f](v1, v2)]
+        undef += [undef_conds[f](v1, v2)]
+    return undef
 
+  def _genSMTDefConds(self, v1, v2, bits):
     # definedness of the instruction
     return {
       self.Add:  lambda a,b: [],
@@ -345,32 +342,34 @@ class BinOp(Instr):
       self.SDiv: lambda a,b: [b != 0, Or(a != (1 << (bits-1)), b != -1)],
       self.URem: lambda a,b: [b != 0],
       self.SRem: lambda a,b: [b != 0, Or(a != (1 << (bits-1)), b != -1)],
-      self.Shl:  lambda a,b: [ULT(b, bits)],
-      self.AShr: lambda a,b: [ULT(b, bits)],
-      self.LShr: lambda a,b: [ULT(b, bits)],
+      self.Shl:  lambda a,b: [],
+      self.AShr: lambda a,b: [],
+      self.LShr: lambda a,b: [],
       self.And:  lambda a,b: [],
       self.Or:   lambda a,b: [],
       self.Xor:  lambda a,b: [],
       }[self.op](v1,v2)
 
-  def toSMT(self, defined, poison, state, qvars):
-    v1 = state.eval(self.v1, defined, poison, qvars)
-    v2 = state.eval(self.v2, defined, poison, qvars)
-    defined += self._genSMTDefConds(v1, v2, poison)
+  def toSMT(self, defined, state, qvars):
+    bits = self.type.getSize()
+    v1, u1 = state.eval(self.v1, defined, qvars)
+    v2, u2 = state.eval(self.v2, defined, qvars)
+    u = And([u1, u2] + self._genUndefValConds(v1, v2, bits))
+    defined += self._genSMTDefConds(v1, v2, bits)
     return {
-      self.Add:  lambda a,b: a + b,
-      self.Sub:  lambda a,b: a - b,
-      self.Mul:  lambda a,b: a * b,
-      self.UDiv: lambda a,b: UDiv(a, b),
-      self.SDiv: lambda a,b: a / b,
-      self.URem: lambda a,b: URem(a, b),
-      self.SRem: lambda a,b: SRem(a, b),
-      self.Shl:  lambda a,b: a << b,
-      self.AShr: lambda a,b: a >> b,
-      self.LShr: lambda a,b: LShR(a, b),
-      self.And:  lambda a,b: a & b,
-      self.Or:   lambda a,b: a | b,
-      self.Xor:  lambda a,b: a ^ b,
+      self.Add:  lambda a,b: (a + b, u),
+      self.Sub:  lambda a,b: (a - b, u),
+      self.Mul:  lambda a,b: (a * b, u),
+      self.UDiv: lambda a,b: (UDiv(a, b), u),
+      self.SDiv: lambda a,b: (a / b, u),
+      self.URem: lambda a,b: (URem(a, b), u),
+      self.SRem: lambda a,b: (SRem(a, b), u),
+      self.Shl:  lambda a,b: (a << b, And(u, ULT(b, bits))),
+      self.AShr: lambda a,b: (a >> b, And(u, ULT(b, bits))),
+      self.LShr: lambda a,b: (LShR(a, b), And(u, ULT(b, bits))),
+      self.And:  lambda a,b: (a & b, BoolVal(True)),
+      self.Or:   lambda a,b: (a | b, u),
+      self.Xor:  lambda a,b: (a ^ b, u),
     }[self.op](v1, v2)
 
   def getTypeConstraints(self):
@@ -510,7 +509,8 @@ class ConversionOp(Instr):
       tt = ' to ' + tt
     return '%s%s %s%s' % (self.getOpName(), st, self.v.getName(), tt)
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
+    v, undef = state.eval(self.v, defined, qvars)
     return {
       self.Trunc:       lambda v: Extract(self.type.getSize()-1, 0, v),
       self.ZExt:        lambda v: ZeroExt(self.type.getSize() -
@@ -521,7 +521,7 @@ class ConversionOp(Instr):
       self.Ptr2Int:     lambda v: truncateOrZExt(v, self.type.getSize()),
       self.Int2Ptr:     lambda v: truncateOrZExt(v, self.type.getSize()),
       self.Bitcast:     lambda v: v,
-    }[self.op](state.eval(self.v, defined, poison, qvars))
+    }[self.op](v), undef
 
   def getTypeConstraints(self):
     cnstr = {
@@ -679,12 +679,13 @@ class Icmp(Instr):
               self.opToSMT(ops[0], a, b),
               self.recurseSMT(ops[1:], a, b, i+1))
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
     # Generate all possible comparisons if icmp is generic. Set of comparisons
     # can be restricted in the precondition.
     ops = [self.op] if self.op != self.Var else range(self.Var)
-    return self.recurseSMT(ops, state.eval(self.v1, defined, poison, qvars),
-                           state.eval(self.v2, defined, poison, qvars), 0)
+    v1, u1 = state.eval(self.v1, defined, qvars)
+    v2, u2 = state.eval(self.v2, defined, qvars)
+    return self.recurseSMT(ops, v1, v2, 0), And(u1, u2)
 
   def getTypeConstraints(self):
     return And(self.stype == self.v1.type,
@@ -776,10 +777,12 @@ class Select(Instr):
   def getOpName(self):
     return 'select'
 
-  def toSMT(self, defined, poison, state, qvars):
-    return If(state.eval(self.c, defined, poison, qvars) == 1,
-              state.eval(self.v1, defined, poison, qvars),
-              state.eval(self.v2, defined, poison, qvars))
+  def toSMT(self, defined, state, qvars):
+    c, uc = state.eval(self.c, defined, qvars)
+    c = (c == 1)
+    v1, u1 = state.eval(self.v1, defined, qvars)
+    v2, u2 = state.eval(self.v2, defined, qvars)
+    return If(c, v1, v2), And(uc, If(c, u1, u2))
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,
@@ -835,8 +838,8 @@ class Alloca(Instr):
   def getOpName(self):
     return 'alloca'
 
-  def toSMT(self, defined, poison, state, qvars):
-    self.numElems.toSMT(defined, poison, state, qvars)
+  def toSMT(self, defined, state, qvars):
+    self.numElems.toSMT(defined, state, qvars)
     ptr = BitVec(self.getName(), self.type.getSize())
     block_size = getAllocSize(self.type.type)
     num_elems = self.numElems.getValue()
@@ -844,7 +847,7 @@ class Alloca(Instr):
 
     if size == 0:
       qvars.append(ptr)
-      return ptr
+      return ptr, BoolVal(False)
 
     if size > 8:
       defined.append(ULT(ptr, ptr + ((size >> 3) - 1)))
@@ -857,7 +860,7 @@ class Alloca(Instr):
     for i in range(0, size/8):
       idx = 8*i
       state.store([], ptr + i, Extract(idx+7, idx, mem))
-    return ptr
+    return ptr, BoolVal(False)
 
   def getTypeConstraints(self):
     return And(self.numElems.getType() == self.elemsType,
@@ -894,17 +897,21 @@ class GEP(Instr):
   def getOpName(self):
     return 'getelementptr'
 
-  def toSMT(self, defined, poison, state, qvars):
-    ptr = state.eval(self.ptr, defined, poison, qvars)
+  def toSMT(self, defined, state, qvars):
+    undef = []
+    ptr, u = state.eval(self.ptr, defined, qvars)
+    undef.append(u)
     type = self.type
     for i in range(len(self.idxs)):
-      idx = truncateOrSExt(state.eval(self.idxs[i], defined, poison, qvars),ptr)
+      idx, u = state.eval(self.idxs[i], defined, qvars)
+      undef.append(u)
+      idx = truncateOrSExt(idx, ptr)
       ptr += getAllocSize(type.getPointeeType())/8 * idx
       if i + 1 != len(self.idxs):
         type = type.getUnderlyingType()
 
     # TODO: handle inbounds
-    return ptr
+    return ptr, And(u)
 
   def getTypeConstraints(self):
     return And(self.type.ensureTypeDepth(len(self.idxs)),
@@ -930,9 +937,9 @@ class Load(Instr):
   def getOpName(self):
     return 'load'
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
     qvars += state.mem_qvars
-    ptr = state.eval(self.v, defined, poison, qvars)
+    ptr, undef = state.eval(self.v, defined, qvars)
     access_sz = getAllocSize(self.type)
     defined_align_access(state, defined, access_sz, self.align, ptr)
 
@@ -946,7 +953,8 @@ class Load(Instr):
     for i in range(0, sz/8):
       # FIXME: assumes little-endian
       bytes = [state.load(ptr + i)] + bytes
-    return mk_concat(bytes)
+    # TODO: does undef propagates through load/stores?
+    return mk_concat(bytes), undef
 
   def getTypeConstraints(self):
     return And(self.stype == self.v.type,
@@ -985,16 +993,18 @@ class Store(Instr):
     return 'store %s%s, %s %s%s' % (t, self.src.getName(), str(self.type),
                                     self.dst.getName(), align)
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
     qvars_new = []
-    src = state.eval(self.src, defined, poison, qvars_new)
-    tgt = state.eval(self.dst, defined, poison, qvars_new)
+    src, usrc = state.eval(self.src, defined, qvars_new)
+    tgt, utgt = state.eval(self.dst, defined, qvars_new)
     qvars += qvars_new
     state.mem_qvars += qvars_new
 
     src_size = self.stype.getSize()
     write_size = getAllocSize(self.stype)
     defined_align_access(state, defined, write_size, self.align, tgt)
+
+    # FIXME: implement undef propagation through memory (usrc, utgt)
 
     src_idx = 0
     # FIXME: assumes little-endian
@@ -1010,7 +1020,7 @@ class Store(Instr):
     for i in range(0, write_size/8):
       state.store(state.defined, tgt+i, Extract(src_idx+7, src_idx, src))
       src_idx += 8
-    return None
+    return None, None
 
   def getTypeConstraints(self):
     return And(self.stype == self.type.type,
@@ -1031,8 +1041,8 @@ class Skip(Instr):
   def __repr__(self):
     return 'skip'
 
-  def toSMT(self, defined, poison, state, qvars):
-    return None
+  def toSMT(self, defined, state, qvars):
+    return None, None
 
 
 ################################
@@ -1046,9 +1056,9 @@ class Unreachable(Instr):
   def __repr__(self):
     return 'unreachable'
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
     defined.append(BoolVal(False))
-    return None
+    return None, None
 
 
 ################################
@@ -1074,15 +1084,14 @@ class Br(TerminatorInst):
 
   def getSuccessors(self, state):
     defined = []
-    poison = []
     qvars = []
-    cond = state.eval(self.cond, defined, poison, qvars)
+    cond = state.eval(self.cond, defined, qvars)
     assert qvars == []
-    return [(self.true, mk_and([cond != 0] + defined + poison)),
-            (self.false, mk_and([cond == 0] + defined + poison))]
+    return [(self.true, mk_and([cond != 0] + defined)),
+            (self.false, mk_and([cond == 0] + defined))]
 
-  def toSMT(self, defined, poison, state, qvars):
-    return None
+  def toSMT(self, defined, state, qvars):
+    return None, None
 
 
 ################################
@@ -1104,8 +1113,8 @@ class Ret(TerminatorInst):
   def getSuccessors(self, state):
     return []
 
-  def toSMT(self, defined, poison, state, qvars):
-    return state.eval(self.val, defined, poison, qvars)
+  def toSMT(self, defined, state, qvars):
+    return state.eval(self.val, defined, qvars)
 
   def getTypeConstraints(self):
     return And(self.type == self.val.type, self.type.getTypeConstraints())
@@ -1155,18 +1164,16 @@ def toSMT(prog, idents, isSource):
   for k,v in idents.iteritems():
     if isinstance(v, (Input, Constant)):
       defined = []
-      poison = []
       qvars = []
-      smt = v.toSMT(defined, poison, state, qvars)
-      assert defined == [] and poison == []
-      state.add(v, smt, [], [], qvars)
+      smt = v.toSMT(defined, state, qvars)
+      assert defined == []
+      state.add(v, smt, defined, qvars)
 
   for bb, instrs in prog.iteritems():
     state.newBB(bb)
     for k,v in instrs.iteritems():
       defined = []
-      poison = []
       qvars = []
-      smt = v.toSMT(defined, poison, state, qvars)
-      state.add(v, smt, defined, poison, qvars)
+      smt = v.toSMT(defined, state, qvars)
+      state.add(v, smt, defined, qvars)
   return state

@@ -514,8 +514,8 @@ class TypeFixedValue(Value):
     assert isinstance(other, TypeFixedValue)
     return self.smtvar == other.smtvar
 
-  def toSMT(self, defined, poison, state, qvars):
-    return self.val
+  def toSMT(self, defined, state, qvars):
+    return self.val, BoolVal(True)
 
   def getTypeConstraints(self):
     c = [self.v.getTypeConstraints()]
@@ -552,10 +552,10 @@ class Input(Value):
   def __repr__(self):
     return self.getName()
 
-  def toSMT(self, defined, poison, state, qvars):
+  def toSMT(self, defined, state, qvars):
     v = BitVec(self.name, self.type.getSize())
     create_mem_if_needed(v, self, state, [])
-    return v
+    return v, BoolVal(True)
 
   def register_types(self, manager):
     if self.name[0] == 'C':
