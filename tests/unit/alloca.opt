@@ -8,4 +8,4 @@ Name: introduce store
 %p = alloca Ty
   =>
 %p = alloca Ty
-store 5, %p
+store i11 5, %p

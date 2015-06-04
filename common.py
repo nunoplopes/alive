@@ -41,6 +41,8 @@ def mk_and(l):
     return BoolVal(True)
   if len(l) == 1:
     return l[0]
+  if any(is_false(e) for e in l):
+    return BoolVal(False)
   return And(l)
 
 
@@ -50,6 +52,8 @@ def mk_or(l):
     return BoolVal(False)
   if len(l) == 1:
     return l[0]
+  if any(is_true(e) for e in l):
+    return BoolVal(True)
   return Or(l)
 
 
@@ -69,6 +73,10 @@ def mk_distinct(l):
 
 def mk_if(c, a, b):
   if is_true(c):
+    return a
+  if is_false(c):
+    return b
+  if is_true(c) or a.eq(b):
     return a
   if is_false(c):
     return b

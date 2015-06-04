@@ -334,10 +334,11 @@ class LLVMBoolPred(BoolPred):
   def toSMT(self, state):
     d = []
     args = []
-    for v in self.args:
-      a, u = v.toSMT(d, state, [])
-      assert is_true(u)
-      args.append(a)
+    if self.op != self.OneUse:
+      for v in self.args:
+        a, u = v.toSMT(d, state, [])
+        assert is_true(u)
+        args.append(a)
 
     return {
       self.eqptrs:      lambda a,b: self._mkMustAnalysis(d, [a,b], a == b),
@@ -360,7 +361,7 @@ class LLVMBoolPred(BoolPred):
       self.NUWMul:      lambda a,b: self._mkMustAnalysis(d, [a,b],
                           no_overflow_umul(a, b)),
       self.NUWShl:      lambda a,b: (d, [LShR(a << b, b) == a]),
-      self.OneUse:      lambda a: (d,
+      self.OneUse:      lambda : (d,
                           [get_users_var(self.args[0].getUniqueName()) == 1]),
     }[self.op](*args)
 

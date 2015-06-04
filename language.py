@@ -76,9 +76,11 @@ class State:
   def __init__(self):
     self.vars = collections.OrderedDict()
     self.defined = [] # definedness so far in the BB
+    self.qvars = []
     self.ptrs = []
     self.mem_qvars = []
     self.bb_pres = {}
+    self.bb_qvars = {}
     self.bb_mem = {}
 
   def add(self, v, smt, defined, qvars):
@@ -86,12 +88,14 @@ class State:
       return
     self.vars[v.getUniqueName()] = (smt, self.defined + defined, qvars)
     if isinstance(v, TerminatorInst):
-      for (bb,cond) in v.getSuccessors(self):
+      for (bb,cond,qvars) in v.getSuccessors(self):
         bb = bb[1:]
         if bb not in self.bb_pres:
           self.bb_pres[bb] = []
+          self.bb_qvars[bb] = []
           self.bb_mem[bb] = []
         self.bb_pres[bb] += [cond]
+        self.bb_qvars[bb] += qvars
         self.bb_mem[bb].append((cond, self.mem))
 
   def addAlloca(self, ptr, mem, block_size, num_elems, align):
@@ -119,9 +123,11 @@ class State:
   def newBB(self, name):
     if name in self.bb_pres:
       self.defined = [mk_or(self.bb_pres[name])]
+      self.qvars = self.bb_qvars[name]
       self.mem = fold_ite_list(self.bb_mem[name])
     else:
       self.defined = []
+      self.qvars = []
       if use_array_theory():
         self.mem = Array('mem0', BitVecSort(get_ptr_size()), BitVecSort(8))
       else:
@@ -148,10 +154,14 @@ class State:
     return cnstr
 
   def eval(self, v, defined, qvars):
-    (smt, d, q) = self.vars[v.getUniqueName()]
+    (v,u), d, q = self.vars[v.getUniqueName()]
     defined += d
-    qvars += q
-    return smt
+    qvars += self.qvars + q
+    if is_true(u):
+      return v, u
+    qv = BitVec('undef' + mk_unique_id(), v.size())
+    qvars.append(qv)
+    return mk_if(u, v, qv), u
 
   def iteritems(self):
     for k,v in self.vars.iteritems():
@@ -354,7 +364,7 @@ class BinOp(Instr):
     bits = self.type.getSize()
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
-    u = And([u1, u2] + self._genUndefValConds(v1, v2, bits))
+    u = mk_and([u1, u2] + self._genUndefValConds(v1, v2, bits))
     defined += self._genSMTDefConds(v1, v2, bits)
     return {
       self.Add:  lambda a,b: (a + b, u),
@@ -364,11 +374,11 @@ class BinOp(Instr):
       self.SDiv: lambda a,b: (a / b, u),
       self.URem: lambda a,b: (URem(a, b), u),
       self.SRem: lambda a,b: (SRem(a, b), u),
-      self.Shl:  lambda a,b: (a << b, And(u, ULT(b, bits))),
-      self.AShr: lambda a,b: (a >> b, And(u, ULT(b, bits))),
-      self.LShr: lambda a,b: (LShR(a, b), And(u, ULT(b, bits))),
-      self.And:  lambda a,b: (a & b, BoolVal(True)),
-      self.Or:   lambda a,b: (a | b, u),
+      self.Shl:  lambda a,b: (a << b, mk_and([u, ULT(b, bits)])),
+      self.AShr: lambda a,b: (a >> b, mk_and([u, ULT(b, bits)])),
+      self.LShr: lambda a,b: (LShR(a, b), mk_and([u, ULT(b, bits)])),
+      self.And:  lambda a,b: (a & b, BoolVal(True) if bits == 1 else u),
+      self.Or:   lambda a,b: (a | b, BoolVal(True) if bits == 1 else u),
       self.Xor:  lambda a,b: (a ^ b, u),
     }[self.op](v1, v2)
 
@@ -685,7 +695,7 @@ class Icmp(Instr):
     ops = [self.op] if self.op != self.Var else range(self.Var)
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
-    return self.recurseSMT(ops, v1, v2, 0), And(u1, u2)
+    return self.recurseSMT(ops, v1, v2, 0), mk_and([u1, u2])
 
   def getTypeConstraints(self):
     return And(self.stype == self.v1.type,
@@ -782,7 +792,7 @@ class Select(Instr):
     c = (c == 1)
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
-    return If(c, v1, v2), And(uc, If(c, u1, u2))
+    return If(c, v1, v2), mk_if(c, u1, u2)
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,
@@ -860,7 +870,7 @@ class Alloca(Instr):
     for i in range(0, size/8):
       idx = 8*i
       state.store([], ptr + i, Extract(idx+7, idx, mem))
-    return ptr, BoolVal(False)
+    return ptr, BoolVal(True)
 
   def getTypeConstraints(self):
     return And(self.numElems.getType() == self.elemsType,
@@ -911,7 +921,7 @@ class GEP(Instr):
         type = type.getUnderlyingType()
 
     # TODO: handle inbounds
-    return ptr, And(u)
+    return ptr, mk_and(undef)
 
   def getTypeConstraints(self):
     return And(self.type.ensureTypeDepth(len(self.idxs)),
@@ -1085,10 +1095,9 @@ class Br(TerminatorInst):
   def getSuccessors(self, state):
     defined = []
     qvars = []
-    cond = state.eval(self.cond, defined, qvars)
-    assert qvars == []
-    return [(self.true, mk_and([cond != 0] + defined)),
-            (self.false, mk_and([cond == 0] + defined))]
+    cond, undef = state.eval(self.cond, defined, qvars)
+    return [(self.true, mk_and([cond != 0, undef] + defined), qvars),
+            (self.false, mk_and([cond == 0, undef] + defined), qvars)]
 
   def toSMT(self, defined, state, qvars):
     return None, None
@@ -1166,7 +1175,6 @@ def toSMT(prog, idents, isSource):
       defined = []
       qvars = []
       smt = v.toSMT(defined, state, qvars)
-      assert defined == []
       state.add(v, smt, defined, qvars)
 
   for bb, instrs in prog.iteritems():

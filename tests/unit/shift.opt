@@ -1,5 +1,5 @@
 Name: shift 1
-%sh = shl nsw 1, %b
+%sh = shl nsw i17 1, %b
 %mul = mul nsw %a, %sh
   =>
 %mul = shl nsw %a, %b

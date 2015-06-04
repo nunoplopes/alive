@@ -340,7 +340,7 @@ class CnstFunction(Constant):
     args = []
     for v in self.args:
       a, u = v.toSMT(defined, state, qvars)
-      assert is_true(u)
+      defined.append(u)
       args.append(a)
 
     d, v = {

@@ -130,7 +130,11 @@ tactic = AndThen(
   #Tactic('simplify'),
   #Tactic('propagate-values'),
   Tactic('solve-eqs'),
-  Cond(Probe('is-qfbv'), Tactic('qfbv'), Tactic('bv'))
+  Cond(Probe('is-qfbv'), Tactic('qfbv'),
+       OrElse(TryFor(Tactic('bv'), 900),
+              TryFor(Tactic('ufbv'), 900),
+              TryFor(Tactic('smt'), 900),
+              Tactic('bv')))
 )
 
 correct_exprs = {}
