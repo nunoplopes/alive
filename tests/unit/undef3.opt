@@ -1,4 +1,4 @@
-; ERROR: Mismatch in values of
+; ERROR: Domain of undefinedness of Target is smaller
 %A = select undef, %X, %Y
   =>
 %A = undef
