@@ -100,7 +100,7 @@ def mk_concat(l):
 
 
 def mk_forall(l, f):
-  if l == []:
+  if l == [] or is_true(f) or is_false(f):
     return f
   return ForAll(l, f)
 

@@ -337,7 +337,7 @@ class LLVMBoolPred(BoolPred):
     if self.op != self.OneUse:
       for v in self.args:
         a, u = v.toSMT(d, state, [])
-        assert is_true(u)
+        ##FIXME assert is_true(u)
         args.append(a)
 
     return {
