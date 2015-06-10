@@ -209,6 +209,17 @@ def print_var_vals(s, vs1, vs2, stopv, types):
   _print_var_vals(s, vs1, stopv, seen, types)
   _print_var_vals(s, vs2, stopv, seen, types)
 
+  # print set of input variables that are undef in the counterexample
+  m = s.model()
+  vars = []
+  for v in m.decls():
+    if v.name().startswith('def_'):
+      if m.evaluate(v()).as_long() == 0:
+        vars.append(v.name()[4:])
+  if len(vars) > 0:
+    vars.sort()
+    print 'Undef inputs: %s' % ', '.join(vars)
+
 
 def get_smt_vars(f):
   if is_const(f):
