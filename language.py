@@ -377,8 +377,8 @@ class BinOp(Instr):
       self.Shl:  lambda a,b: (a << b, mk_and([u, ULT(b, bits)])),
       self.AShr: lambda a,b: (a >> b, mk_and([u, ULT(b, bits)])),
       self.LShr: lambda a,b: (LShR(a, b), mk_and([u, ULT(b, bits)])),
-      self.And:  lambda a,b: (a & b, BoolVal(True) if bits == 1 else u),
-      self.Or:   lambda a,b: (a | b, BoolVal(True) if bits == 1 else u),
+      self.And:  lambda a,b: (a & b, Or(a == 0, b == 0, u) if bits == 1 else u),
+      self.Or:   lambda a,b: (a | b, Or(a == 1, b == 1, u) if bits == 1 else u),
       self.Xor:  lambda a,b: (a ^ b, u),
     }[self.op](v1, v2)
 
