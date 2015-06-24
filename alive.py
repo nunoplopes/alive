@@ -195,13 +195,15 @@ def str_model(s, v):
 
 
 def _print_var_vals(s, vars, stopv, seen, types):
+  m = s.model()
   for k,v in vars.iteritems():
     if k == stopv:
       return
     if k in seen:
       continue
     seen |= set([k])
-    print "%s %s = %s" % (k, var_type(k, types), str_model(s, v[0][0]))
+    undef = ' / undef' if is_false(m.evaluate(v[0][1])) else ''
+    print "%s %s = %s%s" % (k, var_type(k, types), str_model(s, v[0][0]), undef)
 
 
 def print_var_vals(s, vs1, vs2, stopv, types):
