@@ -1,0 +1,9 @@
+; ERROR: Domain of undefinedness of Target is smaller
+%3 = add nuw i2 %0, 1
+%4 = sub nuw nsw i2 %1, %3
+ret i2 %4
+  =>
+%.neg = sub i2 0, %0
+%.neg1 = add nuw i2 %.neg, -1
+%p3 = add i2 %.neg1, %1
+ret i2 %p3

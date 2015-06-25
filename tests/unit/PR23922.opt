@@ -1,0 +1,6 @@
+; ERROR: Domain of undefinedness of Target is smaller
+%13 = sdiv exact i2 %0, -2
+%14 = sdiv i2 %0, -2
+%15 = select i1 %1, i2 %13, i2 %14
+  =>
+%15 = sdiv exact i2 %0, -2
