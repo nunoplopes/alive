@@ -53,6 +53,14 @@ def defined_align_access(state, defined, access_size, req_align, aptr):
   state.defined += defined
 
 
+def undef_val(u, v, qvars):
+  if is_true(u):
+    return v
+  qv = BitVec('undef' + mk_unique_id(), v.size())
+  qvars.append(qv)
+  return mk_if(u, v, qv)
+
+
 ################################
 class MemInfo:
   def __init__(self, ptr, ty, block_size, num_elems, align):
@@ -157,11 +165,7 @@ class State:
     (v,u), d, q = self.vars[v.getUniqueName()]
     defined += d
     qvars += self.qvars + q
-    if is_true(u):
-      return v, u
-    qv = BitVec('undef' + mk_unique_id(), v.size())
-    qvars.append(qv)
-    return mk_if(u, v, qv), u
+    return v, u
 
   def iteritems(self):
     for k,v in self.vars.iteritems():
@@ -342,30 +346,32 @@ class BinOp(Instr):
         undef += [undef_conds[f](v1, v2)]
     return undef
 
-  def _genSMTDefConds(self, v1, v2, bits):
+  def _genSMTDefConds(self, a, b, u1, u2, bits):
     # definedness of the instruction
     return {
-      self.Add:  lambda a,b: [],
-      self.Sub:  lambda a,b: [],
-      self.Mul:  lambda a,b: [],
-      self.UDiv: lambda a,b: [b != 0],
-      self.SDiv: lambda a,b: [b != 0, Or(a != (1 << (bits-1)), b != -1)],
-      self.URem: lambda a,b: [b != 0],
-      self.SRem: lambda a,b: [b != 0, Or(a != (1 << (bits-1)), b != -1)],
-      self.Shl:  lambda a,b: [],
-      self.AShr: lambda a,b: [],
-      self.LShr: lambda a,b: [],
-      self.And:  lambda a,b: [],
-      self.Or:   lambda a,b: [],
-      self.Xor:  lambda a,b: [],
-      }[self.op](v1,v2)
+      self.Add:  lambda: [],
+      self.Sub:  lambda: [],
+      self.Mul:  lambda: [],
+      self.UDiv: lambda: [u2, b != 0],
+      self.SDiv: lambda: [u2, b != 0,
+                          Or(And(u1, a != (1 << (bits-1))), b != -1)],
+      self.URem: lambda: [u2, b != 0],
+      self.SRem: lambda: [u2, b != 0,
+                          Or(And(u1, a != (1 << (bits-1))), b != -1)],
+      self.Shl:  lambda: [],
+      self.AShr: lambda: [],
+      self.LShr: lambda: [],
+      self.And:  lambda: [],
+      self.Or:   lambda: [],
+      self.Xor:  lambda: [],
+      }[self.op]()
 
   def toSMT(self, defined, state, qvars):
     bits = self.type.getSize()
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
     u = mk_and([u1, u2] + self._genUndefValConds(v1, v2, bits))
-    defined += self._genSMTDefConds(v1, v2, bits)
+    defined += self._genSMTDefConds(v1, v2, u1, u2, bits)
     return {
       self.Add:  lambda a,b: (a + b, u),
       self.Sub:  lambda a,b: (a - b, u),
@@ -377,8 +383,10 @@ class BinOp(Instr):
       self.Shl:  lambda a,b: (a << b, mk_and([u, ULT(b, bits)])),
       self.AShr: lambda a,b: (a >> b, mk_and([u, ULT(b, bits)])),
       self.LShr: lambda a,b: (LShR(a, b), mk_and([u, ULT(b, bits)])),
-      self.And:  lambda a,b: (a & b, Or(a == 0, b == 0, u) if bits == 1 else u),
-      self.Or:   lambda a,b: (a | b, Or(a == 1, b == 1, u) if bits == 1 else u),
+      self.And:  lambda a,b: (a & b, Or(u, And(u1, a == 0), And(u2, b == 0))
+                                     if bits == 1 else u),
+      self.Or:   lambda a,b: (a | b, Or(u, And(u1, a == 1), And(u2, b == 1))
+                                     if bits == 1 else u),
       self.Xor:  lambda a,b: (a ^ b, u),
     }[self.op](v1, v2)
 
@@ -789,10 +797,10 @@ class Select(Instr):
 
   def toSMT(self, defined, state, qvars):
     c, uc = state.eval(self.c, defined, qvars)
-    c = (c == 1)
+    c = (undef_val(uc, c, qvars) == 1)
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
-    return If(c, v1, v2), mk_and([uc, mk_if(c, u1, u2)])
+    return If(c, v1, v2), mk_if(c, u1, u2)
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,
