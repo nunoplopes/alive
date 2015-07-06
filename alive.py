@@ -202,25 +202,15 @@ def _print_var_vals(s, vars, stopv, seen, types):
     if k in seen:
       continue
     seen |= set([k])
-    undef = ' / undef' if is_false(m.evaluate(v[0][1])) else ''
-    print "%s %s = %s%s" % (k, var_type(k, types), str_model(s, v[0][0]), undef)
+    val = 'UB' if is_false(m.evaluate(mk_and(v[1]))) else\
+          'undef' if is_false(m.evaluate(v[0][1])) else str_model(s, v[0][0])
+    print "%s %s = %s" % (k, var_type(k, types), val)
 
 
 def print_var_vals(s, vs1, vs2, stopv, types):
   seen = set()
   _print_var_vals(s, vs1, stopv, seen, types)
   _print_var_vals(s, vs2, stopv, seen, types)
-
-  # print set of input variables that are undef in the counterexample
-  m = s.model()
-  vars = []
-  for v in m.decls():
-    if v.name().startswith('def_'):
-      if m.evaluate(v()).as_long() == 0:
-        vars.append(v.name()[4:])
-  if len(vars) > 0:
-    vars.sort()
-    print 'Undef inputs: %s' % ', '.join(vars)
 
 
 def get_smt_vars(f):
