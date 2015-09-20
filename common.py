@@ -195,12 +195,12 @@ def bv_log2(v, bitwidth):
 """
 
 
-def ctlz(v, output_width):
+def count_leading(v, bit, output_width):
   size = v.size()
   def rec(i):
     if i < 0:
       return BitVecVal(size, output_width)
-    return If(Extract(i,i,v) == BitVecVal(1, 1),
+    return If(Extract(i,i,v) == BitVecVal(not bit, 1),
               BitVecVal(size-1-i, output_width),
               rec(i-1))
   return rec(size-1)

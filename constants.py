@@ -248,14 +248,15 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  abs, sbits, obits, zbits, ctlz, cttz, log2, lshr, max, sext, trunc, umax,\
-  width, zext, Last = range(15)
+  abs, sbits, obits, zbits, ctlo, ctlz, cttz, log2, lshr, max, sext, trunc,\
+  umax, width, zext, Last = range(16)
 
   opnames = {
     abs:   'abs',
     sbits: 'ComputeNumSignBits',
     obits: 'computeKnownOneBits',
     zbits: 'computeKnownZeroBits',
+    ctlo:  'countLeadingOnes',
     ctlz:  'countLeadingZeros',
     cttz:  'countTrailingZeros',
     log2:  'log2',
@@ -274,6 +275,7 @@ class CnstFunction(Constant):
     sbits: 1,
     obits: 1,
     zbits: 1,
+    ctlo:  1,
     ctlz:  1,
     cttz:  1,
     log2:  1,
@@ -320,6 +322,7 @@ class CnstFunction(Constant):
       self.sbits: lambda a: allTyEqual([a], Type.Int),
       self.obits: lambda a: allTyEqual([a,self], Type.Int),
       self.zbits: lambda a: allTyEqual([a,self], Type.Int),
+      self.ctlo:  lambda a: allTyEqual([a], Type.Int),
       self.ctlz:  lambda a: allTyEqual([a], Type.Int),
       self.cttz:  lambda a: allTyEqual([a], Type.Int),
       self.log2:  lambda a: allTyEqual([a], Type.Int),
@@ -352,7 +355,8 @@ class CnstFunction(Constant):
                               (BitVec('ana_' + self.getName(), size)),
       self.zbits: lambda a: (lambda b: ([b & a == 0], b))
                               (BitVec('ana_' + self.getName(), size)),
-      self.ctlz:  lambda a: ([], ctlz(a, size)),
+      self.ctlo:  lambda a: ([], count_leading(a, 1, size)),
+      self.ctlz:  lambda a: ([], count_leading(a, 0, size)),
       self.cttz:  lambda a: ([], cttz(a, size)),
       self.log2:  lambda a: ([], bv_log2(a, size)),
       self.lshr:  lambda a,b: ([], LShR(a, b)),

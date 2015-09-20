@@ -1,0 +1,86 @@
+Name: Compares:1088
+Pre: (countLeadingOnes(C1) - countLeadingOnes(C2)) > 0 && C1 == -1 && !isPowerOf2(C2)
+%s = ashr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp uge %a, countLeadingOnes(C1) - countLeadingOnes(C2)
+
+
+Name: Compares:1089
+Pre: C1 < 0 && (countLeadingOnes(C1) - countLeadingOnes(C2)) > 0 && (C1 != -1 || isPowerOf2(C2)) && C1 == (C2 >> (countLeadingOnes(C1) - countLeadingOnes(C2)))
+%s = ashr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp eq %a, countLeadingOnes(C1) - countLeadingOnes(C2)
+
+
+Name: Compares:1089-2
+Pre: C1 > 0 && (countLeadingZeros(C1) - countLeadingZeros(C2)) > 0 && C1 == (C2 >> (countLeadingZeros(C1) - countLeadingZeros(C2)))
+%s = ashr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp eq %a, countLeadingZeros(C1) - countLeadingZeros(C2)
+
+
+Name: Compares:1091
+Pre: C1 < 0 && (countLeadingOnes(C1) - countLeadingOnes(C2)) > 0 && C1 == (C2 u>> (countLeadingOnes(C1) - countLeadingOnes(C2)))
+%s = ashr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp eq %a, countLeadingOnes(C1) - countLeadingOnes(C2)
+
+
+Name: Compares:1091-2
+Pre: C1 < 0 && (countLeadingOnes(C1) - countLeadingOnes(C2)) > 0 && C1 == (C2 u>> (countLeadingOnes(C1) - countLeadingOnes(C2)))
+%s = lshr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp eq %a, countLeadingOnes(C1) - countLeadingOnes(C2)
+
+
+Name: Compares:1091-3
+Pre: C1 > 0 && (countLeadingZeros(C1) - countLeadingZeros(C2)) > 0 && C1 == (C2 u>> (countLeadingZeros(C1) - countLeadingZeros(C2))) && C2 >= 0
+%s = ashr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp eq %a, countLeadingZeros(C1) - countLeadingZeros(C2)
+
+
+Name: Compares:1091-4
+Pre: C1 > 0 && (countLeadingZeros(C1) - countLeadingZeros(C2)) > 0 && C1 == (C2 u>> (countLeadingZeros(C1) - countLeadingZeros(C2)))
+%s = lshr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp eq %a, countLeadingZeros(C1) - countLeadingZeros(C2)
+
+
+Name: Compares:1095
+Pre: C1 < 0 && C1 != C2 && (countLeadingOnes(C1) - countLeadingOnes(C2)) <= 0
+%s = ashr C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = false
+
+
+Name: Compares:1095-2
+Pre: C1 < 0 && C1 != C2 && (countLeadingOnes(C1) - countLeadingOnes(C2)) <= 0
+%s = lshr C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = false
+
+
+Name: Compares:1095-3
+Pre: C1 > 0 && C1 != C2 && (countLeadingZeros(C1) - countLeadingZeros(C2)) <= 0
+%s = ashr C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = false
+
+
+Name: Compares:1095-4
+Pre: C1 > 0 && C1 != C2 && (countLeadingZeros(C1) - countLeadingZeros(C2)) <= 0
+%s = lshr C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = false
