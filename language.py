@@ -230,6 +230,31 @@ class CopyOperand(Instr):
       manager.get_cexp(self),
       instr)]
 
+
+################################
+class Freeze(Instr):
+  def __init__(self, v, type):
+    self.v = v
+    self.type = type
+    assert isinstance(self.v, Value)
+    assert isinstance(self.type, Type)
+
+  def __repr__(self):
+    s = 'freeze '
+    t = str(self.type)
+    if len(t) > 0:
+      s += t + ' '
+    return s + self.v.getName()
+
+  def toSMT(self, defined, state, qvars):
+    v,u = state.eval(self.v, defined, qvars)
+    return undef_val(u, v, qvars), BoolVal(True)
+
+  def getTypeConstraints(self):
+    return And(self.type == self.v.type,
+               self.type.getTypeConstraints())
+
+
 ################################
 class BinOp(Instr):
   Add, Sub, Mul, UDiv, SDiv, URem, SRem, Shl, AShr, LShr, And, Or, Xor,\

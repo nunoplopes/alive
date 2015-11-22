@@ -1,0 +1,19 @@
+Name: 1
+%a = freeze i32 %b
+%c = freeze %a
+  =>
+%c = freeze %b
+
+
+Name: 2
+%a = freeze i33 %b
+%c = freeze %a
+  =>
+%c = freeze %b
+
+
+Name: 3
+%c = freeze i11 %b
+  =>
+%a = freeze %b
+%c = freeze %a

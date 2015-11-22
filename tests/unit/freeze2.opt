@@ -1,0 +1,6 @@
+; ERROR: Mismatch in values
+%a = freeze %b
+%r = sub %a, %a
+  =>
+%c = freeze %b
+%r = sub %a, %c

@@ -119,6 +119,10 @@ def parseBinOp(toks):
   return BinOp(BinOp.getOpId(toks[0]), type, parseOperand(toks[3], type),
                parseOperand(toks[4], type), toks[1])
 
+def parseFreeze(toks):
+  type = toks[1]
+  return Freeze(parseOperand(toks[2], type), type)
+
 def parseConversionOp(toks):
   op = ConversionOp.getOpId(toks[0])
   if ConversionOp.enforceIntSrc(op):
@@ -336,6 +340,8 @@ ptroperand  = (opttype + operand).setParseAction(pa(parsePtrOperand))
 binop = (opname + flags + opttype + operand + comma + operand).\
           setParseAction(pa(parseBinOp))
 
+freeze = (Literal('freeze') + opttype + operand).setParseAction(pa(parseFreeze))
+
 conversionop = (opname + opttype + operand +\
                 Optional(Suppress('to') + type).\
                  setParseAction(pa(parseOptType))).\
@@ -365,7 +371,8 @@ load = (Literal('load') + ptroperand + optalign).setParseAction(pa(parseLoad))
 
 operandinstr = (opttype + operand).setParseAction(pa(parseOperandInstr))
 
-op = operandinstr | icmp | select | alloca | gep | load | binop | conversionop
+op = operandinstr | icmp | select | alloca | gep | load | freeze | binop |\
+     conversionop
 
 store = (Literal('store') + typeoperand + comma + ptroperand +\
          optalign).setParseAction(pa(parseStore))
