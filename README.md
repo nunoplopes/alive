@@ -18,6 +18,14 @@ Usage
 The 'tests' directory has multiple examples of optimizations.
 
 
+More Information
+----------------
+
+Please see this paper for more details about Alive:
+
+  http://www.cs.utah.edu/~regehr/papers/pldi15.pdf
+
+
 Generating Benchmarks
 ---------------------
 Alive will automatically generate benchmarks in SMT-LIB 2 format when the
