@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import re
-from pyparsing.pyparsing import *
 from language import *
 from precondition import *
+from pyparsing.pyparsing import *
 
 # enable memoization of parsing elements. Gives a nice speedup for large files.
 ParserElement.enablePackrat()
