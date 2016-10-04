@@ -203,7 +203,7 @@ def _print_var_vals(s, vars, stopv, seen, types):
       continue
     seen |= set([k])
     val = 'UB' if is_false(m.evaluate(mk_and(v[1]))) else\
-          'undef' if is_false(m.evaluate(v[0][1])) else str_model(s, v[0][0])
+          'poison' if is_false(m.evaluate(v[0][1])) else str_model(s, v[0][0])
     print "%s %s = %s" % (k, var_type(k, types), val)
 
 
@@ -236,8 +236,8 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
     if k[0] == 'C' or not tgtv.has_key(k):
       continue
 
-    ((a, notundefa), defa, qvars) = v
-    ((b, notundefb), defb, qvarsb) = tgtv[k]
+    ((a, notpoisona), defa, qvars) = v
+    ((b, notpoisonb), defb, qvarsb) = tgtv[k]
 
     n_users = users[k]
     base_cnstr = defa + extra_cnstrs + n_users
@@ -248,14 +248,14 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
          % (var_type(k, types), k),
        str_model(s, a), 'UB', k, srcv, tgtv, types))
 
-    # Check if domain of undef values of Src implies that of Tgt.
-    check_expr(qvars, base_cnstr + [notundefa, mk_not(notundefb)], lambda s :
-      ("Domain of undefinedness of Target is smaller than Source's for %s %s\n"
+    # Check if domain of poison values of Src implies that of Tgt.
+    check_expr(qvars, base_cnstr + [notpoisona, mk_not(notpoisonb)], lambda s :
+      ("Target is more poisonous than Source for %s %s\n"
          % (var_type(k, types), k),
-       str_model(s, a), 'undef', k, srcv, tgtv, types))
+       str_model(s, a), 'poison', k, srcv, tgtv, types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, base_cnstr + [notundefa, a != b], lambda s :
+    check_expr(qvars, base_cnstr + [notpoisona, a != b], lambda s :
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
 

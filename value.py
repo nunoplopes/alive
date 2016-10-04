@@ -159,13 +159,16 @@ class UnknownType(Type):
         self.myType = i
         return And(self.typevar == i, type == other)
 
-    assert isinstance(other, UnknownType)
     c = []
-    for i,type in self.types.iteritems():
-      if other.types.has_key(i):
-        c += [And(self.typevar == i,
-                  other.typevar == i,
-                  type == other.types[i])]
+    if isinstance(other, UnknownType):
+      for i,type in self.types.iteritems():
+        if other.types.has_key(i):
+          c += [And(self.typevar == i,
+                    other.typevar == i,
+                    type == other.types[i])]
+    else:
+      for i,type in self.types.iteritems():
+        c += [And(self.typevar == i, type == other)]
     return mk_or(c)
 
   def _intcmp(self, op, other):

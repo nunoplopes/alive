@@ -800,7 +800,6 @@ class Select(Instr):
   def __init__(self, type, c, v1, v2):
     assert isinstance(type, Type)
     assert isinstance(c, Value)
-    assert isinstance(c.type, IntType)
     assert isinstance(v1, Value)
     assert isinstance(v2, Value)
     self.type = type.ensureFirstClass()
@@ -820,10 +819,10 @@ class Select(Instr):
 
   def toSMT(self, defined, state, qvars):
     c, uc = state.eval(self.c, defined, qvars)
-    c = (undef_val(uc, c, qvars) == 1)
+    c = (c == 1)
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
-    return If(c, v1, v2), mk_if(c, u1, u2)
+    return mk_if(c, v1, v2), mk_and([uc, u1, u2])
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,

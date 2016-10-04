@@ -1,4 +1,4 @@
-; ERROR: Domain of undefinedness of Target is smaller
+; ERROR: Target is more poisonous than Source
 %3 = add nuw i2 %0, 1
 %4 = sub nuw nsw i2 %1, %3
 ret i2 %4

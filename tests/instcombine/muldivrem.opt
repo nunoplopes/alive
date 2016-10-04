@@ -312,7 +312,7 @@ Pre: WillNotOverflowUnsignedMul(C1, C2)
 
 Name: 748
 ; FIXME: merge with the following
-Pre: C2 % C1 == 0
+Pre: C2 % C1 == 0 && C2/C1 != -1
 %m = mul nsw i7 %X, C1
 %r = sdiv %m, C2
   =>
@@ -320,7 +320,7 @@ Pre: C2 % C1 == 0
 
 
 Name: 748
-Pre: C2 % C1 == 0
+Pre: C2 % C1 == 0 && C2/C1 != -1
 %m = mul nsw i7 %X, C1
 %r = sdiv exact %m, C2
   =>
@@ -372,7 +372,7 @@ Pre: C1 %u C2 == 0
 Name: 764
 ; FIXME: slow
 ; FIXME: merge the following 4
-Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1 && (C2 / (1 << C1)) != -1
 %s = shl nsw i9 %X, C1
 %r = sdiv %s, C2
   =>
@@ -381,7 +381,7 @@ Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
 
 Name: 764
 ; FIXME: slow
-Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1
+Pre: C2 % (1<<C1) == 0 && C1 != width(C1)-1 && (C2 / (1 << C1)) != -1
 %s = shl nsw i7 %X, C1
 %r = sdiv exact %s, C2
   =>
@@ -593,6 +593,7 @@ Pre: isSignBit(C)
 
 
 Name: 1049
+Pre: C != 1
 ; FIXME: slow
 %Op0 = sub nsw i11 0, %X
 %r = sdiv %Op0, C

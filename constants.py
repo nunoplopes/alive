@@ -76,33 +76,21 @@ class ConstantVal(Constant):
     return CVariable(str(self.val))
 
 ################################
-class UndefVal(Constant):
+class PoisonVal(Constant):
   def __init__(self, type):
     assert isinstance(type, Type)
     self.type = type
     self.mk_name()
 
   def __repr__(self):
-    return 'undef'
+    return 'poison'
 
   def getTypeConstraints(self):
-    # overload Constant's method
     return self.type.getTypeConstraints()
 
   def toSMT(self, defined, state, qvars):
-    # FIXME: should have a it stating when a byte is undef?
-    v = BitVec('undef' + self.id, self.type.getSize())
-    create_mem_if_needed(v, self, state, [v])
     return BitVecVal(0, self.type.getSize()), BoolVal(False)
 
-  def register_types(self, manager):
-    manager.register_type(self, self.type, UnknownType())
-
-  def get_APInt_or_u64(self, manager):
-    raise AliveError('undef cannot be an APInt')
-
-  def get_Value(self, manager):
-    return CFunctionCall('UndefValue::get', manager.get_llvm_type(self))
 
 ################################
 class CnstUnaryOp(Constant):

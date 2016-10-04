@@ -40,15 +40,15 @@ Pre: MaskedValueIsZero(%A, -1 u>> countLeadingZeros(C))
 %r = and %neg, C
 
 
-; ; FIXME: first clause of precondition is untyped
-; ame: countTrailingZeros
-; Pre: countTrailingZeros(C1) == 0 && C1 == C2+1
-; %Y = and %Z, C2
-; %LHS = xor %Y, C1
-; %r = add %LHS, %RHS
-;   =>
-; %or = or %Z, ~C2
-; %r = sub %RHS, %or
+; FIXME: first clause of precondition is untyped
+Name: countTrailingZeros
+Pre: countTrailingZeros(C1) == 0 && C1 == C2+1
+%Y = and %Z, C2
+%LHS = xor %Y, C1
+%r = add %LHS, %RHS
+  =>
+%or = or %Z, ~C2
+%r = sub %RHS, %or
 
 
 Name: log2 APIntOrLit
@@ -99,7 +99,7 @@ Name: width
 Pre: C u> width(C)
 %r = shl %a, C
 =>
-%r = undef  ; TODO: change to unreachable
+%r = poison
 
 
 Name: zext

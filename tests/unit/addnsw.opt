@@ -1,4 +1,4 @@
-; ERROR: Domain of undefinedness of Target is smaller than Source
+; ERROR: Target is more poisonous than Source
 %A = add %x, %y
   =>
 %A = add nsw %x, %y

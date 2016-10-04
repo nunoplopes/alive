@@ -1,40 +1,69 @@
 Name: undef 1
-%1 = and %a, undef
+%u = freeze poison
+%1 = and %a, %u
   =>
 %1 = 0
 
 Name: undef 2
-%1 = or %a, undef
+%u = freeze poison
+%1 = or %a, %u
   =>
 %1 = -1
 
 Name: undef 3
-%1 = select undef, %x, undef
+;Pre: hasOneUse(%u) && hasOneUse(%u2)
+%u = freeze poison
+%u2 = freeze poison
+%1 = select %u, %x, %u2
   =>
 %1 = %x
 
 Name: undef 4
-%1 = select undef, %x, undef
+%1 = select poison, %x, poison
   =>
-%1 = undef
+%1 = poison
+
+Name: undef 4.1
+Pre: hasOneUse(%u)
+%u = freeze poison
+%u2 = freeze poison
+%1 = select %u, %x, %u2
+  =>
+%1 = %u2
 
 Name: undef 5
-%1 = or undef, 1
-%2 = or undef, 1
+%u = freeze poison
+%u2 = freeze poison
+%1 = or %u, 1
+%2 = or %u2, 1
 %3 = add %1, %2
 %4 = and %3, 1
   =>
 %4 = 0
 
 Name: undef 6
-store %x, undef
+%u = freeze poison
+store %x, %u
+  =>
+unreachable
+
+
+Name: undef 6.1
+store %x, poison
   =>
 unreachable
 
 
 ; FIXME: slow
 Name: undef 7
-store i9 undef, %X
+%u = freeze poison
+store i9 %u, %X
+  =>
+skip
+
+
+Name: undef 7.1
+store i9 poison, %X
   =>
 skip
 
@@ -42,7 +71,8 @@ skip
 ; FIXME: slow
 Name: undef 8
 %a = alloca Ty
-store i5 undef, %a
+%u = freeze poison
+store i5 %u, %a
   =>
 %a = alloca Ty
 
@@ -53,4 +83,4 @@ Name: undef 9
 %p = alloca i7
 %x = load %p
   =>
-%x = undef
+%x = poison

@@ -1,4 +1,4 @@
-; ERROR: Domain of undefinedness of Target is smaller
+; ERROR: Target is more poisonous than Source
 %1 = mul nsw i4 -2, %2
 %r = add i4 %1, 3
   =>

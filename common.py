@@ -72,10 +72,6 @@ def mk_distinct(l):
 
 
 def mk_if(c, a, b):
-  if is_true(c):
-    return a
-  if is_false(c):
-    return b
   if is_true(c) or a.eq(b):
     return a
   if is_false(c):

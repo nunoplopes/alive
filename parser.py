@@ -82,8 +82,8 @@ def parseOperand(v, type):
     identifiers[v] = var = Input(v, type)
     return var
 
-  if v == 'undef':
-    c = UndefVal(type)
+  if v == 'poison':
+    c = PoisonVal(type)
   elif v == 'true':
     c = ConstantVal(1, type.ensureIntType(1))
   elif v == 'false':
@@ -331,7 +331,7 @@ i1 = Optional('i1').setParseAction(lambda toks : IntType(1))
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(pa(lambda toks : [toks]))
-operand = cnst_expr | Literal('undef')
+operand = cnst_expr | Literal('poison')
 
 typeoperand = (opttype + operand).setParseAction(pa(parseTypeOperand))
 intoperand  = (opttype + operand).setParseAction(pa(parseIntOperand))
