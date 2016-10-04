@@ -8,7 +8,8 @@ specified in a high-level language.
 Requirements
 ------------
 Alive requires Python 2.7.x and Z3 4.3.2 (or later), which can be obtained
-from https://github.com/Z3Prover/z3  (use the unstable branch)
+from https://github.com/Z3Prover/z3 or
+precompiled from https://github.com/Z3Prover/bin/tree/master/releases
 
 
 Usage
