@@ -298,7 +298,7 @@ def get_ptr_size():
 class AliveError(Exception):
   pass
 
-class ParseError():
+class ParseError:
   def __init__(self, msgs, token = None):
     if isinstance(msgs, list):
       self.msgs = msgs

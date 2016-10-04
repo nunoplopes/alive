@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import re
+from common import ParseError
 from language import *
 from precondition import *
 from pyparsing.pyparsing import *

@@ -1,4 +1,5 @@
 *.pyc
 *.pyo
-libz3.so
+libz3.*
 z3*.py
+z3
