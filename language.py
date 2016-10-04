@@ -408,10 +408,8 @@ class BinOp(Instr):
       self.Shl:  lambda a,b: (a << b, mk_and([u, ULT(b, bits)])),
       self.AShr: lambda a,b: (a >> b, mk_and([u, ULT(b, bits)])),
       self.LShr: lambda a,b: (LShR(a, b), mk_and([u, ULT(b, bits)])),
-      self.And:  lambda a,b: (a & b, Or(u, And(u1, a == 0), And(u2, b == 0))
-                                     if bits == 1 else u),
-      self.Or:   lambda a,b: (a | b, Or(u, And(u1, a == 1), And(u2, b == 1))
-                                     if bits == 1 else u),
+      self.And:  lambda a,b: (a & b, u),
+      self.Or:   lambda a,b: (a | b, u),
       self.Xor:  lambda a,b: (a ^ b, u),
     }[self.op](v1, v2)
 
