@@ -555,6 +555,9 @@ class Input(Value):
   def __repr__(self):
     return self.getName()
 
+  def isConst(self):
+    return self.name[0] == 'C'
+
   def toSMT(self, defined, state, qvars):
     v = BitVec(self.name, self.type.getSize())
     create_mem_if_needed(v, self, state, [])

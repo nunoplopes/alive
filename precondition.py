@@ -324,9 +324,9 @@ class LLVMBoolPred(BoolPred):
     c += [v.getTypeConstraints() for v in self.args]
     return mk_and(c)
 
-  def _mkMustAnalysis(self, d, vars, expr):
-    # If all vars are constant, then analysis is precise.
-    if all(str(v)[0] == 'C' for v in vars):
+  def _mkMustAnalysis(self, d, expr):
+    # If all arguments are constant, then analysis is precise.
+    if all(v.isConst() for v in self.args):
       return d, [expr]
     c = BitVec('ana_%s' % self, 1)
     return d + [Implies(c == 1, expr)], [c == 1]
@@ -341,24 +341,24 @@ class LLVMBoolPred(BoolPred):
         args.append(a)
 
     return {
-      self.eqptrs:      lambda a,b: self._mkMustAnalysis(d, [a,b], a == b),
-      self.isPower2:    lambda a: self._mkMustAnalysis(d, [a],
+      self.eqptrs:      lambda a,b: self._mkMustAnalysis(d, a == b),
+      self.isPower2:    lambda a: self._mkMustAnalysis(d,
                           And(a != 0, a & (a-1) == 0)),
-      self.isPower2OrZ: lambda a: self._mkMustAnalysis(d, [a], a & (a-1) == 0),
+      self.isPower2OrZ: lambda a: self._mkMustAnalysis(d, a & (a-1) == 0),
       self.isShiftedMask: lambda a: (d, isShiftedMask(a)),
       self.isSignBit:   lambda a: (d, [a == (1 << (a.sort().size()-1))]),
-      self.maskZero:    lambda a,b: self._mkMustAnalysis(d, [a], a & b == 0),
-      self.NSWAdd:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+      self.maskZero:    lambda a,b: self._mkMustAnalysis(d, a & b == 0),
+      self.NSWAdd:      lambda a,b: self._mkMustAnalysis(d,
                           SignExt(1,a) + SignExt(1,b) == SignExt(1, a+b)),
-      self.NUWAdd:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+      self.NUWAdd:      lambda a,b: self._mkMustAnalysis(d,
                           ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1, a+b)),
-      self.NSWSub:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+      self.NSWSub:      lambda a,b: self._mkMustAnalysis(d,
                           SignExt(1,a)-SignExt(1,b) == SignExt(1, a-b)),
-      self.NUWSub:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+      self.NUWSub:      lambda a,b: self._mkMustAnalysis(d,
                           ZeroExt(1,a)-ZeroExt(1,b) == ZeroExt(1, a-b)),
-      self.NSWMul:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+      self.NSWMul:      lambda a,b: self._mkMustAnalysis(d,
                           no_overflow_smul(a, b)),
-      self.NUWMul:      lambda a,b: self._mkMustAnalysis(d, [a,b],
+      self.NUWMul:      lambda a,b: self._mkMustAnalysis(d,
                           no_overflow_umul(a, b)),
       self.NUWShl:      lambda a,b: (d, [LShR(a << b, b) == a]),
       self.OneUse:      lambda : (d,

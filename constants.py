@@ -25,6 +25,9 @@ class Constant(Value):
   def getUniqueName(self):
     return self.getName() + '_' + self.id
 
+  def isConst(self):
+    return True
+
   def get_APInt(self, manager):
     return CFunctionCall('APInt',
       manager.get_llvm_type(self).arr('getScalarSizeInBits', []), #TODO: add to manager API?
@@ -51,9 +54,6 @@ class ConstantVal(Constant):
        self.type.getSize() == 1:
       return 'true' if self.val == 1 else 'false'
     return str(self.val)
-
-  def isConst(self):
-    return True
 
   def getTypeConstraints(self):
     c = self.type.getTypeConstraints()
