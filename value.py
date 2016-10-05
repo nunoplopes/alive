@@ -526,7 +526,7 @@ class TypeFixedValue(Value):
     if self.v.isConst():
       c += [self.smtvar == self.v.val]
       if not self.v.type.defined:
-        c += [self.v.type == self.max.bit_length() + int(self.max >= 0)]
+        c += [self.v.type == self.max.bit_length()]
     else:
       if self.v.type.defined:
         mymin = min(self.min, (1 << self.v.type.getSize()) - 1)
@@ -536,7 +536,7 @@ class TypeFixedValue(Value):
         mymax = self.max
       c += [self.smtvar >= mymin, self.smtvar <= mymax]
       if not self.v.type.defined:
-        c += [self.v.type >= self.max.bit_length() + int(self.max >= 0)]
+        c += [self.v.type >= self.max.bit_length()]
 
     return mk_and(c)
 
