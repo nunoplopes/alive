@@ -49,22 +49,22 @@ Name: LoadStoreAlloca:423
 %p = getelementptr i5* null, %idxs
 %y = load i5* %p
   =>
-%y = undef
-store undef, i7* null
+%y = poison
+store poison, i7* null
 
 
 Name: LoadStoreAlloca:438
 %y = load i5* null
   =>
-%y = undef
-store undef, i7* null
+%y = poison
+store poison, i7* null
 
 
 Name: LoadStoreAlloca:438-2
-%y = load i5* undef
+%y = load i5* poison
   =>
-%y = undef
-store undef, i7* null
+%y = poison
+store poison, i7* null
 
 
 ;Nme: LoadStoreAlloca:464
@@ -151,10 +151,10 @@ skip
 Name: LoadStoreAlloca:702
 store %x, i7* null
   =>
-store undef, i7* null
+store poison, i7* null
 
 
 Name: LoadStoreAlloca:712
-store undef, i3* %p
+store poison, i3* %p
   =>
 skip

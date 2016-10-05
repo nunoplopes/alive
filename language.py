@@ -36,21 +36,17 @@ def getPtrAlignCnstr(ptr, align):
   return ptr & (align-1) == 0
 
 
-def defined_align_access(state, defined, access_size, req_align, aptr):
-  defined.append(aptr != 0)
-  must_access = []
-  for blck in state.ptrs:
-    ptr  = blck.ptr
-    size = blck.size()
-    inbounds = And(UGE(aptr, ptr), UGE((size - access_size)/8, aptr - ptr))
-    if req_align != 0 and size >= access_size:
-      # overestimating the alignment is undefined behavior.
-      defined.append(Implies(inbounds, blck.align >= req_align))
-    if access_size <= size:
-      must_access.append(inbounds if blck.isAlloca() else BoolVal(True))
-  defined.append(mk_or(must_access))
-  # load/store are cutpoints; record BB definedness
-  state.defined += defined
+def defined_align_access(defined, align, ptr):
+  defined.append(ptr != 0)
+  # FIXME: ABI-defined
+  if align == 0:
+    align = 4
+
+  if align == 1:
+    return
+
+  align = (int)(math.log(align, 2))
+  defined.append(Extract(align-1, 0, ptr) == 0)
 
 
 def undef_val(u, v, qvars):
@@ -62,30 +58,13 @@ def undef_val(u, v, qvars):
 
 
 ################################
-class MemInfo:
-  def __init__(self, ptr, ty, block_size, num_elems, align):
-    self.ptr = ptr
-    self.ty = ty
-    self.block_size = block_size
-    self.num_elems = num_elems
-    self.align = align
-
-  def isAlloca(self):
-    return self.ty == 'alloca'
-
-  def size(self):
-    return self.block_size * self.num_elems
-
-  def __eq__(self, b):
-    return self.ptr.eq(b.ptr)
-
-
 class State:
   def __init__(self):
     self.vars = collections.OrderedDict()
     self.defined = [] # definedness so far in the BB
     self.qvars = []
-    self.ptrs = []
+    self.allocas = []
+    self.accessed_ptrs = set([])
     self.mem_qvars = []
     self.bb_pres = {}
     self.bb_qvars = {}
@@ -104,61 +83,85 @@ class State:
           self.bb_mem[bb] = []
         self.bb_pres[bb] += [cond]
         self.bb_qvars[bb] += qvars
-        self.bb_mem[bb].append((cond, self.mem))
+        self.bb_mem[bb].append((cond, (self.mem, self.mem_poison)))
 
-  def addAlloca(self, ptr, mem, block_size, num_elems, align):
-    self.mem_qvars.append(mem)
-    self.ptrs.append(MemInfo(ptr, 'alloca', block_size, num_elems, align))
+  def addAlloca(self, ptr, size):
+    self.mem_qvars.append(ptr)
+    self.allocas.append((ptr, size))
 
-  def addInputMem(self, ptr, qvars, block_size, num_elems):
-    # precondition vcgen can call this function spuriously
-    if any(ptr.eq(blck.ptr) for blck in self.ptrs):
-      return
-    self.mem_qvars += qvars
-    self.ptrs.append(MemInfo(ptr, 'in', block_size, num_elems, 1))
-
-  def store(self, cnstr, idx, val):
+  def store_bit(self, dst, val, poison):
     if use_array_theory():
-      self.mem = mk_if(mk_and(cnstr), Update(self.mem, idx, val), self.mem)
+      self.mem = Update(self.mem, dst, val)
+      self.mem_poison = Update(self.mem_poison, dst, poison)
     else:
-      self.mem = If(mk_and(cnstr + [self.idx_var == idx]), val, self.mem)
+      self.mem = If(self.idx_var == dst, val, self.mem)
+      self.mem_poison = If(self.idx_var == dst, poison, self.mem_poison)
 
-  def load(self, idx):
+  def store(self, dst, val, bits):
+    self.accessed_ptrs.add((dst, bits))
+    dst = Concat(dst, BitVecVal(0, 3))
+    src, srcpoison = val
+    for i in range(0, bits):
+      # little-endian
+      self.store_bit(dst + i, Extract(i, i, src), srcpoison)
+
+  def load_bit(self, ptr):
     if use_array_theory():
-      return self.mem[idx]
-    return substitute(self.mem, (self.idx_var, idx))
+      return self.mem[ptr], self.mem_poison[ptr]
+    return substitute(self.mem, (self.idx_var, ptr)),\
+           substitute(self.mem_poison, (self.idx_var, ptr))
+
+  def load(self, ptr, bits):
+    self.accessed_ptrs.add((ptr, bits))
+    val, poison = [], []
+    ptr = Concat(ptr, BitVecVal(0, 3))
+    for i in range(bits):
+      valb, poisonb = self.load_bit(ptr + i)
+      # little-endian
+      val.insert(0, valb)
+      poison.append(poisonb)
+    return simplify(mk_concat(val)), simplify(mk_and(poison))
 
   def newBB(self, name):
     if name in self.bb_pres:
       self.defined = [mk_or(self.bb_pres[name])]
       self.qvars = self.bb_qvars[name]
-      self.mem = fold_ite_list(self.bb_mem[name])
+      self.mem, self.mem_poison = fold_ite_list2(self.bb_mem[name])
     else:
       self.defined = []
       self.qvars = []
       if use_array_theory():
-        self.mem = Array('mem0', BitVecSort(get_ptr_size()), BitVecSort(8))
+        self.mem = Array('mem0', BitVecSort(get_ptr_size() + 3), BitVecSort(1))
+        self.mem_poison = Array('mem_poison0',
+                                BitVecSort(get_ptr_size() + 3), BoolSort())
       else:
-        self.mem = BitVec('mem0', 8)
-        self.idx_var = BitVec('idx', get_ptr_size())
+        self.idx_var = BitVec('idx', get_ptr_size() + 3)
+        self.mem = Function('mem0', BitVecSort(get_ptr_size() + 3),
+                            BitVecSort(1))(self.idx_var)
+        self.mem_poison = Function('mem_poison0',
+                                   BitVecSort(get_ptr_size() + 3),
+                                   BoolSort())(self.idx_var)
     self.current_bb = name
 
   def getAllocaConstraints(self):
-    # generate the following constraints:
-    # 1) Alloca ptrs are never null
-    # 2) Allocated regions do not overlap with each other and with input blocks
+    if self.allocas == []:
+      return []
+
     cnstr = []
-    for mem1 in self.ptrs:
-      if mem1.ty == 'in':
-        continue
-      ptr = mem1.ptr
-      size = mem1.size()
-      cnstr.append(ptr != 0)
-      for mem2 in self.ptrs:
-        if mem1 == mem2:
-          continue
-        cnstr.append(Or(UGE(mem2.ptr, ptr + size),
-                        ULE(mem2.ptr + mem2.size(), ptr)))
+    # 1) Alloca ptrs are never null
+    for (ptr, size) in self.allocas:
+      if size > 0:
+        cnstr.append(ptr != 0)
+
+    # 2) Input pointers cannot guess alloca ptr values
+    for (ptr, size) in self.accessed_ptrs:
+      ptr = simplify(ptr)
+      ptrs = str(ptr)
+      for (ptra, sizea) in self.allocas:
+        ptra = str(ptra)
+        if ptrs.find(ptra) == -1:
+          cnstr.append(Or(UGE(ptra, ptr + size),
+                          ULE(ptra + sizea, ptr)))
     return cnstr
 
   def eval(self, v, defined, qvars):
@@ -887,19 +890,14 @@ class Alloca(Instr):
 
     if size == 0:
       qvars.append(ptr)
-      return ptr, BoolVal(False)
+      return ptr, BoolVal(True)
 
     if size > 8:
-      defined.append(ULT(ptr, ptr + ((size >> 3) - 1)))
+      defined.append(ULE(ptr, -(size >> 3)))
     defined += [ptr != 0,
                 getPtrAlignCnstr(ptr, self.align)]
 
-    mem = freshBV('alloca' + self.getName(), size)
-    state.addAlloca(ptr, mem, block_size, num_elems, self.align)
-
-    for i in range(0, (int)(size/8)):
-      idx = 8*i
-      state.store([], ptr + i, Extract(idx+7, idx, mem))
+    state.addAlloca(ptr, size)
     return ptr, BoolVal(True)
 
   def getTypeConstraints(self):
@@ -979,22 +977,11 @@ class Load(Instr):
 
   def toSMT(self, defined, state, qvars):
     qvars += state.mem_qvars
-    ptr, undef = state.eval(self.v, defined, qvars)
+    ptr, poison = state.eval(self.v, defined, qvars)
+    defined.append(poison)
     access_sz = getAllocSize(self.type)
-    defined_align_access(state, defined, access_sz, self.align, ptr)
-
-    bytes = []
-    sz = self.type.getSize()
-    rem = sz % 8
-    if rem != 0:
-      sz = sz - rem
-      bytes = [Extract(rem-1, 0, state.load(ptr))]
-      ptr += 1
-    for i in range(0, (int)(sz/8)):
-      # FIXME: assumes little-endian
-      bytes = [state.load(ptr + i)] + bytes
-    # TODO: does undef propagates through load/stores?
-    return mk_concat(bytes), undef
+    defined_align_access(defined, self.align, ptr)
+    return state.load(ptr, self.type.getSize())
 
   def getTypeConstraints(self):
     return And(self.stype == self.v.type,
@@ -1035,31 +1022,15 @@ class Store(Instr):
 
   def toSMT(self, defined, state, qvars):
     qvars_new = []
-    src, usrc = state.eval(self.src, defined, qvars_new)
+    src = state.eval(self.src, defined, qvars_new)
     tgt, utgt = state.eval(self.dst, defined, qvars_new)
     qvars += qvars_new
     state.mem_qvars += qvars_new
+    defined.append(utgt)
 
-    src_size = self.stype.getSize()
     write_size = getAllocSize(self.stype)
-    defined_align_access(state, defined, write_size, self.align, tgt)
-
-    # FIXME: implement undef propagation through memory (usrc, utgt)
-
-    src_idx = 0
-    # FIXME: assumes little-endian
-    if src_size != write_size:
-      rem = src_size % 8
-      rest = Extract(rem-1, 0, src)
-      rest_old = Extract(7, rem, state.load(tgt))
-      state.store(state.defined, tgt, Concat(rest_old, rest))
-      tgt += 1
-      write_size -= 8
-      assert (src_size-rem) == write_size
-      src_idx = rem
-    for i in range(0, (int)(write_size/8)):
-      state.store(state.defined, tgt+i, Extract(src_idx+7, src_idx, src))
-      src_idx += 8
+    defined_align_access(defined, self.align, tgt)
+    state.store(tgt, src, self.stype.getSize())
     return None, None
 
   def getTypeConstraints(self):

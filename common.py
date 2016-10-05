@@ -22,13 +22,15 @@ def mk_unique_id():
   return id
 
 
-def fold_ite_list(l):
+def fold_ite_list2(l):
   if len(l) == 0:
     return None
   cond, val = l[0]
   if len(l) == 1:
     return val
-  return If(cond, val, fold_ite_list(l[1:]))
+  val1, val2 = val
+  els1, els2 = fold_ite_list2(l[1:])
+  return If(cond, val1, els1), If(cond, val2, els2)
 
 
 def freshBV(prefix, size):

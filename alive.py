@@ -369,10 +369,15 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
     check_refinement(srcv, tgtv, types, extra_cnstrs, users)
 
   # 3) check that the final memory state is similar in both programs
-  idx = BitVec('idx', get_ptr_size())
-  val1 = srcv.load(idx)
-  val2 = tgtv.load(idx)
-  check_expr(srcv.mem_qvars, extra_cnstrs + [val1 != val2], lambda s :
+  idx = BitVec('idx', get_ptr_size() + 3)
+  val1, poison1 = srcv.load_bit(idx)
+  val2, poison2 = tgtv.load_bit(idx)
+
+  check_expr(srcv.mem_qvars, extra_cnstrs + [poison1, Not(poison2)], lambda s :
+    ('Target memory state is more poisonous for ptr %s' % str_model(s, idx),
+     str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
+
+  check_expr(srcv.mem_qvars, extra_cnstrs + [poison1, val1 != val2], lambda s :
     ('Mismatch in final memory state in ptr %s' % str_model(s, idx),
      str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
 

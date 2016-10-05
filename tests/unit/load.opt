@@ -14,7 +14,7 @@ store 3, %p
   =>
 %p = alloca i9, 5
 store 3, %p
-%val = undef
+%val = poison
 
 
 Name: unreach

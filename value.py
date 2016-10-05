@@ -26,20 +26,6 @@ def allTyEqual(vars, Ty):
 def mkTyEqual(types):
   return [types[0] == types[i] for i in range(1, len(types))]
 
-def create_mem_if_needed(ptr, val, state, qvars):
-    # if we are dealing with an arbitrary pointer, assume it points to something
-    # that can (arbitrarily) hold 7 elements.
-    if isinstance(val.type, PtrType):
-      block_size = val.type.getSize()
-    elif isinstance(val.type, UnknownType) and val.type.myType == Type.Ptr:
-      block_size = val.type.types[Type.Ptr].getSize()
-    else:
-      return
-
-    num_elems = 7
-    size = block_size * num_elems
-    state.addInputMem(ptr, qvars, block_size, num_elems)
-
 
 class Type:
   Int, Ptr, Array, Unknown = range(4)
@@ -560,7 +546,6 @@ class Input(Value):
 
   def toSMT(self, defined, state, qvars):
     v = BitVec(self.name, self.type.getSize())
-    create_mem_if_needed(v, self, state, [])
     if self.name[0] == 'C':
       return v, BoolVal(True)
     uv = BitVec('def_' + self.name, 1)
