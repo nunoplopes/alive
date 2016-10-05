@@ -58,9 +58,7 @@ class ConstantVal(Constant):
   def getTypeConstraints(self):
     c = self.type.getTypeConstraints()
     if self.val != 0 and not self.type.defined:
-      # One more bit for positive integers to allow for sign bit.
-      bits = self.val.bit_length() + int(self.val >= 0)
-      return And(c, self.type >= bits)
+      return And(c, self.type >= self.val.bit_length())
     return c
 
   def toSMT(self, defined, state, qvars):

@@ -97,18 +97,21 @@ Name: AddSub:1152
 
 
 Name: AddSub:1156
+Pre: width(%b) > 1
 %a = add %b, %b
   =>
 %a = shl %b, 1
 
 
 Name: AddSub:1156-2
+Pre: width(%b) > 1
 %a = add nsw %b, %b
   =>
 %a = shl nsw %b, 1
 
 
 Name: AddSub:1156-3
+Pre: width(%b) > 1
 %a = add nuw %b, %b
   =>
 %a = shl nuw %b, 1

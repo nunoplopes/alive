@@ -17,7 +17,7 @@ Name: gep2
 %r = inttoptr %3
 
 Name: gep3
-%gep = getelementptr i8* %A, 1
+%gep = getelementptr i8* %A, i2 1
 %ret = ptrtoint %gep to i32
   =>
 %ptrtoint = ptrtoint %A to i32
