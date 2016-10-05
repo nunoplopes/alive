@@ -50,7 +50,7 @@ class Doc(object):
     return self.format()
   
   def pprint(self, width=80, indent=0):
-    print self.format(width, indent)
+    print(self.format(width, indent))
 
 class _Text(Doc):
   def __init__(self, text):
@@ -119,7 +119,7 @@ class _Nest(Doc):
 
 def printit(iterable):
   for x in iterable:
-    print x
+    print(x)
 
 def joinit(iterable, delimiter):
   it = iter(iterable)

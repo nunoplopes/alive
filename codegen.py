@@ -225,7 +225,7 @@ class CDefinition(CStatement):
     for ctype, var in var_types:
       decls[ctype.underlying_type()].append(ctype.decorate(var))
 
-    for ctype, vars in decls.iteritems():
+    for ctype, vars in decls.items():
       yield cls(CTypeName(ctype), *vars)
 
   def __init__(self, ctype, *inits):

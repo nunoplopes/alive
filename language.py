@@ -167,14 +167,14 @@ class State:
     qvars += self.qvars + q
     return v, u
 
-  def iteritems(self):
-    for k,v in self.vars.iteritems():
+  def items(self):
+    for k,v in self.vars.items():
       if k[0] != '%' and k[0] != 'C' and not k.startswith('ret_'):
         continue
       yield k,v
 
-  def has_key(self, k):
-    return self.vars.has_key(k)
+  def __contains__(self, k):
+    return k in self.vars
 
   def __getitem__(self, k):
     return self.vars[k]
@@ -363,7 +363,7 @@ class BinOp(Instr):
 
     undef = []
     if do_infer_flags():
-      for flag,fn in undef_conds.iteritems():
+      for flag,fn in undef_conds.items():
         bit = get_flag_var(flag, self.getName())
         undef += [Implies(bit == 1, fn(v1, v2))]
     else:
@@ -897,7 +897,7 @@ class Alloca(Instr):
     mem = freshBV('alloca' + self.getName(), size)
     state.addAlloca(ptr, mem, block_size, num_elems, self.align)
 
-    for i in range(0, size/8):
+    for i in range(0, (int)(size/8)):
       idx = 8*i
       state.store([], ptr + i, Extract(idx+7, idx, mem))
     return ptr, BoolVal(True)
@@ -990,7 +990,7 @@ class Load(Instr):
       sz = sz - rem
       bytes = [Extract(rem-1, 0, state.load(ptr))]
       ptr += 1
-    for i in range(0, sz/8):
+    for i in range(0, (int)(sz/8)):
       # FIXME: assumes little-endian
       bytes = [state.load(ptr + i)] + bytes
     # TODO: does undef propagates through load/stores?
@@ -1057,7 +1057,7 @@ class Store(Instr):
       write_size -= 8
       assert (src_size-rem) == write_size
       src_idx = rem
-    for i in range(0, write_size/8):
+    for i in range(0, (int)(write_size/8)):
       state.store(state.defined, tgt+i, Extract(src_idx+7, src_idx, src))
       src_idx += 8
     return None, None
@@ -1161,55 +1161,55 @@ class Ret(TerminatorInst):
 
 ################################
 def print_prog(p, skip):
-  for bb, instrs in p.iteritems():
+  for bb, instrs in p.items():
     if bb != "":
-      print "%s:" % bb
+      print("%s:" % bb)
 
-    for k,v in instrs.iteritems():
+    for k,v in instrs.items():
       if k in skip:
         continue
       k = str(k)
       if k[0] == '%':
-        print '  %s = %s' % (k, v)
+        print('  %s = %s' % (k, v))
       else:
-        print "  %s" % v
+        print("  %s" % v)
 
 
 def countUsers(prog):
   m = {}
-  for bb, instrs in prog.iteritems():
-    for k, v in instrs.iteritems():
+  for bb, instrs in prog.items():
+    for k, v in instrs.items():
       v.countUsers(m)
   return m
 
 
 def getTypeConstraints(p):
-  t = [v.getTypeConstraints() for v in p.itervalues()]
+  t = [v.getTypeConstraints() for v in p.values()]
   # ensure all return instructions have the same type
-  ret_types = [v.type for v in p.itervalues() if isinstance(v, Ret)]
+  ret_types = [v.type for v in p.values() if isinstance(v, Ret)]
   if len(ret_types) > 1:
     t += mkTyEqual(ret_types)
   return t
 
 
 def fixupTypes(p, types):
-  for v in p.itervalues():
+  for v in p.values():
     v.fixupTypes(types)
 
 
 def toSMT(prog, idents, isSource):
   set_smt_is_source(isSource)
   state = State()
-  for k,v in idents.iteritems():
+  for k,v in idents.items():
     if isinstance(v, (Input, Constant)):
       defined = []
       qvars = []
       smt = v.toSMT(defined, state, qvars)
       state.add(v, smt, defined, qvars)
 
-  for bb, instrs in prog.iteritems():
+  for bb, instrs in prog.items():
     state.newBB(bb)
-    for k,v in instrs.iteritems():
+    for k,v in instrs.items():
       defined = []
       qvars = []
       smt = v.toSMT(defined, state, qvars)

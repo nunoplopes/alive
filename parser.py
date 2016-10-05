@@ -68,7 +68,7 @@ def parseOperand(v, type):
 
   # %var
   if v[0] == '%' or v[0] == 'C':
-    if identifiers.has_key(v):
+    if v in identifiers:
       used_identifiers.add(v)
       return identifiers[v]
     if parsing_phase == Target:
@@ -212,10 +212,10 @@ def parseInstr(toks):
   global identifiers, skip_identifiers, BBs
 
   reg = toks[0]
-  if identifiers.has_key(reg):
+  if reg in identifiers:
     if reg in skip_identifiers:
       skip_identifiers.remove(reg)
-      for instrs in BBs.itervalues():
+      for instrs in BBs.values():
         instrs.pop(reg, None)
       identifiers.pop(reg, None)
     else:
@@ -246,7 +246,7 @@ def parseCnstVar(v):
   if id[0] == '%':
     raise ParseError('Only constants allowed in expressions')
 
-  if identifiers.has_key(id):
+  if id in identifiers:
     used_identifiers.add(id)
     return identifiers[id]
 
@@ -410,18 +410,18 @@ def parse_llvm(txt):
     # Ensure regs defined in source are available in the target.
     identifiers_old = identifiers
     identifiers = collections.OrderedDict()
-    for k,v in identifiers_old.iteritems():
+    for k,v in identifiers_old.items():
       if not isinstance(v, (Store, Unreachable)):
         identifiers[k] = v
 
     BBs_old = BBs
     BBs = collections.OrderedDict()
-    for bb, instrs in BBs_old.iteritems():
+    for bb, instrs in BBs_old.items():
       BBs[bb] = collections.OrderedDict()
-      for k,v in instrs.iteritems():
+      for k,v in instrs.items():
         if not isinstance(v, (Store, Unreachable)):
           BBs[bb][k] = v
-    for i,v in identifiers.iteritems():
+    for i,v in identifiers.items():
       if not isinstance(v, (Input, Br, Ret)):
         skip_identifiers.add(i)
   else:
@@ -445,12 +445,11 @@ def parseBoolPredicate(toks):
   return LLVMBoolPred(op, args)
 
 def parseBoolPred(toks):
-  from itertools import izip
   lhs = parseCnstVar(toks[0])
   rest = iter(toks[1:])
   cmps = []
 
-  for optok, rhstok in izip(rest,rest):
+  for optok, rhstok in zip(rest,rest):
     op = BinaryBoolPred.getOpId(optok)
     rhs = parseCnstVar(rhstok)
     cmps.append(BinaryBoolPred(op, lhs, rhs))
@@ -540,9 +539,9 @@ def _parseOpt(s, loc, toks):
 
   # Move unused target instrs (copied from source) to the end.
   lst = []
-  for bb, instrs in tgt.iteritems():
+  for bb, instrs in tgt.items():
     lst = []
-    for k,v in instrs.iteritems():
+    for k,v in instrs.items():
       if k not in used_tgt and not isinstance(v, Constant):
         lst.append((k,v))
         del instrs[k]
@@ -557,8 +556,8 @@ def _parseOpt(s, loc, toks):
 def parseOpt(s, loc, toks):
   try:
     return _parseOpt(s, loc, toks)
-  except ParseException, e:
-    print exception2str(e.msg, e.line, e.lineno, e.col)
+  except ParseException as e:
+    print(exception2str(e.msg, e.line, e.lineno, e.col))
     exit(-1)
 
 
@@ -578,9 +577,9 @@ opt_file = OneOrMore(opt) + StringEnd()
 def parse_opt_file(txt):
   try:
     return opt_file.parseString(txt)
-  except ParseException, e:
-    print exception2str(e.msg, e.line, e.lineno, e.col, 0)
+  except ParseException as e:
+    print(exception2str(e.msg, e.line, e.lineno, e.col, 0))
     exit(-1)
-  except ParseError, e:
-    print e
+  except ParseError as e:
+    print(e)
     exit(-1)
