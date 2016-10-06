@@ -1,4 +1,5 @@
 ; ERROR: Mismatch in values
 %x = load %p
   =>
-%x = undef
+%u = freeze poison
+%x = %u

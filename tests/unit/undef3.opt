@@ -1,4 +1,3 @@
-; ERROR: Domain of undefinedness of Target is smaller
 %A = select poison, %X, %Y
   =>
 %A = poison
