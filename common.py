@@ -296,7 +296,7 @@ def get_ptr_size():
 class AliveError(Exception):
   pass
 
-class ParseError(BaseException):
+class ParseError(Exception):
   def __init__(self, msgs, token = None):
     if isinstance(msgs, list):
       self.msgs = msgs
@@ -304,7 +304,7 @@ class ParseError(BaseException):
       self.msgs = [msgs]
     self.token = token
 
-  def __repr__(self):
+  def __str__(self):
     lineno = get_lineno()
     line = get_line(lineno)
     col = get_column(line, self.token)
