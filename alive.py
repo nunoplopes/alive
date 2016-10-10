@@ -373,6 +373,8 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
   val1, poison1 = srcv.load_bit(idx)
   val2, poison2 = tgtv.load_bit(idx)
 
+  extra_cnstrs += srcv.defined
+
   check_expr(srcv.mem_qvars, extra_cnstrs + [poison1, Not(poison2)], lambda s :
     ('Target memory state is more poisonous for ptr %s' % str_model(s, idx),
      str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))

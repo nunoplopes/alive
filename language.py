@@ -77,6 +77,7 @@ class State:
     if isinstance(v, TerminatorInst):
       for (bb,cond,qvars) in v.getSuccessors(self):
         bb = bb[1:]
+        cond = mk_and([cond] + self.defined)
         if bb not in self.bb_pres:
           self.bb_pres[bb] = []
           self.bb_qvars[bb] = []
@@ -97,7 +98,8 @@ class State:
       self.mem = If(self.idx_var == dst, val, self.mem)
       self.mem_poison = If(self.idx_var == dst, poison, self.mem_poison)
 
-  def store(self, dst, val, bits):
+  def store(self, dst, val, bits, defined):
+    self.defined += defined
     self.accessed_ptrs.add((dst, bits))
     dst = Concat(dst, BitVecVal(0, 3))
     src, srcpoison = val
@@ -111,7 +113,8 @@ class State:
     return substitute(self.mem, (self.idx_var, ptr)),\
            substitute(self.mem_poison, (self.idx_var, ptr))
 
-  def load(self, ptr, bits):
+  def load(self, ptr, bits, defined):
+    self.defined += defined
     self.accessed_ptrs.add((ptr, bits))
     val, poison = [], []
     ptr = Concat(ptr, BitVecVal(0, 3))
@@ -981,7 +984,7 @@ class Load(Instr):
     defined.append(poison)
     access_sz = getAllocSize(self.type)
     defined_align_access(defined, self.align, ptr)
-    return state.load(ptr, self.type.getSize())
+    return state.load(ptr, self.type.getSize(), defined)
 
   def getTypeConstraints(self):
     return And(self.stype == self.v.type,
@@ -1030,7 +1033,7 @@ class Store(Instr):
 
     write_size = getAllocSize(self.stype)
     defined_align_access(defined, self.align, tgt)
-    state.store(tgt, src, self.stype.getSize())
+    state.store(tgt, src, self.stype.getSize(), defined)
     return None, None
 
   def getTypeConstraints(self):

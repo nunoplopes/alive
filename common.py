@@ -30,7 +30,7 @@ def fold_ite_list2(l):
     return val
   val1, val2 = val
   els1, els2 = fold_ite_list2(l[1:])
-  return If(cond, val1, els1), If(cond, val2, els2)
+  return mk_if(cond, val1, els1), mk_if(cond, val2, els2)
 
 
 def freshBV(prefix, size):

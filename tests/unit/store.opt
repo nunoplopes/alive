@@ -3,3 +3,23 @@ store %a, %p
 %b = load %p
   =>
 %b = %a
+
+
+; FIXME: this should fail because cont BB is unreachable?
+; FIXME: need more concise language for manipulating control-flow
+Name: select -> br/store
+  %x = select %c, %a, %b
+  store %x, %p
+  br true, label %cont, label %cont
+cont:
+  skip
+=>
+  br %c, label %ba, label %bb
+ba:
+  store %a, %p
+  br true, label %cont2, label %cont2
+bb:
+  store %b, %p
+  br true, label %cont2, label %cont2
+cont2:
+  skip
