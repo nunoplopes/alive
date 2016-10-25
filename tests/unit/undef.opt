@@ -54,16 +54,8 @@ store %x, poison
 unreachable
 
 
-; FIXME: slow
 Name: undef 7
-%u = freeze poison
-store i9 %u, %X
-  =>
-skip
-
-
-Name: undef 7.1
-store i9 poison, %X
+store poison, %X
   =>
 skip
 
