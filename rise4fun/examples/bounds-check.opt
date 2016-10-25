@@ -1,0 +1,11 @@
+Name: Bounds check simplification
+Pre: C1 u> C3 && C2 u> C3 && isPowerOf2(C1 ^ C2) && isPowerOf2(-C1 ^ -C2) && (-C1 ^ -C2) == ((C3-C1) ^ (C3-C2)) && abs(C1-C2) u> C3
+%x = add i37 %A, C1
+%i = icmp ult %x, C3
+%y = add %A, C2
+%j = icmp ult %y, C3
+%r = or %i, %j
+  =>
+%and = and %A, ~(C1^C2)
+%lhs = add %and, umax(C1,C2)
+%r = icmp ult %lhs, C3

@@ -1,0 +1,7 @@
+Name: Deobfuscate
+%xor = xor %y, %x
+%and = and %y, %x
+%shl = shl %and, 1
+%add = add %shl, %xor
+  =>
+%add = add %x, %y

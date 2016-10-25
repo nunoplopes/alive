@@ -1,0 +1,6 @@
+Name: InstCombine icmp optimization
+Pre: (countLeadingOnes(C1) - countLeadingOnes(C2)) > 0 && C1 == -1 && !isPowerOf2(C2)
+%s = ashr i7 C2, %a
+%i = icmp eq %s, C1
+  =>
+%i = icmp uge %a, countLeadingOnes(C1) - countLeadingOnes(C2)

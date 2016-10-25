@@ -1,0 +1,8 @@
+Name: InstCombine AddSub optimization
+Pre: countTrailingZeros(C1) == 0 && C1 == C2+1
+%Y = and %Z, C2
+%LHS = xor %Y, C1
+%r = add %LHS, %RHS
+  =>
+%or = or %Z, ~C2
+%r = sub %RHS, %or

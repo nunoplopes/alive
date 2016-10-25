@@ -1,0 +1,67 @@
+{
+  displayName:		'opt',
+  name:			'opt',
+  mimeTypes:		['text/opt'],
+  fileExtensions:	['.opt'],
+
+  lineComments:	[';'],
+
+  keywords:	['add', 'sub', 'mul', 'sdiv', 'udiv', 'srem', 'urem',
+                 'shl', 'ashr', 'lshr',
+                 'and', 'or', 'xor', 'select', 'freeze',
+                 'icmp', 'eq', 'ne', 'ule', 'sle', 'ult', 'slt', 'uge', 'sge',
+                 'ugt', 'sgt',
+                 'zext', 'sext', 'trunc', 'ZExtOrTrunc',
+                 'ptrtoint', 'inttoptr', 'bitcast',
+                 'getelementptr', 'inbounds',
+                 'alloca', 'load', 'store',
+                 'br', 'call', 'ret', 'skip', 'unreachable',
+                ],
+
+  functions:	['umax', 'max', 'abs', 'lshr', 'width',
+                 'log2', 'trunc', 'sext', 'zext',
+                 'ComputeNumSignBits', 'computeKnownOneBits',
+                 'computeKnownZeroBits', 'countLeadingOnes',
+                 'countLeadingZeros', 'countTrailingZeros',
+                ],
+
+  predicates:	['equivalentAddressValues', 'isPowerOf2', 'isPowerOf2OrZero',
+                 'isShiftedMask', 'isSignBit', 'MaskedValueIsZero',
+                 'WillNotOverflowSignedAdd', 'WillNotOverflowUnsignedAdd',
+                 'WillNotOverflowSignedSub', 'WillNotOverflowUnsignedSub',
+                 'WillNotOverflowSignedMul', 'WillNotOverflowUnsignedMul',
+                 'WillNotOverflowUnsignedShl', 'hasOneUse',
+                ],
+
+  operators:	['+', '-', '*', '/', 'u>', '>', '<', '==', '!=',
+                 '&&', '||',
+                ],
+
+  brackets: [
+    ['(', ')', 'delimiter.parenthesis'],
+  ],
+
+  tokenizer: {
+    root: [
+      ['Name:.*$', 'header'],
+      ['Pre:', 'header'],
+      ['%[a-zA-Z0-9_.]+', 'identifier'],
+      ['i\\d+\\w+', 'type'],
+      ['C\\d+', 'number'],
+      ['[A-Za-z_]\\w+', { cases: {
+                           '@keywords': 'keyword',
+                           '@functions': 'keyword',
+                           '@predicates': 'keyword',
+                           '@default':  'identifier'
+                       }}],
+      ['\\d+', 'number'],
+      { include: '@whitespace' },
+      ['[()]', '@brackets'],
+    ],
+
+    whitespace: [
+      ['[ \\t\\r\\n]+', 'white'],
+      [';.*$', 'comment']
+    ],
+  }
+}

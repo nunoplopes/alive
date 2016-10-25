@@ -294,7 +294,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
       elif k.startswith('u_') or k.startswith('undef'):
         continue
       else:
-        print("Unknown smt var: " + str(v))
+        print("ERROR: Unknown smt var: " + str(v))
         exit(-1)
 
     q = mk_exists(qvars, q)
@@ -407,7 +407,7 @@ def check_opt(opt):
   s = SolverFor('QF_LIA')
   s.add(type_pre)
   if s.check() != sat:
-    print('Precondition does not type check')
+    print('ERROR: Precondition does not type check')
     exit(-1)
 
   # Only one type per variable/expression in the precondition is required.
@@ -417,13 +417,13 @@ def check_opt(opt):
   s.add(type_src)
   unregister_pick_one_type(get_smt_vars(type_src))
   if s.check() != sat:
-    print('Source program does not type check')
+    print('ERROR: Source program does not type check')
     exit(-1)
 
   s.add(type_tgt)
   unregister_pick_one_type(get_smt_vars(type_tgt))
   if s.check() != sat:
-    print('Source and Target programs do not type check')
+    print('ERROR: Source and Target programs do not type check')
     exit(-1)
 
   # Pointers are assumed to be either 32 or 64 bits

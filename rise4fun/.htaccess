@@ -1,0 +1,3 @@
+<FilesMatch (run|metadata)>
+    SetHandler application/x-httpd-php
+</FilesMatch>

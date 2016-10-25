@@ -1,0 +1,5 @@
+Name: PR20186
+%a = sdiv %X, C
+%r = sub 0, %a
+  =>
+%r = sdiv %X, -C

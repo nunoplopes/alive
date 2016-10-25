@@ -1,0 +1,26 @@
+{
+  "Name":		"Alive",
+  "DisplayName":	"Alive",
+  "Version":		"<?= trim(file_get_contents('version.inc')); ?>",
+  "Email":		"nlopes@microsoft.com",
+  "SupportEmail":	"nlopes@microsoft.com",
+  "TermsOfUseUrl":	"http://rise4fun.com/termsofuse",
+  "PrivacyUrl":		"https://go.microsoft.com/fwlink/?LinkId=521839",
+  "Institution":	"Microsoft Research",
+  "InstitutionUrl":	"https://www.microsoft.com/en-us/research/",
+  "InstitutionImageUrl": "http://rise4fun.com/images/logo_msr_small.png",
+  "MimeType":		"text/x-opt",
+  "SupportsLanguageSyntax": true,
+  "Title":		"Optimization Verifier",
+  "Description":	"Alive proves correctness of peephole optimizations.",
+  "Question":		"Is this optimization correct?",
+  "Url":		"https://github.com/nunoplopes/alive/",
+  "Samples": [
+<?php
+foreach (glob('examples/*.opt') as $f) {
+  echo "    {\n\"Name\": ", json_encode(substr(basename($f), 0, -4)), ",\n";
+  echo "\"Source\": ", json_encode(trim(file_get_contents($f))), "\n    },\n";
+}
+?>
+  ]
+}
