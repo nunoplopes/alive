@@ -828,7 +828,7 @@ class Select(Instr):
     c = (c == 1)
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
-    return mk_if(c, v1, v2), mk_and([uc, u1, u2])
+    return mk_if(c, v1, v2), mk_and([uc, mk_if(c, u1, u2)])
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,
