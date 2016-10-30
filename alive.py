@@ -19,6 +19,8 @@ from language import *
 from parser import parse_opt_file
 from gen import generate_switched_suite
 
+quiet_mode = False
+
 
 def block_model(s, sneg, m):
   # First simplify the model.
@@ -389,11 +391,12 @@ def check_opt(opt):
 
   print('----------------------------------------')
   print('Optimization: ' + name)
-  print('Precondition: ' + str(pre))
-  print_prog(src, set([]))
-  print('=>')
-  print_prog(tgt, skip_tgt)
-  print('')
+  if not quiet_mode:
+    print('Precondition: ' + str(pre))
+    print_prog(src, set([]))
+    print('=>')
+    print_prog(tgt, skip_tgt)
+    print('')
 
   reset_pick_one_type()
   global gbl_prev_flags
@@ -472,10 +475,14 @@ def check_opt(opt):
     check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users)
     block_model(s, sneg, types)
     proofs += 1
-    sys.stdout.write('\rDone: ' + str(proofs))
+    if not quiet_mode:
+      sys.stdout.write('\rDone: ' + str(proofs))
     sys.stdout.flush()
     res = s.check()
     assert res != unknown
+
+  if quiet_mode:
+    sys.stdout.write('Done: ' + str(proofs))
 
   if res == unsat:
     print('\nOptimization is correct!')
@@ -488,6 +495,8 @@ def check_opt(opt):
 
 def main():
   parser = argparse.ArgumentParser()
+  parser.add_argument('-q', action='store_true', default=False,
+    help='Quiet mode', dest='quiet')
   parser.add_argument('-m', '--match', action='append', metavar='name',
     help='run tests containing this text')
   parser.add_argument('--infer-flags', action='store_true', default=False,
@@ -509,6 +518,8 @@ def main():
 
   set_infer_flags(args.infer_flags)
   set_use_array_theory(args.array_th)
+  global quiet_mode
+  quiet_mode = args.quiet
 
   gen = []
 
