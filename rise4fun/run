@@ -1,4 +1,4 @@
-<?php $timeout = 20; ?>
+<?php $timeout = 30; ?>
 {
   "Version": "<?= trim(file_get_contents('version.inc')); ?>",
   "Outputs": [
@@ -6,7 +6,7 @@
       "MimeType": "text/plain",
       "Value": <?php
 
-set_time_limit($timeout+5);
+set_time_limit(5);
 
 $data = json_decode(file_get_contents('php://input'));
 $data = $data->Source;
@@ -16,21 +16,27 @@ if (strlen($data) > 1024) {
   $descriptors = array(
     0 => array('pipe', 'r'), //stdin
     1 => array('pipe', 'w'), //stdout
-//    2 => array('pipe', 'w')  //stderr
+    2 => array('pipe', 'w'), //stderr
   );
-  $p = proc_open('python alive.py', $descriptors, $pipes, __DIR__.'/..');
+  $p = proc_open('timeout -s9 '.$timeout.'s python alive.py -q',
+                 $descriptors, $pipes, __DIR__.'/..');
   fwrite($pipes[0], $data);
   fclose($pipes[0]);
-  array_shift($pipes);
 
+  $pipes = array($pipes[1]);
   $null = null;
   if (!($stream = stream_select($pipes, $null, $null, $timeout))) {
-    echo '"The tool timed out!"';
+    $out = '';
   } else {
     stream_set_timeout($pipes[0], 0, 1);
-    echo json_encode(fread($pipes[0], 8192));
+    $out = stream_get_contents($pipes[0]);
   }
   proc_close($p);
+
+  if (!strpos($out, 'ERROR: ') && !strpos($out, 'is correct'))
+    $out .= "\nAlive timed out!";
+
+  echo json_encode($out);
 }
 
 ?>
