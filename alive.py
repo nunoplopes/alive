@@ -258,14 +258,14 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
        str_model(m, (a, poisona)), 'UB', k, srcv, tgtv, types))
 
     # Check if domain of poison values of Src implies that of Tgt.
-    check_expr(qvars, base_cnstr + [(poisona & poisonb) != poisonb], lambda m :
+    check_expr(qvars, base_cnstr + [(poisonb & ~poisonb) != 0], lambda m :
       ("Target is more poisonous than Source for %s %s\n"
          % (var_type(k, types), k),
        str_model(m, (a, poisona)), str_model(m, (b, poisonb)), k, srcv, tgtv,
        types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, base_cnstr + [(a & ~poisona) != (b & ~poisona)], lambda m:
+    check_expr(qvars, base_cnstr + [(a ^ b) & poisona != 0], lambda m:
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
        str_model(m, (a, poisona)), str_model(m, (b, poisonb)), k, srcv, tgtv,
        types))
@@ -387,14 +387,14 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
 
   extra_cnstrs += srcv.defined
 
-  check_expr(srcv.mem_qvars, extra_cnstrs + [(p1 & p2) != p2],
+  check_expr(srcv.mem_qvars, extra_cnstrs + [p2 & ~p1 != 0],
              lambda m :
     ('Target memory state is more poisonous for ptr %s' % str_model(m, idx),
      str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
      types))
 
   check_expr(srcv.mem_qvars, extra_cnstrs +
-             [(val1 & ~p1) != (val2 & ~p1)], lambda m :
+             [(val1 ^ val2) & p1 != 0], lambda m :
     ('Mismatch in final memory state in ptr %s' % str_model(m, idx),
      str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
      types))
