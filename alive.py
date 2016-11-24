@@ -265,10 +265,10 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
        types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, base_cnstr + [(a ^ b) & poisona != 0], lambda m:
+    check_expr(qvars, base_cnstr + [(a ^ b) & ~poisona != 0], lambda m:
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
-       str_model(m, (a, poisona)), str_model(m, (b, poisonb)), k, srcv, tgtv,
-       types))
+       str_model(m, (a, poisona)), str_model(m, (b, BitVecVal(0, b.size()))), k,
+       srcv, tgtv, types))
 
 
 def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
@@ -388,14 +388,14 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
   extra_cnstrs += srcv.defined
 
   check_expr(srcv.mem_qvars, extra_cnstrs + [p2 & ~p1 != 0], lambda m :
-    ('Target memory state is more poisonous for ptr %s' % str_model(m, idx),
-     str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
-     types))
+    ('Target memory state is more poisonous for ptr %s' %
+     str_model(m, (idx, BitVecVal(0, idx.size()))), str_model(m, (val1, p1)),
+     str_model(m, (val2, p2)), None, srcv, tgtv, types))
 
-  check_expr(srcv.mem_qvars, extra_cnstrs + [(val1 ^ val2) & p1 != 0], lambda m:
-    ('Mismatch in final memory state in ptr %s' % str_model(m, idx),
-     str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
-     types))
+  check_expr(srcv.mem_qvars, extra_cnstrs + [(val1 ^ val2) & ~p1 != 0], lambda m:
+    ('Mismatch in final memory state in ptr %s' %
+     str_model(m, (idx, BitVecVal(0, idx.size()))), str_model(m, (val1, p1)),
+     str_model(m, (val2, BitVecVal(0, val2.size()))), None, srcv, tgtv, types))
 
 
 def check_opt(opt):
