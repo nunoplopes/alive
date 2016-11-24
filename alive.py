@@ -387,14 +387,12 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
 
   extra_cnstrs += srcv.defined
 
-  check_expr(srcv.mem_qvars, extra_cnstrs + [p2 & ~p1 != 0],
-             lambda m :
+  check_expr(srcv.mem_qvars, extra_cnstrs + [p2 & ~p1 != 0], lambda m :
     ('Target memory state is more poisonous for ptr %s' % str_model(m, idx),
      str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
      types))
 
-  check_expr(srcv.mem_qvars, extra_cnstrs +
-             [(val1 ^ val2) & p1 != 0], lambda m :
+  check_expr(srcv.mem_qvars, extra_cnstrs + [(val1 ^ val2) & p1 != 0], lambda m:
     ('Mismatch in final memory state in ptr %s' % str_model(m, idx),
      str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
      types))
