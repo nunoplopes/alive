@@ -147,19 +147,23 @@ def check_expr(qvars, expr, error):
     return
   correct_exprs[id] = expr
 
-  s = tactic.solver()
+  #s = tactic.solver()
+  #s = Tactic('smt').solver()
+  s = TryFor(Tactic('smt'), 900).solver()
   s.add(expr)
 
   if __debug__:
     gen_benchmark(s)
 
   res = s.check()
-  if res != unsat:
+  #if res != unsat:
+  if res == sat:
     check_incomplete_solver(res, s)
-    e, src, tgt, stop, srcv, tgtv, types = error(s)
+    m = s.model()
+    e, src, tgt, stop, srcv, tgtv, types = error(m)
     print('\nERROR: %s' % e)
     print('Example:')
-    print_var_vals(s, srcv, tgtv, stop, types)
+    print_var_vals(m, srcv, tgtv, stop, types)
     print('Source value: ' + src)
     print('Target value: ' + tgt)
     exit(-1)
@@ -184,35 +188,38 @@ def val2binhex(v, bits):
   #return format(v, '#0'+str(bits)+'b')
 
 
-def str_model(s, v):
-  val = s.model().evaluate(v, True)
+def str_model(m, v):
+  val = m.evaluate(v[0], True)
+  poison = m.evaluate(v[1], True).as_long()
+  bits = v[1].size()
+  if poison == ((1<<bits)-1):
+    return "poison"
   if isinstance(val, BoolRef):
     return "true" if is_true(val) else "false"
   valu = val.as_long()
   vals = val.as_signed_long()
-  bin = val2binhex(valu, val.size())
+  bin = val2binhex(valu, bits)
+  poison = "" if poison == 0 else " / poison: %s" % val2binhex(poison, bits)
   if valu != vals:
-    return "%s (%d, %d)" % (bin, valu, vals)
-  return "%s (%d)" % (bin, valu)
+    return "%s (%d, %d)%s" % (bin, valu, vals, poison)
+  return "%s (%d)%s" % (bin, valu, poison)
 
 
-def _print_var_vals(s, vars, stopv, seen, types):
-  m = s.model()
+def _print_var_vals(m, vars, stopv, seen, types):
   for k,v in vars.items():
     if k == stopv:
       return
     if k in seen:
       continue
     seen |= set([k])
-    val = 'UB' if is_false(m.evaluate(mk_and(v[1]))) else\
-          'poison' if is_false(m.evaluate(v[0][1])) else str_model(s, v[0][0])
+    val = 'UB' if is_false(m.evaluate(mk_and(v[1]))) else str_model(m, v[0])
     print("%s %s = %s" % (k, var_type(k, types), val))
 
 
-def print_var_vals(s, vs1, vs2, stopv, types):
+def print_var_vals(m, vs1, vs2, stopv, types):
   seen = set()
-  _print_var_vals(s, vs1, stopv, seen, types)
-  _print_var_vals(s, vs2, stopv, seen, types)
+  _print_var_vals(m, vs1, stopv, seen, types)
+  _print_var_vals(m, vs2, stopv, seen, types)
 
 
 def get_smt_vars(f):
@@ -238,28 +245,30 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
     if k[0] == 'C' or k not in tgtv:
       continue
 
-    ((a, notpoisona), defa, qvars) = v
-    ((b, notpoisonb), defb, qvarsb) = tgtv[k]
+    ((a, poisona), defa, qvars) = v
+    ((b, poisonb), defb, qvarsb) = tgtv[k]
 
     n_users = users[k]
     base_cnstr = defa + extra_cnstrs + n_users
 
     # Check if domain of defined values of Src implies that of Tgt.
-    check_expr(qvars, base_cnstr + [mk_not(mk_and(defb))], lambda s :
+    check_expr(qvars, base_cnstr + [mk_not(mk_and(defb))], lambda m :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
-       str_model(s, a), 'UB', k, srcv, tgtv, types))
+       str_model(m, (a, poisona)), 'UB', k, srcv, tgtv, types))
 
     # Check if domain of poison values of Src implies that of Tgt.
-    check_expr(qvars, base_cnstr + [notpoisona, mk_not(notpoisonb)], lambda s :
+    check_expr(qvars, base_cnstr + [(poisona & poisonb) != poisonb], lambda m :
       ("Target is more poisonous than Source for %s %s\n"
          % (var_type(k, types), k),
-       str_model(s, a), 'poison', k, srcv, tgtv, types))
+       str_model(m, (a, poisona)), str_model(m, (b, poisonb)), k, srcv, tgtv,
+       types))
 
     # Check that final values of vars are equal.
-    check_expr(qvars, base_cnstr + [notpoisona, a != b], lambda s :
+    check_expr(qvars, base_cnstr + [(a & ~poisona) != (b & ~poisona)], lambda m:
       ("Mismatch in values of %s %s\n" % (var_type(k, types), k),
-       str_model(s, a), str_model(s, b), k, srcv, tgtv, types))
+       str_model(m, (a, poisona)), str_model(m, (b, poisonb)), k, srcv, tgtv,
+       types))
 
 
 def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
@@ -351,6 +360,7 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
 
   # 1) check preconditions of BBs
   tgtbbs = tgtv.bb_pres
+  zero = BitVecVal(0, 1)
   for k,v in srcv.bb_pres.items():
     if k not in tgtbbs:
       continue
@@ -358,9 +368,9 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
     # complete (closed world)
     p1 = mk_and(v)
     p2 = mk_and(tgtbbs[k])
-    check_expr([], [p1 != p2] + extra_cnstrs, lambda s :
-      ("Mismatch in preconditions for BB '%s'\n" % k, str_model(s, p1),
-       str_model(s, p2), None, srcv, tgtv, types))
+    check_expr([], [p1 != p2] + extra_cnstrs, lambda m :
+      ("Mismatch in preconditions for BB '%s'\n" % k, str_model(m, (p1, zero)),
+       str_model(m, (p2, zero)), None, srcv, tgtv, types))
 
   # 2) check register values
   if do_infer_flags():
@@ -372,18 +382,22 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
 
   # 3) check that the final memory state is similar in both programs
   idx = BitVec('idx', get_ptr_size() + 3)
-  val1, poison1 = srcv.load_bit(idx)
-  val2, poison2 = tgtv.load_bit(idx)
+  val1, p1 = srcv.load_bit(idx)
+  val2, p2 = tgtv.load_bit(idx)
 
   extra_cnstrs += srcv.defined
 
-  check_expr(srcv.mem_qvars, extra_cnstrs + [poison1, Not(poison2)], lambda s :
-    ('Target memory state is more poisonous for ptr %s' % str_model(s, idx),
-     str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
+  check_expr(srcv.mem_qvars, extra_cnstrs + [(p1 & p2) != p2],
+             lambda m :
+    ('Target memory state is more poisonous for ptr %s' % str_model(m, idx),
+     str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
+     types))
 
-  check_expr(srcv.mem_qvars, extra_cnstrs + [poison1, val1 != val2], lambda s :
-    ('Mismatch in final memory state in ptr %s' % str_model(s, idx),
-     str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
+  check_expr(srcv.mem_qvars, extra_cnstrs +
+             [(val1 & ~p1) != (val2 & ~p1)], lambda m :
+    ('Mismatch in final memory state in ptr %s' % str_model(m, idx),
+     str_model(m, (val1, p1)), str_model(m, (val1, p2)), None, srcv, tgtv,
+     types))
 
 
 def check_opt(opt):
@@ -472,6 +486,7 @@ def check_opt(opt):
     fixupTypes(ident_src, types)
     fixupTypes(ident_tgt, types)
     pre.fixupTypes(types)
+    reset_unique_id()
     check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users)
     block_model(s, sneg, types)
     proofs += 1

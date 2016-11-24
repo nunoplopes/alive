@@ -43,7 +43,7 @@ Pre: isPowerOf2(C2) && C1 & (C2-1) == 0 && C2 & C1 != 0
 
 
 Name: AndOrXor:206
-Pre: C2 & (-1 << C1) == (-1 << C1)
+Pre: C2 & (-1 << C1) == (-1 << C1) && C1 u< width(%X)
 %op = shl %X, C1
 %r = and %op, C2
   =>
@@ -59,7 +59,7 @@ Pre: C2 & (-1 << C1) != (-1 << C1) && C2 & (-1 << C1) != C2
 
 
 Name: AndOrXor:226
-Pre: C2 & lshr(-1, C1) == lshr(-1, C1)
+Pre: (C2 & lshr(-1, C1) == lshr(-1, C1)) && C1 u< width(%X)
 %op = lshr %X, C1
 %r = and %op, C2
   =>

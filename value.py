@@ -547,9 +547,8 @@ class Input(Value):
   def toSMT(self, defined, state, qvars):
     v = BitVec(self.name, self.type.getSize())
     if self.name[0] == 'C':
-      return v, BoolVal(True)
-    uv = BitVec('def_' + self.name, 1)
-    return v, uv == 1
+      return v, BitVecVal(0, self.type.getSize())
+    return v, BitVec('poison_' + self.name, self.type.getSize())
 
   def register_types(self, manager):
     if self.name[0] == 'C':

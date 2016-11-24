@@ -36,8 +36,9 @@ def getPtrAlignCnstr(ptr, align):
   return ptr & (align-1) == 0
 
 
-def defined_align_access(defined, align, ptr):
+def defined_align_access(defined, align, ptr, poison):
   defined.append(ptr != 0)
+  defined.append(poison != -1)
   # FIXME: ABI-defined
   if align == 0:
     align = 4
@@ -49,12 +50,12 @@ def defined_align_access(defined, align, ptr):
   defined.append(Extract(align-1, 0, ptr) == 0)
 
 
-def undef_val(u, v, qvars):
-  if is_true(u):
+def freeze(v, p, qvars):
+  if p.eq(BitVecVal(0, p.size())):
     return v
   qv = BitVec('undef' + mk_unique_id(), v.size())
   qvars.append(qv)
-  return mk_if(u, v, qv)
+  return (v & ~p) | (qv & p)
 
 
 ################################
@@ -105,7 +106,7 @@ class State:
     src, srcpoison = val
     for i in range(0, bits):
       # little-endian
-      self.store_bit(dst + i, Extract(i, i, src), srcpoison)
+      self.store_bit(dst + i, Extract(i, i, src), Extract(i, i, srcpoison))
 
   def load_bit(self, ptr):
     if use_array_theory():
@@ -122,8 +123,8 @@ class State:
       valb, poisonb = self.load_bit(ptr + i)
       # little-endian
       val.insert(0, valb)
-      poison.append(poisonb)
-    return simplify(mk_concat(val)), simplify(mk_and(poison))
+      poison.insert(0, poisonb)
+    return simplify(mk_concat(val)), simplify(mk_concat(poison))
 
   def newBB(self, name):
     if name in self.bb_pres:
@@ -136,14 +137,14 @@ class State:
       if use_array_theory():
         self.mem = Array('mem0', BitVecSort(get_ptr_size() + 3), BitVecSort(1))
         self.mem_poison = Array('mem_poison0',
-                                BitVecSort(get_ptr_size() + 3), BoolSort())
+                                BitVecSort(get_ptr_size() + 3), BitVecSort(1))
       else:
         self.idx_var = BitVec('idx', get_ptr_size() + 3)
         self.mem = Function('mem0', BitVecSort(get_ptr_size() + 3),
                             BitVecSort(1))(self.idx_var)
         self.mem_poison = Function('mem_poison0',
                                    BitVecSort(get_ptr_size() + 3),
-                                   BoolSort())(self.idx_var)
+                                   BitVecSort(1))(self.idx_var)
     self.current_bb = name
 
   def getAllocaConstraints(self):
@@ -253,8 +254,8 @@ class Freeze(Instr):
     return s + self.v.getName()
 
   def toSMT(self, defined, state, qvars):
-    v,u = state.eval(self.v, defined, qvars)
-    return undef_val(u, v, qvars), BoolVal(True)
+    v,p = state.eval(self.v, defined, qvars)
+    return freeze(v, p, qvars), BitVecVal(0, v.size())
 
   def getTypeConstraints(self):
     return And(self.type == self.v.type,
@@ -377,18 +378,18 @@ class BinOp(Instr):
         undef += [undef_conds[f](v1, v2)]
     return undef
 
-  def _genSMTDefConds(self, a, b, u1, u2, bits):
+  def _genSMTDefConds(self, a, b, p1, p2, qvars, bits):
     # definedness of the instruction
     return {
       self.Add:  lambda: [],
       self.Sub:  lambda: [],
       self.Mul:  lambda: [],
-      self.UDiv: lambda: [u2, b != 0],
-      self.SDiv: lambda: [u2, b != 0,
-                          Or(And(u1, a != (1 << (bits-1))), b != -1)],
-      self.URem: lambda: [u2, b != 0],
-      self.SRem: lambda: [u2, b != 0,
-                          Or(And(u1, a != (1 << (bits-1))), b != -1)],
+      self.UDiv: lambda: [freeze(b, p2, qvars) != 0],
+      self.SDiv: lambda b = freeze(b, p2, qvars) : [b != 0,
+                          Or(freeze(a, p1, qvars) != (1 << (bits-1)), b != -1)],
+      self.URem: lambda: [freeze(b, p2, qvars) != 0],
+      self.SRem: lambda b = freeze(b, p2, qvars) : [b != 0,
+                          Or(freeze(a, p1, qvars) != (1 << (bits-1)), b != -1)],
       self.Shl:  lambda: [],
       self.AShr: lambda: [],
       self.LShr: lambda: [],
@@ -399,25 +400,30 @@ class BinOp(Instr):
 
   def toSMT(self, defined, state, qvars):
     bits = self.type.getSize()
-    v1, u1 = state.eval(self.v1, defined, qvars)
-    v2, u2 = state.eval(self.v2, defined, qvars)
-    u = mk_and([u1, u2] + self._genUndefValConds(v1, v2, bits))
-    defined += self._genSMTDefConds(v1, v2, u1, u2, bits)
-    return {
-      self.Add:  lambda a,b: (a + b, u),
-      self.Sub:  lambda a,b: (a - b, u),
-      self.Mul:  lambda a,b: (a * b, u),
-      self.UDiv: lambda a,b: (UDiv(a, b), u),
-      self.SDiv: lambda a,b: (a / b, u),
-      self.URem: lambda a,b: (URem(a, b), u),
-      self.SRem: lambda a,b: (SRem(a, b), u),
-      self.Shl:  lambda a,b: (a << b, mk_and([u, ULT(b, bits)])),
-      self.AShr: lambda a,b: (a >> b, mk_and([u, ULT(b, bits)])),
-      self.LShr: lambda a,b: (LShR(a, b), mk_and([u, ULT(b, bits)])),
-      self.And:  lambda a,b: (a & b, u),
-      self.Or:   lambda a,b: (a | b, u),
-      self.Xor:  lambda a,b: (a ^ b, u),
-    }[self.op](v1, v2)
+    v1, p1 = state.eval(self.v1, defined, qvars)
+    v2, p2 = state.eval(self.v2, defined, qvars)
+    nonpoison = self._genUndefValConds(v1, v2, bits)
+    defined += self._genSMTDefConds(v1, v2, p1, p2, qvars, bits)
+    fn = {
+      self.Add:  lambda a,b: (a + b, []),
+      self.Sub:  lambda a,b: (a - b, []),
+      self.Mul:  lambda a,b: (a * b, []),
+      self.UDiv: lambda a,b: (UDiv(a, b), []),
+      self.SDiv: lambda a,b: (a / b, []),
+      self.URem: lambda a,b: (URem(a, b), []),
+      self.SRem: lambda a,b: (SRem(a, b), []),
+      self.Shl:  lambda a,b: (a << b, [ULT(b, bits)]),
+      self.AShr: lambda a,b: (a >> b, [ULT(b, bits)]),
+      self.LShr: lambda a,b: (LShR(a, b), [ULT(b, bits)]),
+      self.And:  lambda a,b: (a & b, []),
+      self.Or:   lambda a,b: (a | b, []),
+      self.Xor:  lambda a,b: (a ^ b, []),
+    }[self.op]
+    r1 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))[0]
+    r2 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))[0]
+    val, extranonpoison = fn(v1, v2)
+    return val, mk_if(mk_and(nonpoison + extranonpoison), r1 ^ r2,
+                      BitVecVal(-1, bits))
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,
@@ -557,8 +563,8 @@ class ConversionOp(Instr):
     return '%s%s %s%s' % (self.getOpName(), st, self.v.getName(), tt)
 
   def toSMT(self, defined, state, qvars):
-    v, undef = state.eval(self.v, defined, qvars)
-    return {
+    v, p = state.eval(self.v, defined, qvars)
+    fn = {
       self.Trunc:       lambda v: Extract(self.type.getSize()-1, 0, v),
       self.ZExt:        lambda v: ZeroExt(self.type.getSize() -
                                          self.stype.getSize(), v),
@@ -568,7 +574,8 @@ class ConversionOp(Instr):
       self.Ptr2Int:     lambda v: truncateOrZExt(v, self.type.getSize()),
       self.Int2Ptr:     lambda v: truncateOrZExt(v, self.type.getSize()),
       self.Bitcast:     lambda v: v,
-    }[self.op](v), undef
+    }[self.op]
+    return fn(v), fn(p)
 
   def getTypeConstraints(self):
     cnstr = {
@@ -730,9 +737,12 @@ class Icmp(Instr):
     # Generate all possible comparisons if icmp is generic. Set of comparisons
     # can be restricted in the precondition.
     ops = [self.op] if self.op != self.Var else range(self.Var)
-    v1, u1 = state.eval(self.v1, defined, qvars)
-    v2, u2 = state.eval(self.v2, defined, qvars)
-    return self.recurseSMT(ops, v1, v2, 0), mk_and([u1, u2])
+    v1, p1 = state.eval(self.v1, defined, qvars)
+    v2, p2 = state.eval(self.v2, defined, qvars)
+    fn = lambda a,b : self.recurseSMT(ops, a, b, 0)
+    r1 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))
+    r2 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))
+    return fn(v1, v2), mk_if(Or(p1 == -1, p2 == -1), BitVecVal(1, 1), r1 ^ r2)
 
   def getTypeConstraints(self):
     return And(self.stype == self.v1.type,
@@ -828,7 +838,8 @@ class Select(Instr):
     c = (c == 1)
     v1, u1 = state.eval(self.v1, defined, qvars)
     v2, u2 = state.eval(self.v2, defined, qvars)
-    return mk_if(c, v1, v2), mk_and([uc, mk_if(c, u1, u2)])
+    return mk_if(c, v1, v2), mk_if(uc == 1, BitVecVal(-1, v1.size()),
+                                            mk_if(c, u1, u2))
 
   def getTypeConstraints(self):
     return And(self.type == self.v1.type,
@@ -893,7 +904,7 @@ class Alloca(Instr):
 
     if size == 0:
       qvars.append(ptr)
-      return ptr, BoolVal(True)
+      return ptr, BitVecVal(-1, self.type.getSize())
 
     if size > 8:
       defined.append(ULE(ptr, -(size >> 3)))
@@ -901,7 +912,7 @@ class Alloca(Instr):
                 getPtrAlignCnstr(ptr, self.align)]
 
     state.addAlloca(ptr, size)
-    return ptr, BoolVal(True)
+    return ptr, BitVecVal(0, self.type.getSize())
 
   def getTypeConstraints(self):
     return And(self.numElems.getType() == self.elemsType,
@@ -981,9 +992,8 @@ class Load(Instr):
   def toSMT(self, defined, state, qvars):
     qvars += state.mem_qvars
     ptr, poison = state.eval(self.v, defined, qvars)
-    defined.append(poison)
     access_sz = getAllocSize(self.type)
-    defined_align_access(defined, self.align, ptr)
+    defined_align_access(defined, self.align, ptr, poison)
     return state.load(ptr, self.type.getSize(), defined)
 
   def getTypeConstraints(self):
@@ -1026,13 +1036,12 @@ class Store(Instr):
   def toSMT(self, defined, state, qvars):
     qvars_new = []
     src = state.eval(self.src, defined, qvars_new)
-    tgt, utgt = state.eval(self.dst, defined, qvars_new)
+    tgt, ptgt = state.eval(self.dst, defined, qvars_new)
     qvars += qvars_new
     state.mem_qvars += qvars_new
-    defined.append(utgt)
 
     write_size = getAllocSize(self.stype)
-    defined_align_access(defined, self.align, tgt)
+    defined_align_access(defined, self.align, tgt, ptgt)
     state.store(tgt, src, self.stype.getSize(), defined)
     return None, None
 
@@ -1099,9 +1108,10 @@ class Br(TerminatorInst):
   def getSuccessors(self, state):
     defined = []
     qvars = []
-    cond, undef = state.eval(self.cond, defined, qvars)
-    return [(self.true, mk_and([cond != 0, undef] + defined), qvars),
-            (self.false, mk_and([cond == 0, undef] + defined), qvars)]
+    cond, poison = state.eval(self.cond, defined, qvars)
+    poison = poison == 0
+    return [(self.true, mk_and([cond != 0, poison] + defined), qvars),
+            (self.false, mk_and([cond == 0, poison] + defined), qvars)]
 
   def toSMT(self, defined, state, qvars):
     return None, None

@@ -62,7 +62,8 @@ class ConstantVal(Constant):
     return c
 
   def toSMT(self, defined, state, qvars):
-    return BitVecVal(self.val, self.type.getSize()), BoolVal(True)
+    return BitVecVal(self.val, self.type.getSize()),\
+           BitVecVal(0, self.type.getSize())
 
   def register_types(self, manager):
     if isinstance(self.type, PtrType):
@@ -87,7 +88,7 @@ class PoisonVal(Constant):
     return self.type.getTypeConstraints()
 
   def toSMT(self, defined, state, qvars):
-    return BitVecVal(0, self.type.getSize()), BoolVal(False)
+    return BitVecVal(0, self.type.getSize()), BitVecVal(-1, self.type.getSize())
 
 
 ################################
@@ -123,12 +124,12 @@ class CnstUnaryOp(Constant):
                    self.type.getTypeConstraints()])
 
   def toSMT(self, defined, state, qvars):
-    v, u = self.v.toSMT(defined, state, qvars)
-    assert is_true(u)
+    v, p = self.v.toSMT(defined, state, qvars)
+    assert p.eq(BitVecVal(0, p.size()))
     return {
       self.Not: lambda a: ~a,
       self.Neg: lambda a: -a,
-    }[self.op](v), BoolVal(True)
+    }[self.op](v), p
 
   def register_types(self, manager):
     self.v.register_types(manager)
@@ -177,9 +178,10 @@ class CnstBinaryOp(Constant):
                    self.type.getTypeConstraints()])
 
   def toSMT(self, defined, state, qvars):
-    v1, u1 = self.v1.toSMT(defined, state, qvars)
-    v2, u2 = self.v2.toSMT(defined, state, qvars)
-    assert is_true(u1) and is_true(u2)
+    v1, p1 = self.v1.toSMT(defined, state, qvars)
+    v2, p2 = self.v2.toSMT(defined, state, qvars)
+    zero = BitVecVal(0, p1.size())
+    assert p1.eq(zero) and p2.eq(zero)
     return {
       self.And:  lambda a,b: a & b,
       self.Or:   lambda a,b: a | b,
@@ -194,7 +196,7 @@ class CnstBinaryOp(Constant):
       self.AShr: lambda a,b: a >> b,
       self.LShr: lambda a,b: LShR(a, b),
       self.Shl:  lambda a,b: a << b,
-    }[self.op](v1, v2), BoolVal(True)
+    }[self.op](v1, v2), zero
 
   def register_types(self, manager):
     self.v1.register_types(manager)
@@ -328,8 +330,8 @@ class CnstFunction(Constant):
     size = self.type.getSize()
     args = []
     for v in self.args:
-      a, u = v.toSMT(defined, state, qvars)
-      defined.append(u)
+      a, p = v.toSMT(defined, state, qvars)
+      #FIXME assert p.eq(BitVecVal(0, p.size()))
       args.append(a)
 
     d, v = {
@@ -358,7 +360,7 @@ class CnstFunction(Constant):
       del defined[:]
     else:
       defined += d
-    return v, BoolVal(True)
+    return v, BitVecVal(0, size)
 
   def register_types(self, manager):
     for arg in self.args:

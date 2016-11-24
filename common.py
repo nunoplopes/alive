@@ -15,6 +15,10 @@
 from z3 import *
 
 gbl_unique_id = 0
+def reset_unique_id():
+  global gbl_unique_id
+  gbl_unique_id = 0
+
 def mk_unique_id():
   global gbl_unique_id
   id = str(gbl_unique_id)
@@ -95,6 +99,14 @@ def mk_concat(l):
   if len(l) == 1:
     return l[0]
   return Concat(l)
+
+
+def mk_bvnot(v):
+  if v.decl().name() == 'bvnot':
+    return v.children()[0]
+  if isinstance(v, BitVecNumRef):
+    return simplify(~v)
+  return ~v
 
 
 def mk_forall(l, f):

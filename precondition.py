@@ -155,9 +155,9 @@ class BinaryBoolPred(BoolPred):
 
   def toSMT(self, state):
     defined = []
-    v1, u1 = self.v1.toSMT(defined, state, [])
-    v2, u2 = self.v2.toSMT(defined, state, [])
-    assert is_true(u1) and is_true(u2)
+    v1, p1 = self.v1.toSMT(defined, state, [])
+    v2, p2 = self.v2.toSMT(defined, state, [])
+    assert p1.eq(BitVecVal(0, p1.size())) and p2.eq(BitVecVal(0, p2.size()))
     return defined, [{
       self.EQ: lambda a,b: a == b,
       self.NE: lambda a,b: a != b,
