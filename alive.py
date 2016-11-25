@@ -258,7 +258,7 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
        str_model(m, (a, poisona)), 'UB', k, srcv, tgtv, types))
 
     # Check if domain of poison values of Src implies that of Tgt.
-    check_expr(qvars, base_cnstr + [(poisonb & ~poisonb) != 0], lambda m :
+    check_expr(qvars, base_cnstr + [(poisonb & ~poisona) != 0], lambda m :
       ("Target is more poisonous than Source for %s %s\n"
          % (var_type(k, types), k),
        str_model(m, (a, poisona)), str_model(m, (b, poisonb)), k, srcv, tgtv,
