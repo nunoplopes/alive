@@ -339,7 +339,7 @@ class BinOp(Instr):
       if f not in allowed_flags:
         raise ParseError('Flag not supported by ' + self.getOpName(), f)
 
-  def _genUndefValConds(self, v1, v2, bits):
+  def _genPoisonConds(self, v1, v2, p1, p2, qvars):
     undef_conds = {
       self.Add: {'nsw': lambda a,b: SignExt(1,a)+SignExt(1,b) == SignExt(1,a+b),
                  'nuw': lambda a,b: ZeroExt(1,a)+ZeroExt(1,b) == ZeroExt(1,a+b),
@@ -372,24 +372,28 @@ class BinOp(Instr):
     if do_infer_flags():
       for flag,fn in undef_conds.items():
         bit = get_flag_var(flag, self.getName())
-        undef += [Implies(bit == 1, fn(v1, v2))]
+        undef += [Implies(bit == 1,
+                          fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars)))]
     else:
       for f in self.flags:
-        undef += [undef_conds[f](v1, v2)]
+        undef += [undef_conds[f](freeze(v1, p1, qvars), freeze(v2, p2, qvars))]
     return undef
 
-  def _genSMTDefConds(self, a, b, p1, p2, qvars, bits):
+  def _genSMTDefConds(self, a, b, p1, p2, bits):
     # definedness of the instruction
+    if bits > 1:
+      a_not_intmin = lambda : [Extract(bits-2, 0, a & ~p1) != 0,
+                               Extract(bits-1, bits-1, a | p1) == 0]
+    else:
+      a_not_intmin = lambda : [(a | p1) == 0]
     return {
       self.Add:  lambda: [],
       self.Sub:  lambda: [],
       self.Mul:  lambda: [],
-      self.UDiv: lambda: [freeze(b, p2, qvars) != 0],
-      self.SDiv: lambda b = freeze(b, p2, qvars) : [b != 0,
-                          Or(freeze(a, p1, qvars) != (1 << (bits-1)), b != -1)],
-      self.URem: lambda: [freeze(b, p2, qvars) != 0],
-      self.SRem: lambda b = freeze(b, p2, qvars) : [b != 0,
-                          Or(freeze(a, p1, qvars) != (1 << (bits-1)), b != -1)],
+      self.UDiv: lambda: [b & ~p2 != 0],
+      self.SDiv: lambda: [b & ~p2 != 0, Or(a_not_intmin() + [(b | p2) != -1])],
+      self.URem: lambda: [b & ~p2 != 0],
+      self.SRem: lambda: [b & ~p2 != 0, Or(a_not_intmin() + [(b | p2) != -1])],
       self.Shl:  lambda: [],
       self.AShr: lambda: [],
       self.LShr: lambda: [],
@@ -398,12 +402,31 @@ class BinOp(Instr):
       self.Xor:  lambda: [],
       }[self.op]()
 
+  def _poisonPropagation(self, a, b, p1, p2, fn, qvars):
+    generic = lambda : fn(freeze(a, p1, qvars), freeze(b, p2, qvars))[0] ^\
+                       fn(freeze(a, p1, qvars), freeze(b, p2, qvars))[0]
+    return {
+      self.Add:  generic,
+      self.Sub:  generic,
+      self.Mul:  generic,
+      self.UDiv: generic,
+      self.SDiv: generic,
+      self.URem: generic,
+      self.SRem: generic,
+      self.Shl:  lambda : freeze(a, p1, qvars) << freeze(b, p2, qvars),
+      self.AShr: lambda : freeze(a, p1, qvars) >> freeze(b, p2, qvars),
+      self.LShr: lambda : LShR(freeze(a, p1, qvars), freeze(b, p2, qvars)),
+      self.And:  lambda : (a & p2) | (b & p1) | (p1 & p2),
+      self.Or:   lambda : (~a & p2) | (~b & p1) | (p1 & p2),
+      self.Xor:  lambda : p1 | p2,
+      }[self.op]()
+
   def toSMT(self, defined, state, qvars):
     bits = self.type.getSize()
     v1, p1 = state.eval(self.v1, defined, qvars)
     v2, p2 = state.eval(self.v2, defined, qvars)
-    nonpoison = self._genUndefValConds(v1, v2, bits)
-    defined += self._genSMTDefConds(v1, v2, p1, p2, qvars, bits)
+    nonpoison = self._genPoisonConds(v1, v2, p1, p2, qvars)
+    defined += self._genSMTDefConds(v1, v2, p1, p2, bits)
     fn = {
       self.Add:  lambda a,b: (a + b, []),
       self.Sub:  lambda a,b: (a - b, []),
@@ -412,17 +435,16 @@ class BinOp(Instr):
       self.SDiv: lambda a,b: (a / b, []),
       self.URem: lambda a,b: (URem(a, b), []),
       self.SRem: lambda a,b: (SRem(a, b), []),
-      self.Shl:  lambda a,b: (a << b, [ULT(b, bits)]),
-      self.AShr: lambda a,b: (a >> b, [ULT(b, bits)]),
-      self.LShr: lambda a,b: (LShR(a, b), [ULT(b, bits)]),
+      self.Shl:  lambda a,b: (a << b, [ULT(b | p2, bits)]),
+      self.AShr: lambda a,b: (a >> b, [ULT(b | p2, bits)]),
+      self.LShr: lambda a,b: (LShR(a, b), [ULT(b | p2, bits)]),
       self.And:  lambda a,b: (a & b, []),
       self.Or:   lambda a,b: (a | b, []),
       self.Xor:  lambda a,b: (a ^ b, []),
     }[self.op]
-    r1 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))[0]
-    r2 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))[0]
     val, extranonpoison = fn(v1, v2)
-    return val, mk_if(mk_and(nonpoison + extranonpoison), r1 ^ r2,
+    return val, mk_if(mk_and(nonpoison + extranonpoison),
+                      self._poisonPropagation(v1, v2, p1, p2, fn, qvars),
                       BitVecVal(-1, bits))
 
   def getTypeConstraints(self):
@@ -711,17 +733,17 @@ class Icmp(Instr):
 
   def opToSMT(self, op, a, b):
     return {
-      self.EQ:  lambda a,b: toBV(a == b),
-      self.NE:  lambda a,b: toBV(a != b),
-      self.UGT: lambda a,b: toBV(UGT(a, b)),
-      self.UGE: lambda a,b: toBV(UGE(a, b)),
-      self.ULT: lambda a,b: toBV(ULT(a, b)),
-      self.ULE: lambda a,b: toBV(ULE(a, b)),
-      self.SGT: lambda a,b: toBV(a > b),
-      self.SGE: lambda a,b: toBV(a >= b),
-      self.SLT: lambda a,b: toBV(a < b),
-      self.SLE: lambda a,b: toBV(a <= b),
-    }[op](a, b)
+      self.EQ:  lambda : a == b,
+      self.NE:  lambda : a != b,
+      self.UGT: lambda : UGT(a, b),
+      self.UGE: lambda : UGE(a, b),
+      self.ULT: lambda : ULT(a, b),
+      self.ULE: lambda : ULE(a, b),
+      self.SGT: lambda : a > b,
+      self.SGE: lambda : a >= b,
+      self.SLT: lambda : a < b,
+      self.SLE: lambda : a <= b,
+    }[op]()
 
   def recurseSMT(self, ops, a, b, i):
     if len(ops) == 1:
@@ -742,7 +764,7 @@ class Icmp(Instr):
     fn = lambda a,b : self.recurseSMT(ops, a, b, 0)
     r1 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))
     r2 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))
-    return fn(v1, v2), mk_if(Or(p1 == -1, p2 == -1), BitVecVal(1, 1), r1 ^ r2)
+    return toBV(fn(v1, v2)), toBV(Or(p1 == -1, p2 == -1, r1 != r2))
 
   def getTypeConstraints(self):
     return And(self.stype == self.v1.type,
