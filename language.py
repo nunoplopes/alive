@@ -50,12 +50,16 @@ def defined_align_access(defined, align, ptr, poison):
   defined.append(Extract(align-1, 0, ptr) == 0)
 
 
+def mk_undef_var(qvars, size):
+  qv = BitVec('undef' + mk_unique_id(), size)
+  qvars.append(qv)
+  return qv
+
+
 def freeze(v, p, qvars):
   if p.eq(BitVecVal(0, p.size())):
     return v
-  qv = BitVec('undef' + mk_unique_id(), v.size())
-  qvars.append(qv)
-  return (v & ~p) | (qv & p)
+  return (v & ~p) | (mk_undef_var(qvars, v.size()) & p)
 
 
 ################################
@@ -403,8 +407,10 @@ class BinOp(Instr):
       }[self.op]()
 
   def _poisonPropagation(self, a, b, p1, p2, fn, qvars):
-    generic = lambda : fn(freeze(a, p1, qvars), freeze(b, p2, qvars))[0] ^\
-                       fn(freeze(a, p1, qvars), freeze(b, p2, qvars))[0]
+    generic = lambda u1 = mk_undef_var(qvars, a.size()), \
+                     u2 = mk_undef_var(qvars, b.size()) : \
+      (fn(freeze(a, p1, qvars), u1)[0] ^ fn(freeze(a, p1, qvars), u1)[0]) | \
+      (fn(u2, freeze(b, p2, qvars))[0] ^ fn(u2, freeze(b, p2, qvars))[0])
     return {
       self.Add:  generic,
       self.Sub:  generic,
@@ -413,12 +419,12 @@ class BinOp(Instr):
       self.SDiv: generic,
       self.URem: generic,
       self.SRem: generic,
-      self.Shl:  lambda : p1 << freeze(b, p2, qvars),
-      self.AShr: lambda : p1 >> freeze(b, p2, qvars),
-      self.LShr: lambda : LShR(p1, freeze(b, p2, qvars)),
-      self.And:  lambda : (a & p2) | (b & p1) | (p1 & p2),
-      self.Or:   lambda : (~a & p2) | (~b & p1) | (p1 & p2),
-      self.Xor:  lambda : p1 | p2,
+      self.Shl:  generic,
+      self.AShr: generic,
+      self.LShr: generic,
+      self.And:  generic,
+      self.Or:   generic,
+      self.Xor:  generic,
       }[self.op]()
 
   def toSMT(self, defined, state, qvars):
@@ -765,6 +771,11 @@ class Icmp(Instr):
     r1 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))
     r2 = fn(freeze(v1, p1, qvars), freeze(v2, p2, qvars))
     return toBV(fn(v1, v2)), toBV(Or(p1 == -1, p2 == -1, r1 != r2))
+    #u1 = mk_undef_var(qvars, v1.size())
+    #u2 = mk_undef_var(qvars, v2.size())
+    #u1 = fn(freeze(v1, p1, qvars), u1) != fn(freeze(v1, p1, qvars), u1)
+    #u2 = fn(u2, freeze(v2, p2, qvars)) != fn(u2, freeze(v2, p2, qvars))
+    #return toBV(fn(v1, v2)), toBV(Or(p1 == -1, p2 == -1, u1, u2))
 
   def getTypeConstraints(self):
     return And(self.stype == self.v1.type,
@@ -978,14 +989,15 @@ class GEP(Instr):
     type = self.type
     for i in range(len(self.idxs)):
       idx, u = state.eval(self.idxs[i], defined, qvars)
-      undef.append(u)
+      ## FIXME undef.append(u)
       idx = truncateOrSExt(idx, ptr)
       ptr += getAllocSize(type.getPointeeType())/8 * idx
       if i + 1 != len(self.idxs):
         type = type.getUnderlyingType()
 
     # TODO: handle inbounds
-    return ptr, mk_and(undef)
+    #FIXME poison
+    return ptr, BitVecVal(0, ptr.size())
 
   def getTypeConstraints(self):
     return And(self.type.ensureTypeDepth(len(self.idxs)),
