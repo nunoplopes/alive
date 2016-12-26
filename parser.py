@@ -1,4 +1,4 @@
-# Copyright 2014-2015 The Alive authors.
+# Copyright 2014-2016 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -84,6 +84,8 @@ def parseOperand(v, type):
 
   if v == 'poison':
     c = PoisonVal(type)
+  elif v == 'undef':
+    c = UndefVal(type)
   elif v == 'true':
     c = ConstantVal(1, type.ensureIntType(1))
   elif v == 'false':
@@ -331,7 +333,7 @@ i1 = Optional('i1').setParseAction(lambda toks : IntType(1))
 
 flags = ZeroOrMore(Literal('nsw') | Literal('nuw') | Literal('exact')).\
         setParseAction(pa(lambda toks : [toks]))
-operand = cnst_expr | Literal('poison')
+operand = cnst_expr | Literal('poison') | Literal('undef')
 
 typeoperand = (opttype + operand).setParseAction(pa(parseTypeOperand))
 intoperand  = (opttype + operand).setParseAction(pa(parseIntOperand))

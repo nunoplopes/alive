@@ -1,4 +1,4 @@
-# Copyright 2014-2015 The Alive authors.
+# Copyright 2014-2016 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,6 +88,24 @@ class PoisonVal(Constant):
 
   def toSMT(self, defined, state, qvars):
     return BitVecVal(0, self.type.getSize()), BoolVal(False)
+
+
+class UndefVal(Constant):
+  def __init__(self, type):
+    assert isinstance(type, Type)
+    self.type = type
+    self.mk_name()
+
+  def __repr__(self):
+    return 'undef'
+
+  def getTypeConstraints(self):
+    return self.type.getTypeConstraints()
+
+  def toSMT(self, defined, state, qvars):
+    var = BitVec(self.getUniqueName(), self.type.getSize())
+    qvars.append(var)
+    return var, BoolVal(True)
 
 
 ################################

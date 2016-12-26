@@ -1,4 +1,4 @@
-# Copyright 2014-2015 The Alive authors.
+# Copyright 2014-2016 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -169,8 +169,16 @@ class State:
 
   def eval(self, v, defined, qvars):
     (v,u), d, q = self.vars[v.getUniqueName()]
+    undefs = []
+    for qvar in set(self.qvars + q):
+      if str(qvar)[0:6] == 'undef_':
+        newvar = BitVec('undef_' + mk_unique_id(), qvar.sort())
+        undefs.append((qvar, newvar))
+        qvars.append(newvar)
+      else:
+        qvars.append(qvar)
+    v = substitute(v, undefs)
     defined += d
-    qvars += self.qvars + q
     return v, u
 
   def items(self):
