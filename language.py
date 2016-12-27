@@ -168,7 +168,7 @@ class State:
     return cnstr
 
   def eval(self, v, defined, qvars):
-    (v,u), d, q = self.vars[v.getUniqueName()]
+    (v,p), d, q = self.vars[v.getUniqueName()]
     undefs = []
     for qvar in set(self.qvars + q):
       if str(qvar)[0:6] == 'undef_':
@@ -178,8 +178,9 @@ class State:
       else:
         qvars.append(qvar)
     v = substitute(v, undefs)
+    p = substitute(p, undefs)
     defined += d
-    return v, u
+    return v, p
 
   def items(self):
     for k,v in self.vars.items():
