@@ -20,6 +20,7 @@ from parser import parse_opt_file
 from gen import generate_switched_suite
 
 quiet_mode = False
+tv_mode = False
 
 
 def block_model(s, sneg, m):
@@ -154,7 +155,7 @@ def check_expr(qvars, expr, error):
     gen_benchmark(s)
 
   res = s.check()
-  if res != unsat:
+  if (tv_mode and res == sat) or (not tv_mode and res != unsat):
     check_incomplete_solver(res, s)
     e, src, tgt, stop, srcv, tgtv, types = error(s)
     print('\nERROR: %s' % e)
@@ -436,18 +437,19 @@ def check_opt(opt):
   sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
-  has_unreach = any(v.startswith('unreachable') for v in ident_tgt.keys())
-  for v in ident_src.keys():
-    if v[0] == '%' and v not in used_src and v not in used_tgt and\
-       v in skip_tgt and not has_unreach:
-      print('ERROR: Temporary register %s unused and not overwritten' % v)
-      exit(-1)
+  if not tv_mode:
+    has_unreach = any(v.startswith('unreachable') for v in ident_tgt.keys())
+    for v in ident_src.keys():
+      if v[0] == '%' and v not in used_src and v not in used_tgt and\
+        v in skip_tgt and not has_unreach:
+        print('ERROR: Temporary register %s unused and not overwritten' % v)
+        exit(-1)
 
-  for v in ident_tgt.keys():
-    if v[0] == '%' and v not in used_tgt and v not in ident_src:
-      print('ERROR: Temporary register %s unused and does not overwrite any'\
-            ' Source register' % v)
-      exit(-1)
+    for v in ident_tgt.keys():
+      if v[0] == '%' and v not in used_tgt and v not in ident_src:
+        print('ERROR: Temporary register %s unused and does not overwrite any'\
+              ' Source register' % v)
+        exit(-1)
 
   # build constraints that indicate the number of users for each register.
   users_count = countUsers(src)
@@ -509,6 +511,8 @@ def main():
   parser.add_argument('--use-array-th', action='store_true', default=False,
     help='Use array theory to encode memory operations (default: False)',
     dest='array_th')
+  parser.add_argument('--tv', action='store_true', default=False,
+    help='Translation validation mode', dest='tv')
   parser.add_argument('file', type=argparse.FileType('r'), nargs='*',
     default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
@@ -518,8 +522,9 @@ def main():
 
   set_infer_flags(args.infer_flags)
   set_use_array_theory(args.array_th)
-  global quiet_mode
+  global quiet_mode, tv_mode
   quiet_mode = args.quiet
+  tv_mode = args.tv
 
   gen = []
 
