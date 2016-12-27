@@ -15,7 +15,7 @@
 import argparse, glob, re, sys
 from language import *
 from precondition import *
-from parser import parse_opt_file
+from langparser import parse_opt_file
 from codegen import *
 from itertools import combinations, count
 from collections import defaultdict
