@@ -179,7 +179,7 @@ class State:
         qvars.append(qvar)
     v = substitute(v, undefs)
     p = substitute(p, undefs)
-    defined += d
+    defined += [substitute(di, undefs) for di in d]
     return v, p
 
   def items(self):
