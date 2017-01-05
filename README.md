@@ -20,10 +20,14 @@ The 'tests' directory has multiple examples of optimizations.
 
 More Information
 ----------------
-
 Please see this paper for more details about Alive:
 
   http://www.cs.utah.edu/~regehr/papers/pldi15.pdf
+
+
+Online Version
+--------------
+Alive is also available online at: http://rise4fun.com/Alive
 
 
 Generating Benchmarks
