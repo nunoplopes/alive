@@ -9,6 +9,7 @@
   keywords:	['add', 'sub', 'mul', 'sdiv', 'udiv', 'srem', 'urem',
                  'shl', 'ashr', 'lshr',
                  'and', 'or', 'xor', 'select', 'freeze',
+                 'nsw', 'nuw', 'exact',
                  'icmp', 'eq', 'ne', 'ule', 'sle', 'ult', 'slt', 'uge', 'sge',
                  'ugt', 'sgt',
                  'zext', 'sext', 'trunc', 'ZExtOrTrunc',
