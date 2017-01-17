@@ -31,10 +31,14 @@ if (strlen($data) > 1024) {
     stream_set_timeout($pipes[0], 0, 1);
     $out = stream_get_contents($pipes[0]);
   }
+
+  $status = proc_get_status($p);
+  if ($status['exitcode'] === 137 || $status['signaled'])
+    $out .= "\nWARN: Alive timed out!";
   proc_close($p);
 
-  if (!strpos($out, 'ERROR: ') && !strpos($out, 'is correct'))
-    $out .= "\nAlive timed out!";
+  if (!$out)
+    $out = 'ERROR: no output from Alive';
 
   echo json_encode($out);
 }
