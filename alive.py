@@ -136,8 +136,7 @@ tactic = AndThen(
   Cond(Probe('is-qfbv'), Tactic('qfbv'),
        OrElse(TryFor(Tactic('bv'), 900),
               TryFor(Tactic('ufbv'), 900),
-              TryFor(Tactic('smt'), 900),
-              Tactic('bv')))
+              TryFor(Tactic('smt'), 3000)))
 )
 
 correct_exprs = {}
