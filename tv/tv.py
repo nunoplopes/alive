@@ -57,7 +57,7 @@ for opt in re.split('\ndefine i\d+ @',
 input = open(file + '.ll', 'r').read()
 s = ''
 i = 0
-for orig in input.split("; ModuleID = 'opt-fuzz'\n\n")[1:]:
+for orig in re.split('\ndefine i\d+ @', input)[1:]:
   fnname = reg.search(orig).group(0)
   fnargs = orig.splitlines()[0].count(',') + 1
   orig = txt2opt(orig)
