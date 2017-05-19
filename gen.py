@@ -542,7 +542,7 @@ def generate_opt(rule, opt, out):
       CDefinition.init(
         cg.PtrInstruction,
         cg.get_cexp(tgt[root_name]),
-        CFunctionCall('ReplaceInstUsesWith', CVariable('*I'), cg.get_cexp(new_root.v))))
+        CFunctionCall('replaceInstUsesWith', CVariable('*I'), cg.get_cexp(new_root.v))))
   else:
     body.extend(new_root.visit_target(cg, False))
 
@@ -581,8 +581,8 @@ def generate_suite(opts, out):
 
   if SIMPLIFY:
     out.write('''
-  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AC)) {
-    return ReplaceInstUsesWith(*I, V);
+  if (Value *V = SimplifyInstruction(I, SQ)) {
+    return replaceInstUsesWith(*I, V);
   }
 ''')
 
@@ -633,8 +633,8 @@ def generate_switched_suite(opts, out):
 
   if SIMPLIFY:
     out.write('''
-  if (Value *V = SimplifyInstruction(I, DL, TLI, DT, AC)) {
-    return ReplaceInstUsesWith(*I, V);
+  if (Value *V = SimplifyInstruction(I, SQ)) {
+    return replaceInstUsesWith(*I, V);
   }
 ''')
 

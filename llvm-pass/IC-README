@@ -7,9 +7,7 @@ Building LLVM with Alive instead of InstCombine.
 2. Copy contents of alive.inc into InstructionCombining.cpp, where it says
 "Insert InstCombiner::runOnInstruction here".
 
-3. Change header of runOnInstruction to "InstCombiner::runOnInstruction".
+3. Replace InstCombineInternal.h and InstructionCombining.cpp in a fresh copy of
+LLVM with the versions in this directory.
 
-4. Replace InstCombine.h and InstructionCombining.cpp in a fresh copy of LLVM 3.4.1
-with the versions in this directory.
-
-5. Configure and compile.
+4. Compile.

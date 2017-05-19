@@ -381,11 +381,12 @@ class LLVMBoolPred(BoolPred):
       if isinstance(a, Constant):
         return a.get_APInt(manager).dot('isPowerOf2', [])
 
-      return CFunctionCall('isKnownToBeAPowerOfTwo', manager.get_cexp(a))
+      return CFunctionCall('isKnownToBeAPowerOfTwo', manager.get_cexp(a),
+        CVariable('DL'))
 
     if self.op == LLVMBoolPred.isPower2OrZ:
       return CFunctionCall('isKnownToBeAPowerOfTwo',
-        manager.get_cexp(self.args[0]), CVariable('true'))
+        manager.get_cexp(self.args[0]), CVariable('DL'), CVariable('true'))
 
     if self.op == LLVMBoolPred.NUWAdd:
       return CBinExpr('==',
@@ -407,7 +408,7 @@ class LLVMBoolPred(BoolPred):
       return CFunctionCall(self.opnames[self.op], 
         manager.get_cexp(self.args[0]),
         manager.get_cexp(self.args[1]),
-        CVariable('I'))
+        CVariable('*I'))
 
     opname = LLVMBoolPred.opnames[self.op]
     args = []
@@ -417,15 +418,18 @@ class LLVMBoolPred(BoolPred):
       else:
         args.append(manager.get_cexp(self.args[i]))
 
-    if self.op in {LLVMBoolPred.isShiftedMask, LLVMBoolPred.isSignBit}:
+    if self.op == LLVMBoolPred.isShiftedMask:
       return args[0].dot(LLVMBoolPred.opnames[self.op], [])
+
+    if self.op == LLVMBoolPred.isSignBit:
+      return args[0].dot('isSignMask', [])
 
     if self.op == LLVMBoolPred.OneUse:
       return args[0].arr('hasOneUse', [])
 
     if self.op in {LLVMBoolPred.NSWAdd, LLVMBoolPred.NSWSub,
         LLVMBoolPred.NUWSub}:
-      return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('I'))
+      return CFunctionCall(self.opnames[self.op], args[0], args[1], CVariable('*I'))
       # TODO: obtain root from manager?
 
     return CFunctionCall(self.opnames[self.op], *args)
