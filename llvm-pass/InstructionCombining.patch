@@ -1,0 +1,82 @@
+Index: InstructionCombining.cpp
+===================================================================
+--- InstructionCombining.cpp	(revision 303414)
++++ InstructionCombining.cpp	(working copy)
+@@ -2909,7 +2909,8 @@
+     DEBUG(raw_string_ostream SS(OrigI); I->print(SS); OrigI = SS.str(););
+     DEBUG(dbgs() << "IC: Visiting: " << OrigI << '\n');
+ 
+-    if (Instruction *Result = visit(*I)) {
++    if (Instruction *Result = runOnInstruction(I)) {
++    //if (Instruction *Result = visit(*I)) {
+       ++NumCombined;
+       // Should we replace the old instruction with a new one?
+       if (Result != I) {
+@@ -3181,6 +3182,67 @@
+   AU.addPreserved<GlobalsAAWrapperPass>();
+ }
+ 
++bool hasNoSignedWrap(Value *I) {
++  if (OverflowingBinaryOperator *op = dyn_cast<OverflowingBinaryOperator>(I)) {
++    return op->hasNoSignedWrap();
++  }
++  return false;
++}
++
++bool hasNoUnsignedWrap(Value *I) {
++  if (OverflowingBinaryOperator *op = dyn_cast<OverflowingBinaryOperator>(I)) {
++    return op->hasNoUnsignedWrap();
++  }
++  return false;
++}
++
++bool isExact(Value *I) {
++  if (PossiblyExactOperator *op = dyn_cast<PossiblyExactOperator>(I)) {
++    return op->isExact();
++  }
++  return false;
++}
++
++/*
++bool WillNotOverflowSignedMul(const APInt &x, const APInt &y) {
++  bool Overflow;
++  APInt z = x.smul_ov(y, Overflow);
++  return !Overflow;
++}
++*/
++
++bool WillNotOverflowUnsignedMul(const APInt &x, const APInt &y) {
++  bool Overflow;
++  APInt z = x.umul_ov(y, Overflow);
++  return !Overflow;
++}
++
++bool WillNotOverflowUnsignedShl(const APInt &x, const APInt &y) {
++  bool Overflow;
++  APInt z = x.ushl_ov(y, Overflow);
++  return !Overflow;
++}
++
++APInt InstCombiner::computeKnownZeroBits(Value *V, Instruction *CxtI) {
++  unsigned BitWidth = V->getType()->getScalarSizeInBits();
++  KnownBits Known = KnownBits(BitWidth);
++  computeKnownBits(V, Known, 0, CxtI);
++  return Known.Zero;
++}
++
++APInt InstCombiner::computeKnownOneBits(Value *V, Instruction *CxtI) {
++  unsigned BitWidth = V->getType()->getScalarSizeInBits();
++  KnownBits Known = KnownBits(BitWidth);
++  computeKnownBits(V, Known, 0, CxtI);
++  return Known.One;
++}
++
++// ----------------------------
++// Insert InstCombiner::runOnInstruction here
++// ----------------------------
++#include "alive.inc"
++
++
+ bool InstructionCombiningPass::runOnFunction(Function &F) {
+   if (skipFunction(F))
+     return false;
