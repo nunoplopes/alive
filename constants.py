@@ -387,10 +387,12 @@ class CnstFunction(Constant):
       return True, CFunctionCall('ComputeNumSignBits', manager.get_cexp(self.args[0]))
 
     if self.op == CnstFunction.obits:
-      return False, CFunctionCall('computeKnownOneBits', manager.get_cexp(self.args[0]))
+      return False, CFunctionCall('computeKnownOneBits',
+        manager.get_cexp(self.args[0]), CVariable('I'))
 
     if self.op == CnstFunction.zbits:
-      return False, CFunctionCall('computeKnownZeroBits', manager.get_cexp(self.args[0]))
+      return False, CFunctionCall('computeKnownZeroBits',
+        manager.get_cexp(self.args[0]), CVariable('I'))
 
     if self.op == CnstFunction.ctlz:
       return True, self.args[0].get_APInt(manager).dot('countLeadingZeros', [])

@@ -1,0 +1,25 @@
+Index: InstCombineInternal.h
+===================================================================
+--- InstCombineInternal.h	(revision 303414)
++++ InstCombineInternal.h	(working copy)
+@@ -237,6 +237,9 @@
+   /// \returns true if the IR is changed.
+   bool run();
+ 
++  //ALIVE
++  Instruction *runOnInstruction(Instruction *I);
++
+   AssumptionCache &getAssumptionCache() const { return AC; }
+ 
+   const DataLayout &getDataLayout() const { return DL; }
+@@ -534,6 +537,10 @@
+     return llvm::computeKnownBits(V, DL, Depth, &AC, CxtI, &DT);
+   }
+ 
++  //ALIVE
++  APInt computeKnownZeroBits(Value *V, Instruction *CxtI);
++  APInt computeKnownOneBits(Value *V, Instruction *CxtI);
++
+   bool MaskedValueIsZero(Value *V, const APInt &Mask, unsigned Depth = 0,
+                          Instruction *CxtI = nullptr) const {
+     return llvm::MaskedValueIsZero(V, Mask, DL, Depth, &AC, CxtI, &DT);

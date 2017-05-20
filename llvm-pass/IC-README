@@ -2,14 +2,11 @@ Building LLVM with Alive instead of InstCombine.
 
 1. Generate C++ for optimization suite
 
-> python gen.py < suite.opt > alive.inc
+$ python gen.py < suite.opt > alive.inc
 
-2. Copy contents of alive.inc into InstructionCombining.cpp, where it says
-"Insert InstCombiner::runOnInstruction here".
+2. Copy alive.inc to lib/Transforms/InstCombine/ in a fresh copy of LLVM.
 
-3. Change header of runOnInstruction to "InstCombiner::runOnInstruction".
+3. Apply the patches InstCombineInternal.patch and InstructionCombining.patch to
+the corresponding files in lib/Transforms/InstCombine/.
 
-4. Replace InstCombine.h and InstructionCombining.cpp in a fresh copy of LLVM 3.4.1
-with the versions in this directory.
-
-5. Configure and compile.
+4. Build LLVM.
