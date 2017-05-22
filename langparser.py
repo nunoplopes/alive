@@ -16,7 +16,7 @@ import re
 from common import ParseError
 from language import *
 from precondition import *
-from pyparsing.pyparsing import *
+from pyparsing import *
 
 # enable memoization of parsing elements. Gives a nice speedup for large files.
 ParserElement.enablePackrat()
@@ -534,21 +534,20 @@ def _parseOpt(s, loc, toks):
   parsing_phase = Source
   save_parse_str(src, src_line)
   src, ident_src, used_src, _ = parse_llvm(src)
+  root_expr = next(reversed(ident_src))
 
   parsing_phase = Target
   save_parse_str(tgt, tgt_line)
   tgt, ident_tgt, used_tgt, skip_tgt = parse_llvm(tgt)
 
   # Move unused target instrs (copied from source) to the end.
-  lst = []
   for bb, instrs in tgt.items():
-    lst = []
-    for k,v in instrs.items():
-      if k not in used_tgt and not isinstance(v, Constant):
-        lst.append((k,v))
-        del instrs[k]
-    for k,v in lst:
+    todelete = [(k,v) for (k,v) in instrs.items()
+                if k not in used_tgt and not isinstance(v, Constant) and
+                   k != root_expr]
+    for k,v in todelete:
       tgt[bb][k] = v
+      del instrs[k]
 
   parsing_phase = Pre
   save_parse_str(pre, pre_line)
