@@ -534,7 +534,6 @@ def _parseOpt(s, loc, toks):
   parsing_phase = Source
   save_parse_str(src, src_line)
   src, ident_src, used_src, _ = parse_llvm(src)
-  root_expr = next(reversed(ident_src))
 
   parsing_phase = Target
   save_parse_str(tgt, tgt_line)
@@ -542,12 +541,11 @@ def _parseOpt(s, loc, toks):
 
   # Move unused target instrs (copied from source) to the end.
   for bb, instrs in tgt.items():
-    todelete = [(k,v) for (k,v) in instrs.items()
-                if k not in used_tgt and not isinstance(v, Constant) and
-                   k != root_expr]
-    for k,v in todelete:
-      tgt[bb][k] = v
+    reorder = [(k,v) for (k,v) in instrs.items()
+               if k not in used_tgt and not isinstance(v, Constant)]
+    for k,v in reorder:
       del instrs[k]
+      instrs[k] = v
 
   parsing_phase = Pre
   save_parse_str(pre, pre_line)
