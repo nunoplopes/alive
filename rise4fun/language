@@ -21,11 +21,12 @@
                  'br', 'call', 'ret', 'skip', 'unreachable',
                 ],
 
-  functions:	['umax', 'max', 'abs', 'lshr', 'width',
+  functions:	['umax', 'max', 'umin', 'abs', 'lshr', 'width',
                  'log2', 'trunc', 'sext', 'zext',
                  'ComputeNumSignBits', 'computeKnownOneBits',
                  'computeKnownZeroBits', 'countLeadingOnes',
                  'countLeadingZeros', 'countTrailingZeros',
+                 'countTrailingOnes',
                 ],
 
   predicates:	['equivalentAddressValues', 'isPowerOf2', 'isPowerOf2OrZero',

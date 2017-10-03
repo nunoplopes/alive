@@ -252,8 +252,8 @@ class CnstBinaryOp(Constant):
 
 ################################
 class CnstFunction(Constant):
-  abs, sbits, obits, zbits, ctlo, ctlz, cttz, log2, lshr, max, sext, trunc,\
-  umax, width, zext, Last = range(16)
+  abs, sbits, obits, zbits, ctlo, ctlz, cttz, ctto, log2, lshr, max, sext, \
+  trunc, umax, umin, width, zext, Last = range(18)
 
   opnames = {
     abs:   'abs',
@@ -263,12 +263,14 @@ class CnstFunction(Constant):
     ctlo:  'countLeadingOnes',
     ctlz:  'countLeadingZeros',
     cttz:  'countTrailingZeros',
+    ctto:  'countTrailingOnes',
     log2:  'log2',
     lshr:  'lshr',
     max:   'max',
     sext:  'sext',
     trunc: 'trunc',
     umax:  'umax',
+    umin:  'umin',
     width: 'width',
     zext:  'zext',
   }
@@ -282,12 +284,14 @@ class CnstFunction(Constant):
     ctlo:  1,
     ctlz:  1,
     cttz:  1,
+    ctto:  1,
     log2:  1,
     lshr:  2,
     max:   2,
     sext:  1,
     trunc: 1,
     umax:  2,
+    umin:  2,
     width: 1,
     zext:  1,
   }
@@ -329,12 +333,14 @@ class CnstFunction(Constant):
       self.ctlo:  lambda a: allTyEqual([a], Type.Int),
       self.ctlz:  lambda a: allTyEqual([a], Type.Int),
       self.cttz:  lambda a: allTyEqual([a], Type.Int),
+      self.ctto:  lambda a: allTyEqual([a], Type.Int),
       self.log2:  lambda a: allTyEqual([a], Type.Int),
       self.lshr:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.max:   lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.sext:  lambda a: [a.type < self.type],
       self.trunc: lambda a: [self.type < a.type],
       self.umax:  lambda a,b: allTyEqual([a,b,self], Type.Int),
+      self.umin:  lambda a,b: allTyEqual([a,b,self], Type.Int),
       self.width: lambda a: [],
       self.zext:  lambda a: [self.type > a.type],
     }[self.op](*self.args)
@@ -362,12 +368,14 @@ class CnstFunction(Constant):
       self.ctlo:  lambda a: ([], count_leading(a, 1, size)),
       self.ctlz:  lambda a: ([], count_leading(a, 0, size)),
       self.cttz:  lambda a: ([], cttz(a, size)),
+      self.ctto:  lambda a: ([], cttz(~a, size)),
       self.log2:  lambda a: ([], bv_log2(a, size)),
       self.lshr:  lambda a,b: ([], LShR(a, b)),
       self.max:   lambda a,b: ([], If(a > b, a, b)),
       self.sext:  lambda a: ([], SignExt(size - a.size(), a)),
       self.trunc: lambda a: ([], Extract(size-1, 0, a)),
       self.umax:  lambda a,b: ([], If(UGT(a,b), a, b)),
+      self.umin:  lambda a,b: ([], If(ULE(a,b), a, b)),
       self.width: lambda a: (None, BitVecVal(a.size(), size)),
       self.zext:  lambda a: ([], ZeroExt(size - a.size(), a)),
     }[self.op](*args)
