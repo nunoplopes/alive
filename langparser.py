@@ -497,6 +497,14 @@ def parse_pre(txt, ids):
   return pre.parseString(txt)[0]
 
 
+def depends_on(v):
+  deps = set()
+  for attr in dir(v):
+    a = getattr(v, attr)
+    if isinstance(a, Value) and not isinstance(a, (Constant, TypeFixedValue)):
+      deps.add(a.getUniqueName())
+  return deps
+
 ##########################
 opt_id = 1
 
@@ -539,14 +547,31 @@ def _parseOpt(s, loc, toks):
   save_parse_str(tgt, tgt_line)
   tgt, ident_tgt, used_tgt, skip_tgt = parse_llvm(tgt)
 
-  # Move unused target instrs (copied from source) to the end.
+  # Reorder instructions to meet dependencies.
+  seen_ids = set([k for k,v in ident_src.items() if isinstance(v, Input)])
+  new_tgt = collections.OrderedDict()
   for bb, instrs in tgt.items():
-    reorder = [(k,v) for (k,v) in instrs.items()
-               if k not in used_tgt and not isinstance(v, Constant)]
-    for k,v in reorder:
-      del instrs[k]
-      instrs[k] = v
+    new_tgt[bb] = collections.OrderedDict()
+    changed = True
+    while changed:
+      changed = False
+      not_seen = False
+      for k,v in instrs.items():
+        if k not in seen_ids:
+          not_seen = True
+          if isinstance(v, Constant) or depends_on(v).issubset(seen_ids):
+            new_tgt[bb][k] = v
+            seen_ids.add(k)
+            changed = True
+    if not_seen:
+      print(src)
+      print(tgt)
+      print(seen_ids)
+      print(new_tgt)
+      print('cycle in dependencies?')
+      exit(-1)
 
+  tgt = new_tgt
   parsing_phase = Pre
   save_parse_str(pre, pre_line)
   pre = parse_pre(pre, ident_src)
