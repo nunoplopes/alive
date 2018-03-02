@@ -553,20 +553,25 @@ def parseOpt(s, loc, toks):
     print exception2str(e.msg, e.line, e.lineno, e.col)
     exit(-1)
 
+def preParseOpt(loc, toks):
+  return loc
 
 comments = Suppress(Optional(White()) + ZeroOrMore(comment + White()))
 
-opt = comments +\
+opt_expression = comments +\
        (Optional(Literal('Name:') + SkipTo(LineEnd())) +\
        comments +\
        Optional(Literal('Pre:') + locatedExpr(SkipTo(LineEnd()))) +\
        locatedExpr(SkipTo('=>')) + Suppress('=>') +\
-       locatedExpr(SkipTo(Literal('Name:') | StringEnd()))).\
-         setParseAction(parseOpt)
+       locatedExpr(SkipTo(Literal('Name:') | StringEnd())))
 
+opt = opt_expression.copy().setParseAction(parseOpt)
 opt_file = OneOrMore(opt) + StringEnd()
 
+opt_preparse = opt_expression.copy().setParseAction(preParseOpt)
+opt_preparse_file = OneOrMore(opt_preparse) + StringEnd()
 
+# Parses out individual optimizations from `txt` and return them as a list.
 def parse_opt_file(txt):
   try:
     return opt_file.parseString(txt)
@@ -576,3 +581,12 @@ def parse_opt_file(txt):
   except ParseError, e:
     print e
     exit(-1)
+
+def preparse_opt_file(txt):
+  start_locs = opt_preparse_file.parseString(txt)
+  result = []
+  for i in xrange(0, len(start_locs)):
+    begin = start_locs[i]
+    end = start_locs[i + 1] if i != len(start_locs) - 1 else len(txt)
+    result.append(txt[begin:end])
+  return result
