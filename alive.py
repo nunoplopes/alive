@@ -372,7 +372,7 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
      str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
 
 
-def check_opt(opt):
+def check_opt(opt, hide_progress):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
 
   print '----------------------------------------'
@@ -460,8 +460,9 @@ def check_opt(opt):
     check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users)
     block_model(s, sneg, types)
     proofs += 1
-    sys.stdout.write('\rDone: ' + str(proofs))
-    sys.stdout.flush()
+    if not hide_progress:
+      sys.stdout.write('\rDone: ' + str(proofs))
+      sys.stdout.flush()
     res = s.check()
     assert res != unknown
 
@@ -480,6 +481,8 @@ def main():
     help='run tests containing this text')
   parser.add_argument('--infer-flags', action='store_true', default=False,
     help='Infer NSW/NUW/exact flags automaically', dest='infer_flags')
+  parser.add_argument('--hide-progress', action='store_true', default=False,
+    help='Do not display a Done: NN% progress status', dest='hide_progress')
   parser.add_argument('-V', '--verify', action='store_true', default=True,
     help='check correctness of optimizations (default: True)')
   parser.add_argument('--no-verify', action='store_false', dest='verify')
@@ -514,7 +517,7 @@ def main():
         if args.output:
           gen.append(opt)
         if args.verify:
-          check_opt(opt)
+          check_opt(opt, hide_progress=args.hide_progress)
         elif not args.output:
           print opt[0]
 
