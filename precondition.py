@@ -296,7 +296,7 @@ class LLVMBoolPred(BoolPred):
       return (not isinstance(val, Constant), 'register')
     if kind == 'const':
       if isinstance(val, Input):
-        ok = val.getName()[0] == 'C'
+        ok = val.isConst()
       else:
         ok = isinstance(val, Constant)
       return (ok, 'constant')
