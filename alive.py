@@ -196,6 +196,12 @@ def str_model(s, v):
   return "%s (%d)" % (bin, valu)
 
 
+def str_model_val(s, v):
+  m = s.model()
+  return  'UB' if is_false(m.evaluate(mk_and(v[1]))) else\
+          'poison' if is_false(m.evaluate(v[0][1])) else str_model(s, v[0][0])
+
+
 def _print_var_vals(s, vars, stopv, seen, types):
   m = s.model()
   for k,v in vars.items():
@@ -204,9 +210,7 @@ def _print_var_vals(s, vars, stopv, seen, types):
     if k in seen:
       continue
     seen |= set([k])
-    val = 'UB' if is_false(m.evaluate(mk_and(v[1]))) else\
-          'poison' if is_false(m.evaluate(v[0][1])) else str_model(s, v[0][0])
-    print("%s %s = %s" % (k, var_type(k, types), val))
+    print("%s %s = %s" % (k, var_type(k, types), str_model_val(s, v)))
 
 
 def print_var_vals(s, vs1, vs2, stopv, types):
@@ -248,7 +252,7 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
     check_expr(qvars, base_cnstr + [mk_not(mk_and(defb))], lambda s :
       ("Domain of definedness of Target is smaller than Source's for %s %s\n"
          % (var_type(k, types), k),
-       str_model(s, a), 'UB', k, srcv, tgtv, types))
+       str_model_val(s, v), 'UB', k, srcv, tgtv, types))
 
     # Check if domain of poison values of Src implies that of Tgt.
     check_expr(qvars, base_cnstr + [notpoisona, mk_not(notpoisonb)], lambda s :
