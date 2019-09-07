@@ -165,6 +165,27 @@ def check_expr(qvars, expr, error):
     exit(-1)
 
 
+def check_precondition(qvars, expr, vars, types):
+  expr = mk_forall(qvars, mk_and(expr))
+  s = tactic.solver()
+  s.add(expr)
+
+  if __debug__:
+    gen_benchmark(s)
+
+  if s.check() == unsat:
+    print('\nERROR: Precondition is always false!')
+
+    print('\nTypes:')
+    seen = set()
+    for k,v in vars.items():
+      if k in seen:
+        continue
+      seen.add(k)
+      print('%s: %s' % (k, var_type(k, types)))
+    exit(-1)
+
+
 def var_type(var, types):
   t = types[Int('t_' + var)].as_long()
   if t == Type.Int:
@@ -247,6 +268,8 @@ def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
 
     n_users = users[k]
     base_cnstr = defa + extra_cnstrs + n_users
+
+    check_precondition(qvars, extra_cnstrs, srcv, types)
 
     # Check if domain of defined values of Src implies that of Tgt.
     check_expr(qvars, base_cnstr + [mk_not(mk_and(defb))], lambda s :

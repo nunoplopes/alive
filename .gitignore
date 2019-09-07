@@ -3,3 +3,5 @@
 libz3.*
 z3*.py
 z3
+.vs
+.vscode
