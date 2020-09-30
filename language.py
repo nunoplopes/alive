@@ -17,8 +17,8 @@
 import collections
 from constants import *
 from codegen import *
-import six
-from six.moves import range
+
+
 
 
 def getAllocSize(type):
@@ -158,13 +158,13 @@ class State:
     qvars += q
     return smt
 
-  def iteritems(self):
-    for k,v in six.iteritems(self.vars):
+  def items(self):
+    for k,v in self.vars.items():
       if k[0] != '%' and k[0] != 'C' and not k.startswith('ret_'):
         continue
       yield k,v
 
-  def has_key(self, k):
+  def __contains__(self, k):
     return k in self.vars
 
   def __getitem__(self, k):
@@ -333,7 +333,7 @@ class BinOp(Instr):
     }[self.op]
 
     if do_infer_flags():
-      for flag,fn in six.iteritems(poison_conds):
+      for flag,fn in poison_conds.items():
         bit = get_flag_var(flag, self.getName())
         poison += [Implies(bit == 1, fn(v1, v2))]
     else:
@@ -747,7 +747,7 @@ class Icmp(Instr):
       opname = Icmp.op_enum[self.op]
 
     instr = CFunctionCall('new ICmpInst', CVariable(opname),
-      manager.get_cexp(self.v1), 
+      manager.get_cexp(self.v1),
       manager.get_cexp(self.v2))
 
     if use_builder:
@@ -858,7 +858,7 @@ class Alloca(Instr):
     mem = freshBV('alloca' + self.getName(), size)
     state.addAlloca(ptr, mem, block_size, num_elems, self.align)
 
-    for i in range(0, size/8):
+    for i in range(0, size//8):
       idx = 8*i
       state.store([], ptr + i, Extract(idx+7, idx, mem))
     return ptr
@@ -947,7 +947,7 @@ class Load(Instr):
       sz = sz - rem
       bytes = [Extract(rem-1, 0, state.load(ptr))]
       ptr += 1
-    for i in range(0, sz/8):
+    for i in range(0, sz//8):
       # FIXME: assumes little-endian
       bytes = [state.load(ptr + i)] + bytes
     return mk_concat(bytes)
@@ -1011,7 +1011,7 @@ class Store(Instr):
       write_size -= 8
       assert (src_size-rem) == write_size
       src_idx = rem
-    for i in range(0, write_size/8):
+    for i in range(0, write_size//8):
       state.store(state.defined, tgt+i, Extract(src_idx+7, src_idx, src))
       src_idx += 8
     return None
@@ -1117,11 +1117,11 @@ class Ret(TerminatorInst):
 
 ################################
 def print_prog(p, skip):
-  for bb, instrs in six.iteritems(p):
+  for bb, instrs in p.items():
     if bb != "":
       print("%s:" % bb)
 
-    for k,v in six.iteritems(instrs):
+    for k,v in instrs.items():
       if k in skip:
         continue
       k = str(k)
@@ -1133,30 +1133,30 @@ def print_prog(p, skip):
 
 def countUsers(prog):
   m = {}
-  for bb, instrs in six.iteritems(prog):
-    for k, v in six.iteritems(instrs):
+  for bb, instrs in prog.items():
+    for k, v in instrs.items():
       v.countUsers(m)
   return m
 
 
 def getTypeConstraints(p):
-  t = [v.getTypeConstraints() for v in six.itervalues(p)]
+  t = [v.getTypeConstraints() for v in p.values()]
   # ensure all return instructions have the same type
-  ret_types = [v.type for v in six.itervalues(p) if isinstance(v, Ret)]
+  ret_types = [v.type for v in p.values() if isinstance(v, Ret)]
   if len(ret_types) > 1:
     t += mkTyEqual(ret_types)
   return t
 
 
 def fixupTypes(p, types):
-  for v in six.itervalues(p):
+  for v in p.values():
     v.fixupTypes(types)
 
 
 def toSMT(prog, idents, isSource):
   set_smt_is_source(isSource)
   state = State()
-  for k,v in six.iteritems(idents):
+  for k,v in idents.items():
     if isinstance(v, (Input, Constant)):
       defined = []
       poison = []
@@ -1165,9 +1165,9 @@ def toSMT(prog, idents, isSource):
       assert defined == [] and poison == []
       state.add(v, smt, [], [], qvars)
 
-  for bb, instrs in six.iteritems(prog):
+  for bb, instrs in prog.items():
     state.newBB(bb)
-    for k,v in six.iteritems(instrs):
+    for k,v in instrs.items():
       defined = []
       poison = []
       qvars = []

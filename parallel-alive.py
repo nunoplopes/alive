@@ -16,7 +16,7 @@
 
 import argparse, os, shutil, subprocess, sys, tempfile
 from parser import preparse_opt_file
-from six.moves import range
+
 
 # This forks out multiple copies of Alive concurrently to get better throughput
 # on multi-core machines.

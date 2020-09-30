@@ -20,8 +20,8 @@ import argparse, glob, re, sys
 from language import *
 from parser import parse_llvm, parse_opt_file
 from gen import generate_switched_suite
-import six
-from six.moves import range
+
+
 
 
 def block_model(s, sneg, m):
@@ -176,7 +176,7 @@ def var_type(var, types):
 
 
 def val2binhex(v, bits):
-  return '0x%0*X' % ((bits+3) / 4, v)
+  return '0x%0*X' % ((bits+3) // 4, v)
   #if bits % 4 == 0:
   #  return '0x%0*X' % (bits / 4, v)
   #return format(v, '#0'+str(bits)+'b')
@@ -195,7 +195,7 @@ def str_model(s, v):
 
 
 def _print_var_vals(s, vars, stopv, seen, types):
-  for k,v in six.iteritems(vars):
+  for k,v in vars.items():
     if k == stopv:
       return
     if k in seen:
@@ -228,7 +228,7 @@ def get_smt_vars(f):
 
 
 def check_refinement(srcv, tgtv, types, extra_cnstrs, users):
-  for k,v in six.iteritems(srcv):
+  for k,v in srcv.items():
     # skip instructions only on one side; assumes they remain unchanged
     if k[0] == 'C' or k not in tgtv:
       continue
@@ -264,7 +264,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
   flag_vars_src = {}
   flag_vars_tgt = {}
 
-  for k,v in six.iteritems(srcv):
+  for k,v in srcv.items():
     # skip instructions only on one side; assumes they remain unchanged
     if k[0] == 'C' or k not in tgtv:
       continue
@@ -280,7 +280,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
     q = mk_and(users[k] + [q])
 
     input_vars = []
-    for k,v in six.iteritems(get_smt_vars(q)):
+    for k,v in get_smt_vars(q).items():
       if k[0] == '%' or k[0] == 'C' or k.startswith('icmp_') or\
          k.startswith('alloca') or k.startswith('mem_') or k.startswith('ana_'):
         input_vars.append(v)
@@ -317,11 +317,11 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
     check_incomplete_solver(res, s)
     m = s.model()
     min_model = []
-    for v in six.itervalues(flag_vars_src):
+    for v in flag_vars_src.values():
       val = m[v]
       if val and val.as_long() == 1:
         min_model.append(v == 1)
-    for v in six.itervalues(flag_vars_tgt):
+    for v in flag_vars_tgt.values():
       val = m[v]
       if val and val.as_long() == 0:
         min_model.append(v == 0)
@@ -348,7 +348,7 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
 
   # 1) check preconditions of BBs
   tgtbbs = tgtv.bb_pres
-  for k,v in six.iteritems(srcv.bb_pres):
+  for k,v in srcv.bb_pres.items():
     if k not in tgtbbs:
       continue
     # assume open world. May need to add language support to state that a BB is
@@ -425,14 +425,14 @@ def check_opt(opt, hide_progress):
   sneg = SolverFor('QF_LIA')
   sneg.add(Not(mk_and([type_pre] + type_src + type_tgt)))
 
-  has_unreach = any(v.startswith('unreachable') for v in six.iterkeys(ident_tgt))
-  for v in six.iterkeys(ident_src):
+  has_unreach = any(v.startswith('unreachable') for v in ident_tgt.keys())
+  for v in ident_src.keys():
     if v[0] == '%' and v not in used_src and v not in used_tgt and\
        v in skip_tgt and not has_unreach:
       print('ERROR: Temporary register %s unused and not overwritten' % v)
       exit(-1)
 
-  for v in six.iterkeys(ident_tgt):
+  for v in ident_tgt.keys():
     if v[0] == '%' and v not in used_tgt and v not in ident_src:
       print('ERROR: Temporary register %s unused and does not overwrite any'\
             ' Source register' % v)
@@ -441,7 +441,7 @@ def check_opt(opt, hide_progress):
   # build constraints that indicate the number of users for each register.
   users_count = countUsers(src)
   users = {}
-  for k in six.iterkeys(ident_src):
+  for k in ident_src.keys():
     n_users = users_count.get(k)
     users[k] = [get_users_var(k) != n_users] if n_users else []
 

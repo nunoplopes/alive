@@ -16,8 +16,8 @@
 import copy, operator
 from common import *
 from codegen import CVariable, CFieldAccess
-import six
-from six.moves import range
+
+
 
 
 def allTyEqual(vars, Ty):
@@ -115,7 +115,7 @@ class UnknownType(Type):
 
   def setName(self, name):
     self.typevar = Int('t_' + name)
-    for t in six.itervalues(self.types):
+    for t in self.types.values():
       t.setName(name)
 
   def _getSizeUnknown(self, idx):
@@ -157,14 +157,14 @@ class UnknownType(Type):
       return And(self.typevar == self.myType,
                  self.types[self.myType] == other)
 
-    for i,type in six.iteritems(self.types):
+    for i,type in self.types.items():
       if isinstance(other, type.__class__):
         self.myType = i
         return And(self.typevar == i, type == other)
 
     assert isinstance(other, UnknownType)
     c = []
-    for i,type in six.iteritems(self.types):
+    for i,type in self.types.items():
       if i in other.types:
         c += [And(self.typevar == i,
                   other.typevar == i,
@@ -196,7 +196,7 @@ class UnknownType(Type):
   def getTypeConstraints(self):
     if self.myType != self.Unknown:
       return self.types[self.myType].getTypeConstraints()
-    return mk_or([t.getTypeConstraints() for t in six.itervalues(self.types)])
+    return mk_or([t.getTypeConstraints() for t in self.types.values()])
 
 
 ################################

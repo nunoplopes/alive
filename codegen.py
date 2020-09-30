@@ -15,7 +15,7 @@
 
 from pretty import *
 from collections import defaultdict
-import six
+
 from functools import reduce
 
 class CFragment(object):
@@ -108,7 +108,7 @@ class CFunctionCall(CExpression):
 
     return group(self.fun + '(' + arglist + ')').nest(4)
 
-#     return group(self.fun + '(' + self.args[0].formatExpr(18) + 
+#     return group(self.fun + '(' + self.args[0].formatExpr(18) +
 #       iter_seq(',' + line + arg.formatExpr(18) for arg in self.args[1:]) + ')').nest(4)
 
 class CFieldAccess(CExpression):
@@ -228,7 +228,7 @@ class CDefinition(CStatement):
     for ctype, var in var_types:
       decls[ctype.underlying_type()].append(ctype.decorate(var))
 
-    for ctype, vars in six.iteritems(decls):
+    for ctype, vars in decls.items():
       yield cls(CTypeName(ctype), *vars)
 
   def __init__(self, ctype, *inits):

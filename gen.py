@@ -21,9 +21,9 @@ from parser import parse_opt_file
 from codegen import *
 from itertools import combinations, count
 from collections import defaultdict
-import six
-from six.moves import zip
-from six.moves import range
+
+
+
 
 DO_STATS = True
 SIMPLIFY = True
@@ -47,7 +47,7 @@ def get_most_specific_type(t1, t2):
 
     # TODO: return t1 or t2 when possible?
     types = [(s, get_most_specific_type(t, t2.types[s]))
-      for (s,t) in six.iteritems(t1.types) if s in t2.types]
+      for (s,t) in t1.types.items() if s in t2.types]
 
     _mismatch(not types)
 
@@ -107,19 +107,19 @@ class CodeGenerator(object):
 
     print('----', title)
     print('value_names:', end=' ')
-    pprint(set([(v.getUniqueName(),n) for v,n in six.iteritems(self.value_names)]))
+    pprint(set([(v.getUniqueName(),n) for v,n in self.value_names.items()]))
     print('key_names:', end=' ')
     pprint(self.key_names)
     print('names:', end=' ')
     pprint(self.names)
     print('bound: ', end=' ')
-    pprint(dict([(n,str(t)) for (n,t) in six.iteritems(self.name_type)]))
+    pprint(dict([(n,str(t)) for (n,t) in self.name_type.items()]))
     print('reps:', end=' ')
-    pprint(dict([(lookup(v), lookup(r)) for (v,r) in six.iteritems(self.reps)]))
+    pprint(dict([(lookup(v), lookup(r)) for (v,r) in self.reps.items()]))
     print('required:', end=' ')
-    pprint(dict([(lookup(v), type_str(t)) for v,t in six.iteritems(self.required)]))
+    pprint(dict([(lookup(v), type_str(t)) for v,t in self.required.items()]))
     print('guaranteed:', end=' ')
-    pprint(dict([(lookup(v), type_str(t)) for v,t in six.iteritems(self.guaranteed)]))
+    pprint(dict([(lookup(v), type_str(t)) for v,t in self.guaranteed.items()]))
     print('named_types:', end=' ')
     pprint(self.named_types)
     print('----')
@@ -511,7 +511,7 @@ def generate_opt(rule, opt, out):
     cg.unify(*cg.named_types[name])
 
 
-  tgt_vals = [v for k,v in six.iteritems(tgt) if not (isinstance(v,Input) or k in tgt_skip)]
+  tgt_vals = [v for k,v in tgt.items() if not (isinstance(v,Input) or k in tgt_skip)]
 
   for value in tgt_vals:
     value.register_types(cg)
@@ -521,7 +521,7 @@ def generate_opt(rule, opt, out):
   cg.unify(root, new_root)
   clauses.extend(cg.clauses)
 
-  for v,t in six.iteritems(cg.guaranteed):
+  for v,t in cg.guaranteed.items():
     if not cg.bound(v): continue
 
     clauses.extend(minimal_type_constraints(cg.get_llvm_type(v), cg.required[v], t))
@@ -556,7 +556,7 @@ def generate_opt(rule, opt, out):
   cif = CIf(CBinExpr.reduce('&&', clauses), body).format()
 
   decl_it = CDefinition.block((t, CVariable(v))
-    for v,t in six.iteritems(cg.name_type) if v != 'I')
+    for v,t in cg.name_type.items() if v != 'I')
   decl = iter_seq(line + d.format() for d in decl_it)
 
   code = nest(2,
@@ -649,7 +649,7 @@ def generate_switched_suite(opts, out):
   for opt in opts:
     root_opts[get_root(opt[1][4]).getOpName()].append(opt)
 
-  for root, opts in six.iteritems(root_opts):
+  for root, opts in root_opts.items():
     if root not in llvm_opcode:
       continue
 

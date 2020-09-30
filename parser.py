@@ -18,9 +18,9 @@ import re
 from language import *
 from precondition import *
 from pyparsing import *
-import six
-from six.moves import zip
-from six.moves import range
+
+
+
 
 # enable memoization of parsing elements. Gives a nice speedup for large files.
 ParserElement.enablePackrat()
@@ -215,7 +215,7 @@ def parseInstr(toks):
   if reg in identifiers:
     if reg in skip_identifiers:
       skip_identifiers.remove(reg)
-      for instrs in six.itervalues(BBs):
+      for instrs in BBs.values():
         instrs.pop(reg, None)
       identifiers.pop(reg, None)
     else:
@@ -407,18 +407,18 @@ def parse_llvm(txt):
     # Ensure regs defined in source are available in the target.
     identifiers_old = identifiers
     identifiers = collections.OrderedDict()
-    for k,v in six.iteritems(identifiers_old):
+    for k,v in identifiers_old.items():
       if not isinstance(v, (Store, Unreachable)):
         identifiers[k] = v
 
     BBs_old = BBs
     BBs = collections.OrderedDict()
-    for bb, instrs in six.iteritems(BBs_old):
+    for bb, instrs in BBs_old.items():
       BBs[bb] = collections.OrderedDict()
-      for k,v in six.iteritems(instrs):
+      for k,v in instrs.items():
         if not isinstance(v, (Store, Unreachable)):
           BBs[bb][k] = v
-    for i,v in six.iteritems(identifiers):
+    for i,v in identifiers.items():
       if not isinstance(v, (Input, Ret)):
         skip_identifiers.add(i)
   else:
@@ -537,13 +537,13 @@ def _parseOpt(s, loc, toks):
 
   # Move unused target instrs (copied from source) to the end.
   lst = []
-  for bb, instrs in six.iteritems(tgt):
+  for bb, instrs in tgt.items():
     lst = []
-    for k,v in six.iteritems(instrs):
+    for k,v in instrs.items():
       if k not in used_tgt and not isinstance(v, Constant):
         lst.append((k,v))
-        del instrs[k]
     for k,v in lst:
+      del instrs[k]
       tgt[bb][k] = v
 
   parsing_phase = Pre

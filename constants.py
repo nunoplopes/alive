@@ -15,7 +15,7 @@
 
 from value import *
 from codegen import *
-from six.moves import range
+
 
 
 class Constant(Value):
@@ -422,14 +422,14 @@ class CnstFunction(Constant):
         [manager.get_llvm_type(self).arr('getScalarSizeInBits', [])])
 
     if self.op == CnstFunction.umax:
-      return False, CFunctionCall('APIntOps::umax', 
+      return False, CFunctionCall('APIntOps::umax',
         self.args[0].get_APInt(manager), self.args[1].get_APInt(manager))
 
     if self.op == CnstFunction.width:
       return True, manager.get_llvm_type(self.args[0]).arr('getScalarSizeInBits', [])
 
     if self.op == CnstFunction.zext:
-      return False, self.args[0].get_APInt(manager).dot('zext', 
+      return False, self.args[0].get_APInt(manager).dot('zext',
         [manager.get_llvm_type(self).arr('getScalarSizeInBits',[])])
 
     raise AliveError(self.opnames[self.op] + ' not implemented')
@@ -437,7 +437,7 @@ class CnstFunction(Constant):
   def get_APInt(self, manager):
     wrap, cexp = self._get_cexp(manager)
     if wrap:
-      return CFunctionCall('APInt', 
+      return CFunctionCall('APInt',
         manager.get_llvm_type(self).arr('getScalarSizeInBits',[]), cexp)
 
     return cexp

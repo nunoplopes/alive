@@ -16,7 +16,7 @@
 from language import *
 from codegen import *
 from itertools import chain
-from six.moves import range
+
 
 class BoolPred:
   def fixupTypes(self, types):
@@ -407,7 +407,7 @@ class LLVMBoolPred(BoolPred):
         CVariable('OverflowResult::NeverOverflows'))
 
     if self.op == LLVMBoolPred.NSWMul:
-      return CFunctionCall(self.opnames[self.op], 
+      return CFunctionCall(self.opnames[self.op],
         manager.get_cexp(self.args[0]),
         manager.get_cexp(self.args[1]),
         CVariable('*I'))
