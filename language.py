@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 import collections
 from constants import *
 from codegen import *
@@ -241,7 +241,7 @@ class BinOp(Instr):
     Or:   'or',
     Xor:  'xor',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
 
   def __init__(self, op, type, v1, v2, flags = []):
@@ -459,7 +459,7 @@ class ConversionOp(Instr):
     Int2Ptr:     'inttoptr',
     Bitcast:     'bitcast',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
   def __init__(self, op, stype, v, type):
     assert isinstance(stype, Type)
@@ -628,7 +628,7 @@ class Icmp(Instr):
     SLT: 'slt',
     SLE: 'sle',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
 
   def __init__(self, op, type, v1, v2):

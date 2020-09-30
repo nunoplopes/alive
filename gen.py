@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 import argparse, glob, re, sys
 from language import *
 from precondition import *
@@ -411,7 +411,7 @@ def type_str(atype):
     return type_str(atype.type) + '[]'
 
   if isinstance(atype, UnknownType):
-    return '(' + '|'.join(type_str(t) for t in atype.types.values()) + ')'
+    return '(' + '|'.join(type_str(t) for t in list(atype.types.values())) + ')'
 
   return '?'
 

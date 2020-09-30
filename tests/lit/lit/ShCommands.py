@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+
 class Command:
     def __init__(self, args, redirects):
         self.args = list(args)

@@ -6,8 +6,8 @@ lit - LLVM Integrated Tester.
 See lit.pod for more information.
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 import math, os, platform, random, re, sys, time
 
 import lit.ProgressBar
@@ -100,7 +100,7 @@ def write_test_results(run, lit_config, testing_time, output_path):
         # Add test metrics, if present.
         if test.result.metrics:
             test_data['metrics'] = metrics_data = {}
-            for key, value in test.result.metrics.items():
+            for key, value in list(test.result.metrics.items()):
                 metrics_data[key] = value.todata()
 
         tests_data.append(test_data)

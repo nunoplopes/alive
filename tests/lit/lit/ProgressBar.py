@@ -3,7 +3,7 @@
 # Source: http://code.activestate.com/recipes/475116/, with
 # modifications by Daniel Dunbar.
 
-from __future__ import absolute_import
+
 import sys, re, time
 from six.moves import range
 from six.moves import zip

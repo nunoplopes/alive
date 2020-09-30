@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
+
 from language import *
 from codegen import *
 from itertools import chain
@@ -226,7 +226,7 @@ class LLVMBoolPred(BoolPred):
     NUWShl:      'WillNotOverflowUnsignedShl',
     OneUse:      'hasOneUse',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
   num_args = {
     eqptrs:      2,

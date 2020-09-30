@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 import argparse, glob, re, sys
 from language import *
 from parser import parse_llvm, parse_opt_file

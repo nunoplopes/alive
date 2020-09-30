@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
+
 from value import *
 from codegen import *
 from six.moves import range
@@ -267,7 +267,7 @@ class CnstFunction(Constant):
     width: 'width',
     zext:  'zext',
   }
-  opids = {v:k for k,v in opnames.items()}
+  opids = {v:k for k,v in list(opnames.items())}
 
   num_args = {
     abs:   1,

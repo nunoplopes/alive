@@ -19,8 +19,8 @@ Based on "Lazy v. Yield: Incremental, Linear Pretty-Printing", by Kiselyov,
 Peyton-Jones, and Sabry.
 '''
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 from collections import deque
 from itertools import chain
 from six.moves import range
@@ -63,7 +63,7 @@ class _Text(Doc):
   def events(self, indent):
     yield (Doc.Text, self.text)
   
-  def __nonzero__(self):
+  def __bool__(self):
     return bool(self.text)
     
   def __repr__(self):
@@ -100,7 +100,7 @@ class _Seq(Doc):
   def _items(self):
     return iter(self.docs)
   
-  def __nonzero__(self):
+  def __bool__(self):
     return any(bool(doc) for doc in self.docs)
   
   def __repr__(self):
@@ -114,7 +114,7 @@ class _Nest(Doc):
   def events(self, indent):
     return self.doc.events(indent + self.indent)
   
-  def __nonzero__(self):
+  def __bool__(self):
     return bool(self.doc)
   
   def __repr__(self):

@@ -22,11 +22,11 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
-from __future__ import absolute_import
-from __future__ import print_function
+
+
 import six
 from six.moves import map
-from six import unichr
+from six import chr
 from six.moves import range
 from six.moves import zip
 __doc__ = \
@@ -103,7 +103,7 @@ PY_3 = sys.version.startswith('3')
 if PY_3:
     _MAX_INT = sys.maxsize
     six.string_types = str
-    unichr = chr
+    chr = chr
     _ustr = str
 
     # build list of single arg builtins, that can be used as parse actions
@@ -559,7 +559,7 @@ class ParseResults(object):
         """Returns the parse results as XML. Tags are created for tokens and lists that have defined results names."""
         nl = "\n"
         out = []
-        namedItems = dict((v[1],k) for (k,vlist) in self.__tokdict.items()
+        namedItems = dict((v[1],k) for (k,vlist) in list(self.__tokdict.items())
                                                             for v in vlist)
         nextLevelIndent = indent + "  "
 
@@ -616,7 +616,7 @@ class ParseResults(object):
         return "".join(out)
 
     def __lookup(self,sub):
-        for k,vlist in self.__tokdict.items():
+        for k,vlist in list(self.__tokdict.items()):
             for v,loc in vlist:
                 if sub is v:
                     return k
@@ -2571,13 +2571,13 @@ class Each(ParseExpression):
         finalResults = ParseResults([])
         for r in resultlist:
             dups = {}
-            for k in r.keys():
+            for k in list(r.keys()):
                 if k in finalResults:
                     tmp = ParseResults(finalResults[k])
                     tmp += ParseResults(r[k])
                     dups[k] = tmp
             finalResults += ParseResults(r)
-            for k,v in dups.items():
+            for k,v in list(dups.items()):
                 finalResults[k] = v
         return loc, finalResults
 
@@ -3341,8 +3341,8 @@ stringStart = StringStart().setName("stringStart")
 stringEnd   = StringEnd().setName("stringEnd")
 
 _escapedPunc = Word( _bslash, r"\[]-*.$+^?()~ ", exact=2 ).setParseAction(lambda s,l,t:t[0][1])
-_escapedHexChar = Regex(r"\\0?[xX][0-9a-fA-F]+").setParseAction(lambda s,l,t:unichr(int(t[0].lstrip(r'\0x'),16)))
-_escapedOctChar = Regex(r"\\0[0-7]+").setParseAction(lambda s,l,t:unichr(int(t[0][1:],8)))
+_escapedHexChar = Regex(r"\\0?[xX][0-9a-fA-F]+").setParseAction(lambda s,l,t:chr(int(t[0].lstrip(r'\0x'),16)))
+_escapedOctChar = Regex(r"\\0[0-7]+").setParseAction(lambda s,l,t:chr(int(t[0][1:],8)))
 _singleChar = _escapedPunc | _escapedHexChar | _escapedOctChar | Word(printables, excludeChars=r'\]', exact=1)
 _charRange = Group(_singleChar + Suppress("-") + _singleChar)
 _reBracketExpr = Literal("[") + Optional("^").setResultsName("negate") + Group( OneOrMore( _charRange | _singleChar ) ).setResultsName("body") + "]"
@@ -3364,7 +3364,7 @@ def srange(s):
           a range of any of the above, separated by a dash ('a-z', etc.)
           any combination of the above ('aeiouy', 'a-zA-Z0-9_$', etc.)
     """
-    _expanded = lambda p: p if not isinstance(p,ParseResults) else ''.join(unichr(c) for c in range(ord(p[0]),ord(p[1])+1))
+    _expanded = lambda p: p if not isinstance(p,ParseResults) else ''.join(chr(c) for c in range(ord(p[0]),ord(p[1])+1))
     try:
         return "".join(_expanded(part) for part in _reBracketExpr.parseString(s).body)
     except:

@@ -1,6 +1,6 @@
 """'lit' Testing Tool"""
 
-from __future__ import absolute_import
+
 from .main import main
 
 __author__ = 'Daniel Dunbar'
