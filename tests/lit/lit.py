@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
-if __name__=='__main__':
-    import lit
-    lit.main()
+from lit.main import main
+
+if __name__ == '__main__':
+    main()

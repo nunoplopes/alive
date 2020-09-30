@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from z3 import *
+
 
 gbl_unique_id = 0
 def mk_unique_id():
@@ -232,7 +234,7 @@ def register_pick_one_type(v):
 
 def unregister_pick_one_type(vs):
   global gbl_one_type_only
-  for v in vs.iterkeys():
+  for v in vs.keys():
     gbl_one_type_only.discard(v)
 
 def reset_pick_one_type():
@@ -298,7 +300,7 @@ def get_ptr_size():
 class AliveError(Exception):
   pass
 
-class ParseError():
+class ParseError(BaseException):
   def __init__(self, msgs, token = None):
     if isinstance(msgs, list):
       self.msgs = msgs

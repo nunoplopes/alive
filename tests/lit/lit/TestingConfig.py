@@ -1,9 +1,8 @@
 import os
 import sys
 
-OldPy = sys.version_info[0] == 2 and sys.version_info[1] < 7
 
-class TestingConfig:
+class TestingConfig(object):
     """"
     TestingConfig - Information on the tests inside a suite.
     """
@@ -17,33 +16,31 @@ class TestingConfig:
         """
         # Set the environment based on the command line arguments.
         environment = {
-            'LIBRARY_PATH' : os.environ.get('LIBRARY_PATH',''),
-            'LD_LIBRARY_PATH' : os.environ.get('LD_LIBRARY_PATH',''),
             'PATH' : os.pathsep.join(litConfig.path +
                                      [os.environ.get('PATH','')]),
-            'SYSTEMROOT' : os.environ.get('SYSTEMROOT',''),
-            'TERM' : os.environ.get('TERM',''),
             'LLVM_DISABLE_CRASH_REPORT' : '1',
             }
 
-        if sys.platform == 'win32':
-            environment.update({
-                    'INCLUDE' : os.environ.get('INCLUDE',''),
-                    'PATHEXT' : os.environ.get('PATHEXT',''),
-                    'PYTHONUNBUFFERED' : '1',
-                    'TEMP' : os.environ.get('TEMP',''),
-                    'TMP' : os.environ.get('TMP',''),
-                    })
+        pass_vars = ['LIBRARY_PATH', 'LD_LIBRARY_PATH', 'SYSTEMROOT', 'TERM',
+                     'CLANG', 'LD_PRELOAD', 'ASAN_OPTIONS', 'UBSAN_OPTIONS',
+                     'LSAN_OPTIONS', 'ADB', 'ANDROID_SERIAL', 'SSH_AUTH_SOCK',
+                     'SANITIZER_IGNORE_CVE_2016_2143', 'TMPDIR', 'TMP', 'TEMP',
+                     'TEMPDIR', 'AVRLIT_BOARD', 'AVRLIT_PORT',
+                     'FILECHECK_OPTS', 'VCINSTALLDIR', 'VCToolsinstallDir',
+                     'VSINSTALLDIR', 'WindowsSdkDir', 'WindowsSDKLibVersion']
 
-        # The option to preserve TEMP, TMP, and TMPDIR.
-        # This is intended to check how many temporary files would be generated
-        # (and be not cleaned up) in automated builders.
-        if 'LIT_PRESERVES_TMP' in os.environ:
-            environment.update({
-                    'TEMP' : os.environ.get('TEMP',''),
-                    'TMP' : os.environ.get('TMP',''),
-                    'TMPDIR' : os.environ.get('TMPDIR',''),
-                    })
+        if sys.platform == 'win32':
+            pass_vars.append('INCLUDE')
+            pass_vars.append('LIB')
+            pass_vars.append('PATHEXT')
+            environment['PYTHONBUFFERED'] = '1'
+
+        for var in pass_vars:
+            val = os.environ.get(var, '')
+            # Check for empty string as some variables such as LD_PRELOAD cannot be empty
+            # ('') for OS's such as OpenBSD.
+            if val:
+                environment[var] = val
 
         # Set the default available features based on the LitConfig.
         available_features = []
@@ -75,13 +72,12 @@ class TestingConfig:
 
         # Load the config script data.
         data = None
-        if not OldPy:
-            f = open(path)
-            try:
-                data = f.read()
-            except:
-                litConfig.fatal('unable to load config file: %r' % (path,))
-            f.close()
+        f = open(path)
+        try:
+            data = f.read()
+        except:
+            litConfig.fatal('unable to load config file: %r' % (path,))
+        f.close()
 
         # Execute the config script to initialize the object.
         cfg_globals = dict(globals())
@@ -89,10 +85,7 @@ class TestingConfig:
         cfg_globals['lit_config'] = litConfig
         cfg_globals['__file__'] = path
         try:
-            if OldPy:
-                execfile(path, cfg_globals)
-            else:
-                exec(compile(data, path, 'exec'), cfg_globals, None)
+            exec(compile(data, path, 'exec'), cfg_globals, None)
             if litConfig.debug:
                 litConfig.note('... loaded config %r' % path)
         except SystemExit:
@@ -106,13 +99,13 @@ class TestingConfig:
             litConfig.fatal(
                 'unable to parse config file %r, traceback: %s' % (
                     path, traceback.format_exc()))
-
         self.finish(litConfig)
 
     def __init__(self, parent, name, suffixes, test_format,
                  environment, substitutions, unsupported,
                  test_exec_root, test_source_root, excludes,
-                 available_features, pipefail):
+                 available_features, pipefail, limit_to_features = [],
+                 is_early = False, parallelism_group = None):
         self.parent = parent
         self.name = str(name)
         self.suffixes = set(suffixes)
@@ -125,6 +118,26 @@ class TestingConfig:
         self.excludes = set(excludes)
         self.available_features = set(available_features)
         self.pipefail = pipefail
+        # This list is used by TestRunner.py to restrict running only tests that
+        # require one of the features in this list if this list is non-empty.
+        # Configurations can set this list to restrict the set of tests to run.
+        self.limit_to_features = set(limit_to_features)
+        # Whether the suite should be tested early in a given run.
+        self.is_early = bool(is_early)
+        self.parallelism_group = parallelism_group
+        self._recursiveExpansionLimit = None
+
+    @property
+    def recursiveExpansionLimit(self):
+        return self._recursiveExpansionLimit
+
+    @recursiveExpansionLimit.setter
+    def recursiveExpansionLimit(self, value):
+        if value is not None and not isinstance(value, int):
+            raise ValueError('recursiveExpansionLimit must be either None or an integer (got <{}>)'.format(value))
+        if isinstance(value, int) and value < 0:
+            raise ValueError('recursiveExpansionLimit must be a non-negative integer (got <{}>)'.format(value))
+        self._recursiveExpansionLimit = value
 
     def finish(self, litConfig):
         """finish() - Finish this config object, after loading is complete."""
@@ -150,4 +163,29 @@ class TestingConfig:
             return self
         else:
             return self.parent.root
+
+class SubstituteCaptures:
+    """
+    Helper class to indicate that the substitutions contains backreferences.
+
+    This can be used as the following in lit.cfg to mark subsitutions as having
+    back-references::
+
+        config.substutions.append(('\b[^ ]*.cpp', SubstituteCaptures('\0.txt')))
+
+    """
+    def __init__(self, substitution):
+        self.substitution = substitution
+
+    def replace(self, pattern, replacement):
+        return self.substitution
+
+    def __str__(self):
+        return self.substitution
+
+    def __len__(self):
+        return len(self.substitution)
+
+    def __getitem__(self, item):
+        return self.substitution.__getitem__(item)
 

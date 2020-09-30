@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from language import *
 from codegen import *
 from itertools import chain
+
 
 class BoolPred:
   def fixupTypes(self, types):
@@ -126,7 +128,7 @@ class PredOr(BoolPred):
 
 ################################
 class BinaryBoolPred(BoolPred):
-  EQ, NE, SLT, SLE, SGT, SGE, ULT, ULE, UGT, UGE, Last = range(11)
+  EQ, NE, SLT, SLE, SGT, SGE, ULT, ULE, UGT, UGE, Last = list(range(11))
 
   opnames = ['==', '!=', '<', '<=', '>', '>=', 'u<', 'u<=', 'u>', 'u>=']
 
@@ -206,7 +208,7 @@ class BinaryBoolPred(BoolPred):
 class LLVMBoolPred(BoolPred):
   eqptrs, isPower2, isPower2OrZ, isShiftedMask, isSignBit, maskZero,\
   NSWAdd, NUWAdd, NSWSub, NUWSub, NSWMul, NUWMul, NUWShl, OneUse,\
-  Last = range(15)
+  Last = list(range(15))
 
   opnames = {
     eqptrs:      'equivalentAddressValues',
@@ -224,7 +226,7 @@ class LLVMBoolPred(BoolPred):
     NUWShl:      'WillNotOverflowUnsignedShl',
     OneUse:      'hasOneUse',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
   num_args = {
     eqptrs:      2,
@@ -405,7 +407,7 @@ class LLVMBoolPred(BoolPred):
         CVariable('OverflowResult::NeverOverflows'))
 
     if self.op == LLVMBoolPred.NSWMul:
-      return CFunctionCall(self.opnames[self.op], 
+      return CFunctionCall(self.opnames[self.op],
         manager.get_cexp(self.args[0]),
         manager.get_cexp(self.args[1]),
         CVariable('*I'))

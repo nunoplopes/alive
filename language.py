@@ -12,9 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+
 import collections
 from constants import *
 from codegen import *
+
+
 
 
 def getAllocSize(type):
@@ -154,14 +158,14 @@ class State:
     qvars += q
     return smt
 
-  def iteritems(self):
-    for k,v in self.vars.iteritems():
+  def items(self):
+    for k,v in self.vars.items():
       if k[0] != '%' and k[0] != 'C' and not k.startswith('ret_'):
         continue
       yield k,v
 
-  def has_key(self, k):
-    return self.vars.has_key(k)
+  def __contains__(self, k):
+    return k in self.vars
 
   def __getitem__(self, k):
     return self.vars[k]
@@ -220,7 +224,7 @@ class CopyOperand(Instr):
 ################################
 class BinOp(Instr):
   Add, Sub, Mul, UDiv, SDiv, URem, SRem, Shl, AShr, LShr, And, Or, Xor,\
-  Last = range(14)
+  Last = list(range(14))
 
   opnames = {
     Add:  'add',
@@ -237,7 +241,7 @@ class BinOp(Instr):
     Or:   'or',
     Xor:  'xor',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
 
   def __init__(self, op, type, v1, v2, flags = []):
@@ -329,7 +333,7 @@ class BinOp(Instr):
     }[self.op]
 
     if do_infer_flags():
-      for flag,fn in poison_conds.iteritems():
+      for flag,fn in poison_conds.items():
         bit = get_flag_var(flag, self.getName())
         poison += [Implies(bit == 1, fn(v1, v2))]
     else:
@@ -444,7 +448,7 @@ class BinOp(Instr):
 
 ################################
 class ConversionOp(Instr):
-  Trunc, ZExt, SExt, ZExtOrTrunc, Ptr2Int, Int2Ptr, Bitcast, Last = range(8)
+  Trunc, ZExt, SExt, ZExtOrTrunc, Ptr2Int, Int2Ptr, Bitcast, Last = list(range(8))
 
   opnames = {
     Trunc:       'trunc',
@@ -455,7 +459,7 @@ class ConversionOp(Instr):
     Int2Ptr:     'inttoptr',
     Bitcast:     'bitcast',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
   def __init__(self, op, stype, v, type):
     assert isinstance(stype, Type)
@@ -610,7 +614,7 @@ class ConversionOp(Instr):
 
 ################################
 class Icmp(Instr):
-  EQ, NE, UGT, UGE, ULT, ULE, SGT, SGE, SLT, SLE, Var, Last = range(12)
+  EQ, NE, UGT, UGE, ULT, ULE, SGT, SGE, SLT, SLE, Var, Last = list(range(12))
 
   opnames = {
     EQ:  'eq',
@@ -624,7 +628,7 @@ class Icmp(Instr):
     SLT: 'slt',
     SLE: 'sle',
   }
-  opids = {v:k for k, v in opnames.items()}
+  opids = {v:k for k, v in list(opnames.items())}
 
 
   def __init__(self, op, type, v1, v2):
@@ -682,7 +686,7 @@ class Icmp(Instr):
   def toSMT(self, defined, poison, state, qvars):
     # Generate all possible comparisons if icmp is generic. Set of comparisons
     # can be restricted in the precondition.
-    ops = [self.op] if self.op != self.Var else range(self.Var)
+    ops = [self.op] if self.op != self.Var else list(range(self.Var))
     return self.recurseSMT(ops, state.eval(self.v1, defined, poison, qvars),
                            state.eval(self.v2, defined, poison, qvars), 0)
 
@@ -743,7 +747,7 @@ class Icmp(Instr):
       opname = Icmp.op_enum[self.op]
 
     instr = CFunctionCall('new ICmpInst', CVariable(opname),
-      manager.get_cexp(self.v1), 
+      manager.get_cexp(self.v1),
       manager.get_cexp(self.v2))
 
     if use_builder:
@@ -854,7 +858,7 @@ class Alloca(Instr):
     mem = freshBV('alloca' + self.getName(), size)
     state.addAlloca(ptr, mem, block_size, num_elems, self.align)
 
-    for i in range(0, size/8):
+    for i in range(0, size//8):
       idx = 8*i
       state.store([], ptr + i, Extract(idx+7, idx, mem))
     return ptr
@@ -943,7 +947,7 @@ class Load(Instr):
       sz = sz - rem
       bytes = [Extract(rem-1, 0, state.load(ptr))]
       ptr += 1
-    for i in range(0, sz/8):
+    for i in range(0, sz//8):
       # FIXME: assumes little-endian
       bytes = [state.load(ptr + i)] + bytes
     return mk_concat(bytes)
@@ -1007,7 +1011,7 @@ class Store(Instr):
       write_size -= 8
       assert (src_size-rem) == write_size
       src_idx = rem
-    for i in range(0, write_size/8):
+    for i in range(0, write_size//8):
       state.store(state.defined, tgt+i, Extract(src_idx+7, src_idx, src))
       src_idx += 8
     return None
@@ -1113,46 +1117,46 @@ class Ret(TerminatorInst):
 
 ################################
 def print_prog(p, skip):
-  for bb, instrs in p.iteritems():
+  for bb, instrs in p.items():
     if bb != "":
-      print "%s:" % bb
+      print("%s:" % bb)
 
-    for k,v in instrs.iteritems():
+    for k,v in instrs.items():
       if k in skip:
         continue
       k = str(k)
       if k[0] == '%':
-        print '  %s = %s' % (k, v)
+        print('  %s = %s' % (k, v))
       else:
-        print "  %s" % v
+        print("  %s" % v)
 
 
 def countUsers(prog):
   m = {}
-  for bb, instrs in prog.iteritems():
-    for k, v in instrs.iteritems():
+  for bb, instrs in prog.items():
+    for k, v in instrs.items():
       v.countUsers(m)
   return m
 
 
 def getTypeConstraints(p):
-  t = [v.getTypeConstraints() for v in p.itervalues()]
+  t = [v.getTypeConstraints() for v in p.values()]
   # ensure all return instructions have the same type
-  ret_types = [v.type for v in p.itervalues() if isinstance(v, Ret)]
+  ret_types = [v.type for v in p.values() if isinstance(v, Ret)]
   if len(ret_types) > 1:
     t += mkTyEqual(ret_types)
   return t
 
 
 def fixupTypes(p, types):
-  for v in p.itervalues():
+  for v in p.values():
     v.fixupTypes(types)
 
 
 def toSMT(prog, idents, isSource):
   set_smt_is_source(isSource)
   state = State()
-  for k,v in idents.iteritems():
+  for k,v in idents.items():
     if isinstance(v, (Input, Constant)):
       defined = []
       poison = []
@@ -1161,9 +1165,9 @@ def toSMT(prog, idents, isSource):
       assert defined == [] and poison == []
       state.add(v, smt, [], [], qvars)
 
-  for bb, instrs in prog.iteritems():
+  for bb, instrs in prog.items():
     state.newBB(bb)
-    for k,v in instrs.iteritems():
+    for k,v in instrs.items():
       defined = []
       poison = []
       qvars = []

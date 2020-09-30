@@ -5,14 +5,13 @@ import lit.Test
 from .base import FileBasedTest
 
 
-def executeCommand(command, input):
+def executeCommand(command):
   p = subprocess.Popen(command,
-                       stdin=subprocess.PIPE,
                        stdout=subprocess.PIPE,
                        stderr=subprocess.PIPE)
-  p.stdin.write(input)
   out,err = p.communicate()
   exitCode = p.wait()
+
 
   # Detect Ctrl-C in subprocess.
   if exitCode == -signal.SIGINT:
@@ -43,7 +42,9 @@ class AliveTest(FileBasedTest):
 
   def execute(self, test, litConfig):
     test = test.getSourcePath()
-    cmd = ['python', 'alive.py']
+    cmd = ['./alive.py']
+    cmd.append(test)
+
     input = readFile(test)
 
     # add test-specific args
@@ -51,14 +52,14 @@ class AliveTest(FileBasedTest):
     if m != None:
       cmd += m.group(1).split()
 
-    out, err, exitCode = executeCommand(cmd, input)
+    out, err, exitCode = executeCommand(cmd)
 
     m = self.regex.search(input)
     if m == None:
-      if exitCode == 0 and string.find(out, 'Optimization is correct!') != -1:
+      if exitCode == 0 and str.find(out, 'Optimization is correct!') != -1:
         return lit.Test.PASS, ''
       return lit.Test.FAIL, out + err
 
-    if exitCode == 255 and string.find(out, m.group(1)) != -1:
+    if exitCode == 255 and str.find(out, m.group(1)) != -1:
       return lit.Test.PASS, ''
     return lit.Test.FAIL, out + err

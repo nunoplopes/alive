@@ -12,13 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+
 import argparse, glob, re, sys
 from language import *
 from precondition import *
 from parser import parse_opt_file
 from codegen import *
-from itertools import combinations, izip, count
+from itertools import combinations, count
 from collections import defaultdict
+
+
+
 
 DO_STATS = True
 SIMPLIFY = True
@@ -42,7 +47,7 @@ def get_most_specific_type(t1, t2):
 
     # TODO: return t1 or t2 when possible?
     types = [(s, get_most_specific_type(t, t2.types[s]))
-      for (s,t) in t1.types.iteritems() if s in t2.types]
+      for (s,t) in t1.types.items() if s in t2.types]
 
     _mismatch(not types)
 
@@ -75,7 +80,7 @@ def get_most_specific_type(t1, t2):
 
 
 class CodeGenerator(object):
-  Source, Target = range(2)
+  Source, Target = list(range(2))
 
   PtrConstantInt = CPtrType(CTypeName('ConstantInt'))
   PtrValue = CPtrType(CTypeName('Value'))
@@ -100,24 +105,24 @@ class CodeGenerator(object):
       if v == None: return None
       return self.value_names.get(v, '<' + v.getUniqueName() + '>')
 
-    print '----', title
-    print 'value_names:',
-    pprint(set([(v.getUniqueName(),n) for v,n in self.value_names.iteritems()]))
-    print 'key_names:',
+    print('----', title)
+    print('value_names:', end=' ')
+    pprint(set([(v.getUniqueName(),n) for v,n in self.value_names.items()]))
+    print('key_names:', end=' ')
     pprint(self.key_names)
-    print 'names:',
+    print('names:', end=' ')
     pprint(self.names)
-    print 'bound: ',
-    pprint(dict([(n,str(t)) for (n,t) in self.name_type.iteritems()]))
-    print 'reps:',
-    pprint(dict([(lookup(v), lookup(r)) for (v,r) in self.reps.iteritems()]))
-    print 'required:',
-    pprint(dict([(lookup(v), type_str(t)) for v,t in self.required.iteritems()]))
-    print 'guaranteed:',
-    pprint(dict([(lookup(v), type_str(t)) for v,t in self.guaranteed.iteritems()]))
-    print 'named_types:',
+    print('bound: ', end=' ')
+    pprint(dict([(n,str(t)) for (n,t) in self.name_type.items()]))
+    print('reps:', end=' ')
+    pprint(dict([(lookup(v), lookup(r)) for (v,r) in self.reps.items()]))
+    print('required:', end=' ')
+    pprint(dict([(lookup(v), type_str(t)) for v,t in self.required.items()]))
+    print('guaranteed:', end=' ')
+    pprint(dict([(lookup(v), type_str(t)) for v,t in self.guaranteed.items()]))
+    print('named_types:', end=' ')
     pprint(self.named_types)
-    print '----'
+    print('----')
 
   def get_name(self, value):
     'Return the name for this value, creating one if needed'
@@ -293,7 +298,7 @@ class CodeGenerator(object):
     "Constrain the given values to have the same LLVM type"
 
     it = iter(values)
-    v1 = it.next()
+    v1 = next(it)
     r1 = self.get_rep(v1)
 
     for v2 in it:
@@ -406,12 +411,12 @@ def type_str(atype):
     return type_str(atype.type) + '[]'
 
   if isinstance(atype, UnknownType):
-    return '(' + '|'.join(type_str(t) for t in atype.types.values()) + ')'
+    return '(' + '|'.join(type_str(t) for t in list(atype.types.values())) + ')'
 
   return '?'
 
 def get_root(src):
-  values = src.values()
+  values = list(src.values())
   root = values.pop()
   while not isinstance(root, Instr):
     root = values.pop()
@@ -459,10 +464,10 @@ def minimal_type_constraints(ty_exp, required, guaranteed):
 
   assert(isinstance(required, UnknownType))
 
-  reqs = required.types.keys()
+  reqs = list(required.types.keys())
   reqs.sort()
 
-  guars = guaranteed.types.keys()
+  guars = list(guaranteed.types.keys())
   guars.sort()
 
   if reqs == [Type.Int, Type.Ptr] and Type.Array in guars:
@@ -506,7 +511,7 @@ def generate_opt(rule, opt, out):
     cg.unify(*cg.named_types[name])
 
 
-  tgt_vals = [v for k,v in tgt.iteritems() if not (isinstance(v,Input) or k in tgt_skip)]
+  tgt_vals = [v for k,v in tgt.items() if not (isinstance(v,Input) or k in tgt_skip)]
 
   for value in tgt_vals:
     value.register_types(cg)
@@ -516,7 +521,7 @@ def generate_opt(rule, opt, out):
   cg.unify(root, new_root)
   clauses.extend(cg.clauses)
 
-  for v,t in cg.guaranteed.iteritems():
+  for v,t in cg.guaranteed.items():
     if not cg.bound(v): continue
 
     clauses.extend(minimal_type_constraints(cg.get_llvm_type(v), cg.required[v], t))
@@ -551,7 +556,7 @@ def generate_opt(rule, opt, out):
   cif = CIf(CBinExpr.reduce('&&', clauses), body).format()
 
   decl_it = CDefinition.block((t, CVariable(v))
-    for v,t in cg.name_type.iteritems() if v != 'I')
+    for v,t in cg.name_type.items() if v != 'I')
   decl = iter_seq(line + d.format() for d in decl_it)
 
   code = nest(2,
@@ -563,7 +568,7 @@ def generate_opt(rule, opt, out):
 
 
 def generate_suite(opts, out):
-  opts = list(izip(count(1), opts))
+  opts = list(zip(count(1), opts))
 
   # gather names of testcases
   if DO_STATS:
@@ -617,7 +622,7 @@ llvm_opcode = {
 
 def generate_switched_suite(opts, out):
   root_opts = defaultdict(list)
-  opts = list(izip(count(1), opts))
+  opts = list(zip(count(1), opts))
 
   # gather names of testcases
   if DO_STATS:
@@ -644,7 +649,7 @@ def generate_switched_suite(opts, out):
   for opt in opts:
     root_opts[get_root(opt[1][4]).getOpName()].append(opt)
 
-  for root, opts in root_opts.iteritems():
+  for root, opts in root_opts.items():
     if root not in llvm_opcode:
       continue
 

@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import copy, operator
 from common import *
 from codegen import CVariable, CFieldAccess
+
+
 
 
 def allTyEqual(vars, Ty):
@@ -42,7 +45,7 @@ def create_mem_if_needed(ptr, val, state, qvars):
 
 
 class Type:
-  Int, Ptr, Array, Unknown = range(4)
+  Int, Ptr, Array, Unknown = list(range(4))
 
   def __repr__(self):
     return ''
@@ -112,7 +115,7 @@ class UnknownType(Type):
 
   def setName(self, name):
     self.typevar = Int('t_' + name)
-    for t in self.types.itervalues():
+    for t in self.types.values():
       t.setName(name)
 
   def _getSizeUnknown(self, idx):
@@ -128,7 +131,7 @@ class UnknownType(Type):
     return self._getSizeUnknown(0)
 
   def getIntType(self, c):
-    if self.myType == self.Unknown and self.types.has_key(self.Int):
+    if self.myType == self.Unknown and self.Int in self.types:
       self.myType = self.Int
       c += [self.typevar == self.Int]
 
@@ -154,15 +157,15 @@ class UnknownType(Type):
       return And(self.typevar == self.myType,
                  self.types[self.myType] == other)
 
-    for i,type in self.types.iteritems():
+    for i,type in self.types.items():
       if isinstance(other, type.__class__):
         self.myType = i
         return And(self.typevar == i, type == other)
 
     assert isinstance(other, UnknownType)
     c = []
-    for i,type in self.types.iteritems():
-      if other.types.has_key(i):
+    for i,type in self.types.items():
+      if i in other.types:
         c += [And(self.typevar == i,
                   other.typevar == i,
                   type == other.types[i])]
@@ -193,7 +196,7 @@ class UnknownType(Type):
   def getTypeConstraints(self):
     if self.myType != self.Unknown:
       return self.types[self.myType].getTypeConstraints()
-    return mk_or([t.getTypeConstraints() for t in self.types.itervalues()])
+    return mk_or([t.getTypeConstraints() for t in self.types.values()])
 
 
 ################################

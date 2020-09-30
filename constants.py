@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from value import *
 from codegen import *
+
 
 
 class Constant(Value):
@@ -106,7 +108,7 @@ class UndefVal(Constant):
 
 ################################
 class CnstUnaryOp(Constant):
-  Not, Neg, Last = range(3)
+  Not, Neg, Last = list(range(3))
 
   opnames = ['~', '-']
 
@@ -158,7 +160,7 @@ class CnstUnaryOp(Constant):
 ################################
 class CnstBinaryOp(Constant):
   And, Or, Xor, Add, Sub, Mul, Div, DivU, Rem, RemU, AShr, LShr, Shl,\
-  Last = range(14)
+  Last = list(range(14))
 
   opnames = ['&', '|', '^', '+', '-', '*', '/', '/u', '%', '%u','>>','u>>','<<']
 
@@ -247,7 +249,7 @@ class CnstBinaryOp(Constant):
 ################################
 class CnstFunction(Constant):
   abs, sbits, obits, zbits, ctlz, cttz, log2, lshr, max, sext, trunc, umax,\
-  width, zext, Last = range(15)
+  width, zext, Last = list(range(15))
 
   opnames = {
     abs:   'abs',
@@ -265,7 +267,7 @@ class CnstFunction(Constant):
     width: 'width',
     zext:  'zext',
   }
-  opids = {v:k for k,v in opnames.items()}
+  opids = {v:k for k,v in list(opnames.items())}
 
   num_args = {
     abs:   1,
@@ -420,14 +422,14 @@ class CnstFunction(Constant):
         [manager.get_llvm_type(self).arr('getScalarSizeInBits', [])])
 
     if self.op == CnstFunction.umax:
-      return False, CFunctionCall('APIntOps::umax', 
+      return False, CFunctionCall('APIntOps::umax',
         self.args[0].get_APInt(manager), self.args[1].get_APInt(manager))
 
     if self.op == CnstFunction.width:
       return True, manager.get_llvm_type(self.args[0]).arr('getScalarSizeInBits', [])
 
     if self.op == CnstFunction.zext:
-      return False, self.args[0].get_APInt(manager).dot('zext', 
+      return False, self.args[0].get_APInt(manager).dot('zext',
         [manager.get_llvm_type(self).arr('getScalarSizeInBits',[])])
 
     raise AliveError(self.opnames[self.op] + ' not implemented')
@@ -435,7 +437,7 @@ class CnstFunction(Constant):
   def get_APInt(self, manager):
     wrap, cexp = self._get_cexp(manager)
     if wrap:
-      return CFunctionCall('APInt', 
+      return CFunctionCall('APInt',
         manager.get_llvm_type(self).arr('getScalarSizeInBits',[]), cexp)
 
     return cexp
