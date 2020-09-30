@@ -1,9 +1,12 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import threading
 import time
 import traceback
+from six.moves import range
 try:
-    import Queue as queue
+    import six.moves.queue as queue
 except ImportError:
     import queue
 

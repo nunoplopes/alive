@@ -19,11 +19,14 @@ Based on "Lazy v. Yield: Incremental, Linear Pretty-Printing", by Kiselyov,
 Peyton-Jones, and Sabry.
 '''
 
+from __future__ import absolute_import
+from __future__ import print_function
 from collections import deque
 from itertools import chain
+from six.moves import range
 
 class Doc(object):
-  Text, Line, GBegin, GEnd = range(4)
+  Text, Line, GBegin, GEnd = list(range(4))
   
   def _items(self):
     yield self
@@ -50,7 +53,7 @@ class Doc(object):
     return self.format()
   
   def pprint(self, width=80, indent=0):
-    print self.format(width, indent)
+    print(self.format(width, indent))
 
 class _Text(Doc):
   def __init__(self, text):
@@ -119,7 +122,7 @@ class _Nest(Doc):
 
 def printit(iterable):
   for x in iterable:
-    print x
+    print(x)
 
 def joinit(iterable, delimiter):
   it = iter(iterable)

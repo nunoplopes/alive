@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
+from __future__ import print_function
 import argparse, os, shutil, subprocess, sys, tempfile
 from parser import preparse_opt_file
+from six.moves import range
 
 # This forks out multiple copies of Alive concurrently to get better throughput
 # on multi-core machines.
@@ -29,7 +32,7 @@ def main():
 
   preparsed_opts = sum([preparse_opt_file(f.read()) for f in args.file], [])
   tempdir = tempfile.mkdtemp()
-  print 'Using temporary directory {0}'.format(tempdir)
+  print('Using temporary directory {0}'.format(tempdir))
 
   makefile_file_name = os.path.join(tempdir, 'Makefile')
   with open(makefile_file_name, 'a') as f:
@@ -55,12 +58,12 @@ def main():
       f.write('\tcat {0} >> {1}\n'.format(output_file_name, all_results_file_name))
   old_dir = os.getcwd()
   os.chdir(tempdir)
-  print 'Invoking make to run {0} copies of alive in parallel ...'.format(PARALLEL_JOBS)
+  print('Invoking make to run {0} copies of alive in parallel ...'.format(PARALLEL_JOBS))
   with open(os.devnull, 'w') as devnull:
     subprocess.call(['make', '-j' + str(PARALLEL_JOBS), 'all'],
                     stdout=devnull, stderr=subprocess.STDOUT)
   with open(all_results_file_name, 'r') as all_results:
-    print ''.join(all_results.readlines())
+    print(''.join(all_results.readlines()))
   os.chdir(old_dir)
   shutil.rmtree(tempdir)
 

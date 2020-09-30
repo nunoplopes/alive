@@ -3,7 +3,10 @@
 # Source: http://code.activestate.com/recipes/475116/, with
 # modifications by Daniel Dunbar.
 
+from __future__ import absolute_import
 import sys, re, time
+from six.moves import range
+from six.moves import zip
 
 def to_bytes(str):
     # Encode to Latin1 to get binary data.
@@ -119,19 +122,19 @@ class TerminalController:
         # Colors
         set_fg = self._tigetstr('setf')
         if set_fg:
-            for i,color in zip(range(len(self._COLORS)), self._COLORS):
+            for i,color in zip(list(range(len(self._COLORS))), self._COLORS):
                 setattr(self, color, self._tparm(set_fg, i))
         set_fg_ansi = self._tigetstr('setaf')
         if set_fg_ansi:
-            for i,color in zip(range(len(self._ANSICOLORS)), self._ANSICOLORS):
+            for i,color in zip(list(range(len(self._ANSICOLORS))), self._ANSICOLORS):
                 setattr(self, color, self._tparm(set_fg_ansi, i))
         set_bg = self._tigetstr('setb')
         if set_bg:
-            for i,color in zip(range(len(self._COLORS)), self._COLORS):
+            for i,color in zip(list(range(len(self._COLORS))), self._COLORS):
                 setattr(self, 'BG_'+color, self._tparm(set_bg, i))
         set_bg_ansi = self._tigetstr('setab')
         if set_bg_ansi:
-            for i,color in zip(range(len(self._ANSICOLORS)), self._ANSICOLORS):
+            for i,color in zip(list(range(len(self._ANSICOLORS))), self._ANSICOLORS):
                 setattr(self, 'BG_'+color, self._tparm(set_bg_ansi, i))
 
     def _tparm(self, arg, index):

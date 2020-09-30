@@ -7,6 +7,7 @@ import tempfile
 import lit.ShUtil as ShUtil
 import lit.Test as Test
 import lit.util
+from six.moves import range
 
 class InternalShellError(Exception):
     def __init__(self, command, message):

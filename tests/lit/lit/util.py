@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import errno
 import itertools
 import math
@@ -6,6 +8,7 @@ import platform
 import signal
 import subprocess
 import sys
+from six.moves import range
 
 def detectCPUs():
     """
@@ -118,27 +121,27 @@ def printHistogram(items, title = 'Items'):
 
     barW = 40
     hr = '-' * (barW + 34)
-    print('\nSlowest %s:' % title)
+    print(('\nSlowest %s:' % title))
     print(hr)
     for name,value in items[-20:]:
-        print('%.2fs: %s' % (value, name))
-    print('\n%s Times:' % title)
+        print(('%.2fs: %s' % (value, name)))
+    print(('\n%s Times:' % title))
     print(hr)
     pDigits = int(math.ceil(math.log(maxValue, 10)))
     pfDigits = max(0, 3-pDigits)
     if pfDigits:
         pDigits += pfDigits + 1
     cDigits = int(math.ceil(math.log(len(items), 10)))
-    print("[%s] :: [%s] :: [%s]" % ('Range'.center((pDigits+1)*2 + 3),
+    print(("[%s] :: [%s] :: [%s]" % ('Range'.center((pDigits+1)*2 + 3),
                                     'Percentage'.center(barW),
-                                    'Count'.center(cDigits*2 + 1)))
+                                    'Count'.center(cDigits*2 + 1))))
     print(hr)
     for i,row in enumerate(histo):
         pct = float(len(row)) / len(items)
         w = int(barW * pct)
-        print("[%*.*fs,%*.*fs) :: [%s%s] :: [%*d/%*d]" % (
+        print(("[%*.*fs,%*.*fs) :: [%s%s] :: [%*d/%*d]" % (
             pDigits, pfDigits, i*barH, pDigits, pfDigits, (i+1)*barH,
-            '*'*w, ' '*(barW-w), cDigits, len(row), cDigits, len(items)))
+            '*'*w, ' '*(barW-w), cDigits, len(row), cDigits, len(items))))
 
 # Close extra file handles on UNIX (on Windows this cannot be done while
 # also redirecting input).

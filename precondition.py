@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
 from language import *
 from codegen import *
 from itertools import chain
+from six.moves import range
 
 class BoolPred:
   def fixupTypes(self, types):
@@ -126,7 +128,7 @@ class PredOr(BoolPred):
 
 ################################
 class BinaryBoolPred(BoolPred):
-  EQ, NE, SLT, SLE, SGT, SGE, ULT, ULE, UGT, UGE, Last = range(11)
+  EQ, NE, SLT, SLE, SGT, SGE, ULT, ULE, UGT, UGE, Last = list(range(11))
 
   opnames = ['==', '!=', '<', '<=', '>', '>=', 'u<', 'u<=', 'u>', 'u>=']
 
@@ -206,7 +208,7 @@ class BinaryBoolPred(BoolPred):
 class LLVMBoolPred(BoolPred):
   eqptrs, isPower2, isPower2OrZ, isShiftedMask, isSignBit, maskZero,\
   NSWAdd, NUWAdd, NSWSub, NUWSub, NSWMul, NUWMul, NUWShl, OneUse,\
-  Last = range(15)
+  Last = list(range(15))
 
   opnames = {
     eqptrs:      'equivalentAddressValues',

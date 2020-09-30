@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
 from value import *
 from codegen import *
+from six.moves import range
 
 
 class Constant(Value):
@@ -106,7 +108,7 @@ class UndefVal(Constant):
 
 ################################
 class CnstUnaryOp(Constant):
-  Not, Neg, Last = range(3)
+  Not, Neg, Last = list(range(3))
 
   opnames = ['~', '-']
 
@@ -158,7 +160,7 @@ class CnstUnaryOp(Constant):
 ################################
 class CnstBinaryOp(Constant):
   And, Or, Xor, Add, Sub, Mul, Div, DivU, Rem, RemU, AShr, LShr, Shl,\
-  Last = range(14)
+  Last = list(range(14))
 
   opnames = ['&', '|', '^', '+', '-', '*', '/', '/u', '%', '%u','>>','u>>','<<']
 
@@ -247,7 +249,7 @@ class CnstBinaryOp(Constant):
 ################################
 class CnstFunction(Constant):
   abs, sbits, obits, zbits, ctlz, cttz, log2, lshr, max, sext, trunc, umax,\
-  width, zext, Last = range(15)
+  width, zext, Last = list(range(15))
 
   opnames = {
     abs:   'abs',

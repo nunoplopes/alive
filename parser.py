@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
+from __future__ import print_function
 import re
 from language import *
 from precondition import *
 from pyparsing.pyparsing import *
+import six
+from six.moves import zip
+from six.moves import range
 
 # enable memoization of parsing elements. Gives a nice speedup for large files.
 ParserElement.enablePackrat()
 
 # Parsing phases
-Source, Target, Pre = range(3)
+Source, Target, Pre = list(range(3))
 
 
 def pa(fn):
@@ -67,7 +72,7 @@ def parseOperand(v, type):
 
   # %var
   if v[0] == '%' or v[0] == 'C':
-    if identifiers.has_key(v):
+    if v in identifiers:
       used_identifiers.add(v)
       return identifiers[v]
     if parsing_phase == Target:
@@ -207,10 +212,10 @@ def parseInstr(toks):
   global identifiers, skip_identifiers, BBs
 
   reg = toks[0]
-  if identifiers.has_key(reg):
+  if reg in identifiers:
     if reg in skip_identifiers:
       skip_identifiers.remove(reg)
-      for instrs in BBs.itervalues():
+      for instrs in six.itervalues(BBs):
         instrs.pop(reg, None)
       identifiers.pop(reg, None)
     else:
@@ -241,7 +246,7 @@ def parseCnstVar(v):
   if id[0] == '%':
     raise ParseError('Only constants allowed in expressions')
 
-  if identifiers.has_key(id):
+  if id in identifiers:
     used_identifiers.add(id)
     return identifiers[id]
 
@@ -402,18 +407,18 @@ def parse_llvm(txt):
     # Ensure regs defined in source are available in the target.
     identifiers_old = identifiers
     identifiers = collections.OrderedDict()
-    for k,v in identifiers_old.iteritems():
+    for k,v in six.iteritems(identifiers_old):
       if not isinstance(v, (Store, Unreachable)):
         identifiers[k] = v
 
     BBs_old = BBs
     BBs = collections.OrderedDict()
-    for bb, instrs in BBs_old.iteritems():
+    for bb, instrs in six.iteritems(BBs_old):
       BBs[bb] = collections.OrderedDict()
-      for k,v in instrs.iteritems():
+      for k,v in six.iteritems(instrs):
         if not isinstance(v, (Store, Unreachable)):
           BBs[bb][k] = v
-    for i,v in identifiers.iteritems():
+    for i,v in six.iteritems(identifiers):
       if not isinstance(v, (Input, Ret)):
         skip_identifiers.add(i)
   else:
@@ -437,12 +442,12 @@ def parseBoolPredicate(toks):
   return LLVMBoolPred(op, args)
 
 def parseBoolPred(toks):
-  from itertools import izip
+  
   lhs = parseCnstVar(toks[0])
   rest = iter(toks[1:])
   cmps = []
 
-  for optok, rhstok in izip(rest,rest):
+  for optok, rhstok in zip(rest,rest):
     op = BinaryBoolPred.getOpId(optok)
     rhs = parseCnstVar(rhstok)
     cmps.append(BinaryBoolPred(op, lhs, rhs))
@@ -532,9 +537,9 @@ def _parseOpt(s, loc, toks):
 
   # Move unused target instrs (copied from source) to the end.
   lst = []
-  for bb, instrs in tgt.iteritems():
+  for bb, instrs in six.iteritems(tgt):
     lst = []
-    for k,v in instrs.iteritems():
+    for k,v in six.iteritems(instrs):
       if k not in used_tgt and not isinstance(v, Constant):
         lst.append((k,v))
         del instrs[k]
@@ -549,8 +554,8 @@ def _parseOpt(s, loc, toks):
 def parseOpt(s, loc, toks):
   try:
     return _parseOpt(s, loc, toks)
-  except ParseException, e:
-    print exception2str(e.msg, e.line, e.lineno, e.col)
+  except ParseException as e:
+    print(exception2str(e.msg, e.line, e.lineno, e.col))
     exit(-1)
 
 def preParseOpt(loc, toks):
@@ -575,17 +580,17 @@ opt_preparse_file = OneOrMore(opt_preparse) + StringEnd()
 def parse_opt_file(txt):
   try:
     return opt_file.parseString(txt)
-  except ParseException, e:
-    print exception2str(e.msg, e.line, e.lineno, e.col, 0)
+  except ParseException as e:
+    print(exception2str(e.msg, e.line, e.lineno, e.col, 0))
     exit(-1)
-  except ParseError, e:
-    print e
+  except ParseError as e:
+    print(e)
     exit(-1)
 
 def preparse_opt_file(txt):
   start_locs = opt_preparse_file.parseString(txt)
   result = []
-  for i in xrange(0, len(start_locs)):
+  for i in range(0, len(start_locs)):
     begin = start_locs[i]
     end = start_locs[i + 1] if i != len(start_locs) - 1 else len(txt)
     result.append(txt[begin:end])

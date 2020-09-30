@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 class Command:
     def __init__(self, args, redirects):
         self.args = list(args)
@@ -24,7 +25,7 @@ class Command:
             file.write(quoted)
 
             # For debugging / validation.
-            import ShUtil
+            from . import ShUtil
             dequoted = list(ShUtil.ShLexer(quoted).lex())
             if dequoted != [arg]:
                 raise NotImplementedError('Unable to quote %r' % arg)

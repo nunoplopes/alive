@@ -12,9 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
+from __future__ import print_function
 import collections
 from constants import *
 from codegen import *
+import six
+from six.moves import range
 
 
 def getAllocSize(type):
@@ -155,13 +159,13 @@ class State:
     return smt
 
   def iteritems(self):
-    for k,v in self.vars.iteritems():
+    for k,v in six.iteritems(self.vars):
       if k[0] != '%' and k[0] != 'C' and not k.startswith('ret_'):
         continue
       yield k,v
 
   def has_key(self, k):
-    return self.vars.has_key(k)
+    return k in self.vars
 
   def __getitem__(self, k):
     return self.vars[k]
@@ -220,7 +224,7 @@ class CopyOperand(Instr):
 ################################
 class BinOp(Instr):
   Add, Sub, Mul, UDiv, SDiv, URem, SRem, Shl, AShr, LShr, And, Or, Xor,\
-  Last = range(14)
+  Last = list(range(14))
 
   opnames = {
     Add:  'add',
@@ -329,7 +333,7 @@ class BinOp(Instr):
     }[self.op]
 
     if do_infer_flags():
-      for flag,fn in poison_conds.iteritems():
+      for flag,fn in six.iteritems(poison_conds):
         bit = get_flag_var(flag, self.getName())
         poison += [Implies(bit == 1, fn(v1, v2))]
     else:
@@ -444,7 +448,7 @@ class BinOp(Instr):
 
 ################################
 class ConversionOp(Instr):
-  Trunc, ZExt, SExt, ZExtOrTrunc, Ptr2Int, Int2Ptr, Bitcast, Last = range(8)
+  Trunc, ZExt, SExt, ZExtOrTrunc, Ptr2Int, Int2Ptr, Bitcast, Last = list(range(8))
 
   opnames = {
     Trunc:       'trunc',
@@ -610,7 +614,7 @@ class ConversionOp(Instr):
 
 ################################
 class Icmp(Instr):
-  EQ, NE, UGT, UGE, ULT, ULE, SGT, SGE, SLT, SLE, Var, Last = range(12)
+  EQ, NE, UGT, UGE, ULT, ULE, SGT, SGE, SLT, SLE, Var, Last = list(range(12))
 
   opnames = {
     EQ:  'eq',
@@ -682,7 +686,7 @@ class Icmp(Instr):
   def toSMT(self, defined, poison, state, qvars):
     # Generate all possible comparisons if icmp is generic. Set of comparisons
     # can be restricted in the precondition.
-    ops = [self.op] if self.op != self.Var else range(self.Var)
+    ops = [self.op] if self.op != self.Var else list(range(self.Var))
     return self.recurseSMT(ops, state.eval(self.v1, defined, poison, qvars),
                            state.eval(self.v2, defined, poison, qvars), 0)
 
@@ -1113,46 +1117,46 @@ class Ret(TerminatorInst):
 
 ################################
 def print_prog(p, skip):
-  for bb, instrs in p.iteritems():
+  for bb, instrs in six.iteritems(p):
     if bb != "":
-      print "%s:" % bb
+      print("%s:" % bb)
 
-    for k,v in instrs.iteritems():
+    for k,v in six.iteritems(instrs):
       if k in skip:
         continue
       k = str(k)
       if k[0] == '%':
-        print '  %s = %s' % (k, v)
+        print('  %s = %s' % (k, v))
       else:
-        print "  %s" % v
+        print("  %s" % v)
 
 
 def countUsers(prog):
   m = {}
-  for bb, instrs in prog.iteritems():
-    for k, v in instrs.iteritems():
+  for bb, instrs in six.iteritems(prog):
+    for k, v in six.iteritems(instrs):
       v.countUsers(m)
   return m
 
 
 def getTypeConstraints(p):
-  t = [v.getTypeConstraints() for v in p.itervalues()]
+  t = [v.getTypeConstraints() for v in six.itervalues(p)]
   # ensure all return instructions have the same type
-  ret_types = [v.type for v in p.itervalues() if isinstance(v, Ret)]
+  ret_types = [v.type for v in six.itervalues(p) if isinstance(v, Ret)]
   if len(ret_types) > 1:
     t += mkTyEqual(ret_types)
   return t
 
 
 def fixupTypes(p, types):
-  for v in p.itervalues():
+  for v in six.itervalues(p):
     v.fixupTypes(types)
 
 
 def toSMT(prog, idents, isSource):
   set_smt_is_source(isSource)
   state = State()
-  for k,v in idents.iteritems():
+  for k,v in six.iteritems(idents):
     if isinstance(v, (Input, Constant)):
       defined = []
       poison = []
@@ -1161,9 +1165,9 @@ def toSMT(prog, idents, isSource):
       assert defined == [] and poison == []
       state.add(v, smt, [], [], qvars)
 
-  for bb, instrs in prog.iteritems():
+  for bb, instrs in six.iteritems(prog):
     state.newBB(bb)
-    for k,v in instrs.iteritems():
+    for k,v in six.iteritems(instrs):
       defined = []
       poison = []
       qvars = []

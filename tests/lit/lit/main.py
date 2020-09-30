@@ -7,6 +7,7 @@ See lit.pod for more information.
 """
 
 from __future__ import absolute_import
+from __future__ import print_function
 import math, os, platform, random, re, sys, time
 
 import lit.ProgressBar
@@ -51,24 +52,24 @@ class TestingProgressDisplay(object):
 
         # Show the test result line.
         test_name = test.getFullName()
-        print('%s: %s (%d of %d)' % (test.result.code.name, test_name,
-                                     self.completed, self.numTests))
+        print(('%s: %s (%d of %d)' % (test.result.code.name, test_name,
+                                     self.completed, self.numTests)))
 
         # Show the test failure output, if requested.
         if test.result.code.isFailure and self.opts.showOutput:
-            print("%s TEST '%s' FAILED %s" % ('*'*20, test.getFullName(),
-                                              '*'*20))
-            print(test.result.output)
-            print("*" * 20)
+            print(("%s TEST '%s' FAILED %s" % ('*'*20, test.getFullName(),
+                                              '*'*20)))
+            print((test.result.output))
+            print(("*" * 20))
 
         # Report test metrics, if present.
         if test.result.metrics:
-            print("%s TEST '%s' RESULTS %s" % ('*'*10, test.getFullName(),
-                                               '*'*10))
+            print(("%s TEST '%s' RESULTS %s" % ('*'*10, test.getFullName(),
+                                               '*'*10)))
             items = sorted(test.result.metrics.items())
             for metric_name, value in items:
-                print('%s: %s ' % (metric_name, value.format()))
-            print("*" * 10)
+                print(('%s: %s ' % (metric_name, value.format())))
+            print(("*" * 10))
 
         # Ensure the output is flushed.
         sys.stdout.flush()
@@ -232,7 +233,7 @@ def main(builtinParameters = {}):
     (opts, args) = parser.parse_args()
 
     if opts.show_version:
-        print("lit %s" % (lit.__version__,))
+        print(("lit %s" % (lit.__version__,)))
         return
 
     if not args:
@@ -291,9 +292,9 @@ def main(builtinParameters = {}):
         if opts.showSuites:
             print('-- Test Suites --')
             for ts,ts_tests in suitesAndTests:
-                print('  %s - %d tests' %(ts.name, len(ts_tests)))
-                print('    Source Root: %s' % ts.source_root)
-                print('    Exec Root  : %s' % ts.exec_root)
+                print(('  %s - %d tests' %(ts.name, len(ts_tests))))
+                print(('    Source Root: %s' % ts.source_root))
+                print(('    Exec Root  : %s' % ts.exec_root))
 
         # Show the tests, if requested.
         if opts.showTests:
@@ -301,7 +302,7 @@ def main(builtinParameters = {}):
             for ts,ts_tests in suitesAndTests:
                 ts_tests.sort(key = lambda test: test.path_in_suite)
                 for test in ts_tests:
-                    print('  %s' % (test.getFullName(),))
+                    print(('  %s' % (test.getFullName(),)))
 
         # Exit.
         sys.exit(0)
@@ -363,7 +364,7 @@ def main(builtinParameters = {}):
 
     testing_time = time.time() - startTime
     if not opts.quiet:
-        print('Testing Time: %.2fs' % (testing_time,))
+        print(('Testing Time: %.2fs' % (testing_time,)))
 
     # Write out the test data, if requested.
     if opts.output_path is not None:
@@ -386,10 +387,10 @@ def main(builtinParameters = {}):
         elts = byCode.get(code)
         if not elts:
             continue
-        print('*'*20)
-        print('%s (%d):' % (title, len(elts)))
+        print(('*'*20))
+        print(('%s (%d):' % (title, len(elts))))
         for test in elts:
-            print('    %s' % test.getFullName())
+            print(('    %s' % test.getFullName()))
         sys.stdout.write('\n')
 
     if opts.timeTests and run.tests:
@@ -408,7 +409,7 @@ def main(builtinParameters = {}):
             continue
         N = len(byCode.get(code,[]))
         if N:
-            print('  %s: %d' % (name,N))
+            print(('  %s: %d' % (name,N)))
 
     # If we encountered any additional errors, exit abnormally.
     if litConfig.numErrors:

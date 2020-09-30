@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import sys
 
@@ -90,7 +91,7 @@ class TestingConfig:
         cfg_globals['__file__'] = path
         try:
             if OldPy:
-                execfile(path, cfg_globals)
+                exec(compile(open(path, "rb").read(), path, 'exec'), cfg_globals)
             else:
                 exec(compile(data, path, 'exec'), cfg_globals, None)
             if litConfig.debug:
