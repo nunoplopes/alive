@@ -17,7 +17,7 @@
 import re
 from language import *
 from precondition import *
-from pyparsing.pyparsing import *
+from pyparsing import *
 import six
 from six.moves import zip
 from six.moves import range
@@ -442,7 +442,7 @@ def parseBoolPredicate(toks):
   return LLVMBoolPred(op, args)
 
 def parseBoolPred(toks):
-  
+
   lhs = parseCnstVar(toks[0])
   rest = iter(toks[1:])
   cmps = []
