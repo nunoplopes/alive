@@ -18,6 +18,9 @@ import argparse, glob, re, sys
 from language import *
 from parser import parse_llvm, parse_opt_file
 from gen import generate_switched_suite
+import signal
+import stopit
+import pdb
 
 
 def block_model(s, sneg, m):
@@ -297,6 +300,7 @@ def infer_flags(srcv, tgtv, types, extra_cnstrs, prev_flags, users):
     query.append(q)
 
   s = Solver()#tactic.solver()
+  s.set("timeout", 2)
   s.add(query)
   if __debug__:
     gen_benchmark(s)
@@ -371,13 +375,14 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
     ('Mismatch in final memory state in ptr %s' % str_model(s, idx),
      str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
 
-
+@stopit.threading_timeoutable(default='timeout')
 def check_opt(opt, hide_progress):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
 
   print '----------------------------------------'
   print 'Optimization: ' + name
   print 'Precondition: ' + str(pre)
+  if str(pre) != "true": print("HAS PRECONDITION! SKIPPING"); return
   print_prog(src, set([]))
   print '=>'
   print_prog(tgt, skip_tgt)
@@ -393,6 +398,7 @@ def check_opt(opt, hide_progress):
   type_pre = pre.getTypeConstraints()
 
   s = SolverFor('QF_LIA')
+  s.set("timeout", 2)
   s.add(type_pre)
   if s.check() != sat:
     print 'Precondition does not type check'
@@ -474,6 +480,7 @@ def check_opt(opt, hide_progress):
   else:
     print '\nVerification incomplete; did not check all bit widths\n'
 
+  return True # succeeded, did not time out
 
 def main():
   parser = argparse.ArgumentParser()
@@ -496,6 +503,8 @@ def main():
   parser.add_argument('file', type=argparse.FileType('r'), nargs='*',
     default=[sys.stdin],
     help='optimization file (read from stdin if none given)',)
+  parser.add_argument('--max-time', default=0,
+    help='maximum time (in seconds) to run the solver', dest='maxtime')
 
   args = os.getenv('ALIVE_EXTRA_ARGS', '').split() + sys.argv[1:]
   args = parser.parse_args(args)
@@ -514,12 +523,8 @@ def main():
 
     for opt in opts:
       if not args.match or any(pat in opt[0] for pat in args.match):
-        if args.output:
-          gen.append(opt)
-        if args.verify:
-          check_opt(opt, hide_progress=args.hide_progress)
-        elif not args.output:
-          print opt[0]
+          result = check_opt(opt, hide_progress=args.hide_progress, timeout=int(2))
+          if result == 'timeout': print("ERROR: Timed out")
 
   if args.output:
     generate_switched_suite(gen, args.output)

@@ -16,6 +16,8 @@ import copy, operator
 from common import *
 from codegen import CVariable, CFieldAccess
 
+BITWIDTH_MAX = 1024
+
 
 def allTyEqual(vars, Ty):
   c = [vars[0].type.typevar == Ty]
@@ -309,8 +311,9 @@ class IntType(Type):
     else:
       # Integers are assumed to be up to 64 bits.
       # We bias towards 4/8 bits, as counterexamples become easier to understand
-      c += [Or(self.bitsvar == 8, self.bitsvar == 4,
-               And(self.bitsvar > 0, self.bitsvar <= 64))]
+      # c += [Or(self.bitsvar == 8, self.bitsvar == 4,
+      #          And(self.bitsvar > 0, self.bitsvar <= BITWIDTH_MAX))]
+      c += [Or(self.bitsvar == 1, self.bitsvar == BITWIDTH_MAX)]
     return And(c)
 
 
