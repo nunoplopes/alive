@@ -22,8 +22,8 @@ from gen import generate_switched_suite
 import signal
 import stopit
 import pdb
-
-
+import time
+import csv
 def block_model(s, sneg, m):
   # First simplify the model.
   sneg.push()
@@ -557,9 +557,65 @@ def main():
   if args.output:
     generate_switched_suite(gen, args.output)
 
+# a row in the CSV data that we write.
+class Row:
+  def __init__(self, path, name, src, tgt, timeout, time_elapsed, exitcode, completed_in_time):
+    self.path = path
+    self.name = name
+    self.src = src
+    self.tgt = tgt
+    self.timeout = timeout
+    self.time_elapsed = time_elapsed
+    self.exitcode = exitcode
+    self.completed_in_time = completed_in_time
+  
+  @classmethod
+  def write_header(cls, csv_writer):
+    csv_writer.writerow(["path", "name", "src", "tgt", "timeout", "time_elapsed", "exitcode", "completed_in_time"])
+
+  def write(self, csv_writer):
+    csv_writer.writerow([self.path, self.name, self.src, self.tgt, self.timeout, self.time_elapsed, self.exitcode, self.completed_in_time])
+    
+
+def verify_opt_with_timeout(path, opt, timeout):
+  name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
+  if str(pre) != "true": print("%s has precondition; skipping." % (name, )); return None
+  # timer using python standard library
+  start_time = time.time()
+  hide_progress = False
+  p1 = Process(target=check_opt, args=(opt, hide_progress))
+  p1.start()
+  p1.join(timeout=timeout)
+  end_time = time.time()
+  p1.terminate()
+  exitcode = p1.exitcode
+  completed_in_time = exitcode == 0  
+  print("elapsed: [%4s] seconds. exitcode: [%s]. Succeeded? [%s]" % \
+    (end_time - start_time, exitcode, completed_in_time))
+  row = Row(path, name, src, tgt, timeout, end_time - start_time, exitcode, completed_in_time)
+  return row
+  
+
+def verify_all():
+  out_path = "experiment-out-data/out.csv"
+  paths = ["tests/instcombine/addsub.opt"]
+  with open(out_path, "w") as of:
+    wof = csv.writer(of, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    Row.write_header(wof)
+    # 7200 seconds = 2 hours
+    timeout_search_space = [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200] # , 14400, 28800, 57600, 86400]
+    for timeout in [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600]:
+      for path in paths:
+        with open(path, "r") as f:
+          opts = parse_opt_file(f.read())
+          for opt in opts:
+            row = verify_opt_with_timeout(path, opt, timeout)
+            if not row: continue # skipped because precondition.
+            row.write(wof)
+            of.flush()
 if __name__ == "__main__":
   try:
-    main()
+    verify_all()
   except IOError, e:
     print >> sys.stderr, 'ERROR:', e
     exit(-1)

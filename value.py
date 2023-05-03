@@ -16,7 +16,7 @@ import copy, operator
 from common import *
 from codegen import CVariable, CFieldAccess
 
-BITWIDTH_MAX = 1024
+BITWIDTH_MAX = 64
 
 
 def allTyEqual(vars, Ty):
