@@ -492,20 +492,20 @@ def check_opt(opt, timeout, bitwidth, hide_progress):
 
 # a row in the CSV data that we write.
 class Row:
-  def __init__(self, path, name, timeout, time_elapsed, exitcode, completed_in_time):
+  def __init__(self, path, name, timeout, time_elapsed, exitcode, timed_out):
     self.path = path
     self.name = name
     self.timeout = timeout
     self.time_elapsed = time_elapsed
     self.exitcode = exitcode
-    self.completed_in_time = completed_in_time
+    self.timed_out = timed_out
 
   @classmethod
   def write_header(cls, csv_writer):
-    csv_writer.writerow(["path", "name", "timeout", "time_elapsed", "exitcode", "completed_in_time"])
+    csv_writer.writerow(["path", "name", "timeout", "time_elapsed", "exitcode", "timed_out"])
 
   def write(self, csv_writer):
-    csv_writer.writerow([self.path, self.name, self.timeout, self.time_elapsed, self.exitcode, self.completed_in_time])
+    csv_writer.writerow([self.path, self.name, self.timeout, self.time_elapsed, self.exitcode, self.timed_out])
 
 
 def verify_opt_with_timeout(path, opt, timeout, bitwidth):
@@ -521,16 +521,20 @@ def verify_opt_with_timeout(path, opt, timeout, bitwidth):
   end_time = time.time()
   p1.terminate()
   exitcode = p1.exitcode
-  completed_in_time = exitcode == 0
-  print("timeout: [%4s]. bitwidth: [%4s], elapsed: [%4s] seconds. exitcode: [%s]. Succeeded? [%s]" % \
-    (timeout, bitwidth, end_time - start_time, exitcode, completed_in_time))
-  row = Row(path, name, timeout, end_time - start_time, exitcode, completed_in_time)
+  timed_out = exitcode is None
+  print("timeout: [%4s]. bitwidth: [%4s], elapsed: [%4s] seconds. exitcode: [%s]. Timed out? [%s]" % \
+    (timeout, bitwidth, end_time - start_time, exitcode, timed_out))
+  row = Row(path, name, timeout, end_time - start_time, exitcode, timed_out)
   return row
 
 
 def verify_all():
   out_path = "experiment-out-data/out.csv"
-  paths = ["tests/instcombine/addsub.opt"]
+  paths = ["tests/instcombine/addsub.opt",
+           "tests/instcombine/andorxor.opt",
+           "tests/instcombine/muldivrem.opt",
+           "tests/instcombine/select.opt",
+           "tests/instcombine/shift.opt"]
   with open(out_path, "w") as of:
     wof = csv.writer(of, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     Row.write_header(wof)
@@ -544,7 +548,7 @@ def verify_all():
         for path in paths:
           with open(path, "r") as f:
             opts = parse_opt_file(f.read())
-            for opt in opts[:20]:
+            for opt in opts:
               row = verify_opt_with_timeout(path, opt, timeout, bitwidth)
               if not row: continue # skipped because precondition.
               row.write(wof)
