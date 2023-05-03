@@ -378,11 +378,12 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
      str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
 
 # @stopit.threading_timeoutable(default='timeout')
-def check_opt(opt, bitwidth, hide_progress):
+def check_opt(opt, timeout, bitwidth, hide_progress):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
 
-  print '----------------------------------------'
   print 'Optimization: ' + name
+  print 'Timeout: ' + str(timeout)
+  print 'Bitwidth: ' + str(bitwidth)
   print 'Precondition: ' + str(pre)
   print_prog(src, set([]))
   print '=>'
@@ -473,7 +474,8 @@ def check_opt(opt, bitwidth, hide_progress):
     if not hide_progress:
       sys.stdout.write('\rDone: ' + str(proofs))
       sys.stdout.flush()
-    print("Checking result...")
+    sys.stdout.write('\rChecking Result')
+    sys.stdout.flush()
     # s.set("timeout", 2)
     res = s.check()
     assert res != unknown
@@ -488,113 +490,43 @@ def check_opt(opt, bitwidth, hide_progress):
 
   return True # succeeded, did not time out
 
-def main():
-  parser = argparse.ArgumentParser()
-  parser.add_argument('-m', '--match', action='append', metavar='name',
-    help='run tests containing this text')
-  parser.add_argument('--infer-flags', action='store_true', default=False,
-    help='Infer NSW/NUW/exact flags automaically', dest='infer_flags')
-  parser.add_argument('--hide-progress', action='store_true', default=False,
-    help='Do not display a Done: NN% progress status', dest='hide_progress')
-  parser.add_argument('-V', '--verify', action='store_true', default=True,
-    help='check correctness of optimizations (default: True)')
-  parser.add_argument('--no-verify', action='store_false', dest='verify')
-  parser.add_argument('-o', '--output', type=argparse.FileType('w'), metavar='file',
-    help='Write generated code to <file> ("-" for stdout)')
-  parser.add_argument('--use-array-th', action='store_true', default=False,
-    help='Use array theory to encode memory operations (default: False)',
-    dest='array_th')
-  parser.add_argument('--new-sema', action='store_true', default=False,
-    help='Use new semantics (default: False)', dest='new_sem')
-  parser.add_argument('file', type=argparse.FileType('r'), nargs='*',
-    default=[sys.stdin],
-    help='optimization file (read from stdin if none given)',)
-  parser.add_argument('--max-time', default=0,
-    help='maximum time (in seconds) to run the solver', dest='maxtime')
-
-  args = os.getenv('ALIVE_EXTRA_ARGS', '').split() + sys.argv[1:]
-  args = parser.parse_args(args)
-
-  set_infer_flags(args.infer_flags)
-  set_use_array_theory(args.array_th)
-  set_use_new_semantics(args.new_sem)
-
-  gen = []
-
-  for f in args.file:
-    if f.isatty():
-      sys.stderr.write('[Reading from terminal...]\n')
-
-    opts = parse_opt_file(f.read())
-
-    timeouts = []
-    TIMEOUT=60 # seconds
-
-    for opt in opts:
-      if not args.match or any(pat in opt[0] for pat in args.match):
-          # result = check_opt(opt, hide_progress=args.hide_progress, timeout=2)
-          name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
-          if str(pre) != "true": print("%s has precondition; skipping." % (name, )); continue
-
-          p1 = Process(target=check_opt, args=(opt, args.hide_progress))
-          p1.start()
-          p1.join(timeout=TIMEOUT)
-          p1.terminate()
-          if p1.exitcode is None:
-             timeouts.append(opt)
-             print("ERROR: Timed out")
-    if timeouts:
-      print("timeouts in (%s) seconds" % (TIMEOUT,))
-      for opt in timeouts:
-          name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
-          print("--------------")
-          print("Optimization: %s" % (name,))
-          print_prog(src, set([]))
-          print '=>'
-          print_prog(tgt, skip_tgt)
-    else:
-        print("NO timeouts (maxtime=%s)!" % (TIMEOUT, ))
-  if args.output:
-    generate_switched_suite(gen, args.output)
-
 # a row in the CSV data that we write.
 class Row:
-  def __init__(self, path, name, src, tgt, timeout, time_elapsed, exitcode, completed_in_time):
+  def __init__(self, path, name, timeout, time_elapsed, exitcode, completed_in_time):
     self.path = path
     self.name = name
-    self.src = src
-    self.tgt = tgt
     self.timeout = timeout
     self.time_elapsed = time_elapsed
     self.exitcode = exitcode
     self.completed_in_time = completed_in_time
-  
+
   @classmethod
   def write_header(cls, csv_writer):
-    csv_writer.writerow(["path", "name", "src", "tgt", "timeout", "time_elapsed", "exitcode", "completed_in_time"])
+    csv_writer.writerow(["path", "name", "timeout", "time_elapsed", "exitcode", "completed_in_time"])
 
   def write(self, csv_writer):
-    csv_writer.writerow([self.path, self.name, self.src, self.tgt, self.timeout, self.time_elapsed, self.exitcode, self.completed_in_time])
-    
+    csv_writer.writerow([self.path, self.name, self.timeout, self.time_elapsed, self.exitcode, self.completed_in_time])
+
 
 def verify_opt_with_timeout(path, opt, timeout, bitwidth):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
+  print '----------------------------------------'
   if str(pre) != "true": print("%s has precondition; skipping." % (name, )); return None
   # timer using python standard library
   start_time = time.time()
   hide_progress = False
-  p1 = Process(target=check_opt, args=(opt, bitwidth, hide_progress))
+  p1 = Process(target=check_opt, args=(opt, timeout, bitwidth, hide_progress))
   p1.start()
   p1.join(timeout=timeout)
   end_time = time.time()
   p1.terminate()
   exitcode = p1.exitcode
-  completed_in_time = exitcode == 0  
-  print("elapsed: [%4s] seconds. exitcode: [%s]. Succeeded? [%s]" % \
-    (end_time - start_time, exitcode, completed_in_time))
-  row = Row(path, name, src, tgt, timeout, end_time - start_time, exitcode, completed_in_time)
+  completed_in_time = exitcode == 0
+  print("timeout: [%4s]. bitwidth: [%4s], elapsed: [%4s] seconds. exitcode: [%s]. Succeeded? [%s]" % \
+    (timeout, bitwidth, end_time - start_time, exitcode, completed_in_time))
+  row = Row(path, name, timeout, end_time - start_time, exitcode, completed_in_time)
   return row
-  
+
 
 def verify_all():
   out_path = "experiment-out-data/out.csv"
@@ -604,19 +536,20 @@ def verify_all():
     Row.write_header(wof)
     # 7200 seconds = 2 hours
     timeout_search_space = [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600]
-    timeout_search_space.reverse() 
-    bitwidth_search_space = [8, 16, 32, 64, 128, 256, 512, 1024]
+    timeout_search_space.reverse()
+    bitwidth_search_space = [pow(2, i) for i in range(6, 30)]
 
     for timeout in [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600]:
       for bitwidth in bitwidth_search_space:
         for path in paths:
           with open(path, "r") as f:
             opts = parse_opt_file(f.read())
-            for opt in opts:
+            for opt in opts[:20]:
               row = verify_opt_with_timeout(path, opt, timeout, bitwidth)
               if not row: continue # skipped because precondition.
               row.write(wof)
               of.flush()
+
 if __name__ == "__main__":
   try:
     verify_all()
