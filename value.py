@@ -16,8 +16,6 @@ import copy, operator
 from common import *
 from codegen import CVariable, CFieldAccess
 
-BITWIDTH_MAX = 64
-
 
 def allTyEqual(vars, Ty):
   c = [vars[0].type.typevar == Ty]
@@ -192,10 +190,10 @@ class UnknownType(Type):
       c += [Or(self.types[i].ensureTypeDepth(depth), self.typevar != i)]
     return mk_and(c)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     if self.myType != self.Unknown:
-      return self.types[self.myType].getTypeConstraints()
-    return mk_or([t.getTypeConstraints() for t in self.types.itervalues()])
+      return self.types[self.myType].getTypeConstraints(bitwidth)
+    return mk_or([t.getTypeConstraints(bitwidth) for t in self.types.itervalues()])
 
 
 ################################
@@ -224,10 +222,10 @@ class NamedType(UnknownType):
     UnknownType.setName(self, self.name)
     self.type.setName(name)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.type == self,
-               UnknownType.getTypeConstraints(self),
-               self.type.getTypeConstraints())
+               UnknownType.getTypeConstraints(self, bitwidth),
+               self.type.getTypeConstraints(bitwidth))
 
 
 ################################
@@ -304,7 +302,7 @@ class IntType(Type):
   def ensureTypeDepth(self, depth):
     return BoolVal(depth == 0)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth_max):
     c = [self.typevar == Type.Int]
     if self.defined:
       c += [self.bitsvar == self.getSize()]
@@ -313,7 +311,7 @@ class IntType(Type):
       # We bias towards 4/8 bits, as counterexamples become easier to understand
       # c += [Or(self.bitsvar == 8, self.bitsvar == 4,
       #          And(self.bitsvar > 0, self.bitsvar <= BITWIDTH_MAX))]
-      c += [Or(self.bitsvar == 1, self.bitsvar == BITWIDTH_MAX)]
+      c += [Or(self.bitsvar == 1, self.bitsvar == bitwidth_max)]
     return And(c)
 
 
@@ -370,9 +368,9 @@ class PtrType(Type):
   def ensureTypeDepth(self, depth):
     return BoolVal(False) if depth == 0 else self.type.ensureTypeDepth(depth-1)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.typevar == Type.Ptr,
-               self.type.getTypeConstraints())
+               self.type.getTypeConstraints(bitwidth))
 
 
 ################################
@@ -418,10 +416,10 @@ class ArrayType(Type):
   def ensureTypeDepth(self, depth):
     return BoolVal(False) if depth == 0 else self.type.ensureTypeDepth(depth-1)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.typevar == Type.Array,
-               self.elems.getTypeConstraints(),
-               self.type.getTypeConstraints())
+               self.elems.getTypeConstraints(bitwidth),
+               self.type.getTypeConstraints(bitwidth))
 
 
 ################################
@@ -461,16 +459,16 @@ class Value:
           newa += [e]
         setattr(self, attr, newa)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     c = []
     for attr in dir(self):
       a = getattr(self, attr)
       if isinstance(a, (Type, Value)):
-        c += [a.getTypeConstraints()]
+        c += [a.getTypeConstraints(bitwidth)]
       elif isinstance(a, list):
         for e in a:
           if isinstance(e, (Type, Value)):
-            c += [e.getTypeConstraints()]
+            c += [e.getTypeConstraints(bitwidth)]
     return mk_and(c)
 
   def fixupTypes(self, types):
@@ -520,8 +518,8 @@ class TypeFixedValue(Value):
   def toSMT(self, defined, poison, state, qvars):
     return self.val
 
-  def getTypeConstraints(self):
-    c = [self.v.getTypeConstraints()]
+  def getTypeConstraints(self, bitwidth):
+    c = [self.v.getTypeConstraints(bitwidth)]
 
     if self.v.isConst():
       c += [self.smtvar == self.v.val]

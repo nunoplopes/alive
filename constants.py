@@ -55,8 +55,8 @@ class ConstantVal(Constant):
   def isConst(self):
     return True
 
-  def getTypeConstraints(self):
-    c = self.type.getTypeConstraints()
+  def getTypeConstraints(self, bitwidth):
+    c = self.type.getTypeConstraints(bitwidth)
     if self.val != 0 and not self.type.defined:
       # One more bit for positive integers to allow for sign bit.
       bits = self.val.bit_length() + int(self.val >= 0)
@@ -85,9 +85,9 @@ class UndefVal(Constant):
   def __repr__(self):
     return 'undef'
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     # overload Constant's method
-    return self.type.getTypeConstraints()
+    return self.type.getTypeConstraints(bitwidth)
 
   def toSMT(self, defined, poison, state, qvars):
     v = BitVec('undef' + self.id, self.type.getSize())
@@ -131,10 +131,10 @@ class CnstUnaryOp(Constant):
   def getType(self):
     return self.v.getType()
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return mk_and([self.type == self.v.type,
-                   self.v.getTypeConstraints(),
-                   self.type.getTypeConstraints()])
+                   self.v.getTypeConstraints(bitwidth),
+                   self.type.getTypeConstraints(bitwidth)])
 
   def toSMT(self, defined, poison, state, qvars):
     v = self.v.toSMT(defined, poison, state, qvars)
@@ -182,12 +182,12 @@ class CnstBinaryOp(Constant):
         return i
     assert False
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return mk_and([self.type == self.v1.type,
                    self.type == self.v2.type,
-                   self.v1.getTypeConstraints(),
-                   self.v2.getTypeConstraints(),
-                   self.type.getTypeConstraints()])
+                   self.v1.getTypeConstraints(bitwidth),
+                   self.v2.getTypeConstraints(bitwidth),
+                   self.type.getTypeConstraints(bitwidth)])
 
   def toSMT(self, defined, poison, state, qvars):
     v1 = self.v1.toSMT(defined, poison, state, qvars)
@@ -312,7 +312,7 @@ class CnstFunction(Constant):
       return CnstFunction.opids[name]
     raise ParseError('Unknown function:')
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     c = {
       self.abs:   lambda a: allTyEqual([a,self], Type.Int),
       self.sbits: lambda a: allTyEqual([a], Type.Int),
@@ -330,8 +330,8 @@ class CnstFunction(Constant):
       self.zext:  lambda a: [self.type > a.type],
     }[self.op](*self.args)
 
-    return mk_and([v.getTypeConstraints() for v in self.args] +\
-                  [self.type.getTypeConstraints()] + c)
+    return mk_and([v.getTypeConstraints(bitwidth) for v in self.args] +\
+                  [self.type.getTypeConstraints(bitwidth)] + c)
 
   def toSMT(self, defined, poison, state, qvars):
     size = self.type.getSize()

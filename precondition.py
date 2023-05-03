@@ -33,7 +33,7 @@ class TruePred(BoolPred):
   def __repr__(self):
     return 'true'
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return BoolVal(True)
 
   def toSMT(self, state):
@@ -55,8 +55,8 @@ class PredNot(BoolPred):
   def __repr__(self):
     return '!%s' % self.v
 
-  def getTypeConstraints(self):
-    return self.v.getTypeConstraints()
+  def getTypeConstraints(self, bitwidth):
+    return self.v.getTypeConstraints(bitwidth)
 
   def toSMT(self, state):
     d, v = self.v.toSMT(state)
@@ -77,8 +77,8 @@ class PredAnd(BoolPred):
   def __repr__(self):
    return '(' + ' && '.join(repr(v) for v in self.args) + ')'
 
-  def getTypeConstraints(self):
-    return mk_and(v.getTypeConstraints() for v in self.args)
+  def getTypeConstraints(self, bitwidth):
+    return mk_and(v.getTypeConstraints(bitwidth) for v in self.args)
 
   def toSMT(self, state):
     d = []
@@ -105,8 +105,8 @@ class PredOr(BoolPred):
   def __repr__(self):
     return '(' + ' || '.join(repr(v) for v in self.args) + ')'
 
-  def getTypeConstraints(self):
-    return mk_and(v.getTypeConstraints() for v in self.args)
+  def getTypeConstraints(self, bitwidth):
+    return mk_and(v.getTypeConstraints(bitwidth) for v in self.args)
 
   def toSMT(self, state):
     d = []
@@ -150,8 +150,8 @@ class BinaryBoolPred(BoolPred):
 
   def getTypeConstraints(self):
     return mk_and([self.v1.type == self.v2.type,
-                   self.v1.getTypeConstraints(),
-                   self.v2.getTypeConstraints()])
+                   self.v1.getTypeConstraints(bitwidth),
+                   self.v2.getTypeConstraints(bitwidth)])
 
   def toSMT(self, state):
     defined = []
@@ -318,9 +318,9 @@ class LLVMBoolPred(BoolPred):
     OneUse:      lambda a: []
   }
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     c = self.argConstraints[self.op](*self.args)
-    c += [v.getTypeConstraints() for v in self.args]
+    c += [v.getTypeConstraints(bitwidth) for v in self.args]
     return mk_and(c)
 
   def _mkMustAnalysis(self, d, vars, expr):

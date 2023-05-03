@@ -378,7 +378,7 @@ def check_typed_opt(pre, src, ident_src, tgt, ident_tgt, types, users):
      str_model(s, val1), str_model(s, val2), None, srcv, tgtv, types))
 
 # @stopit.threading_timeoutable(default='timeout')
-def check_opt(opt, hide_progress):
+def check_opt(opt, bitwidth, hide_progress):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
 
   print '----------------------------------------'
@@ -394,9 +394,9 @@ def check_opt(opt, hide_progress):
   gbl_prev_flags = []
 
   # infer allowed types for registers
-  type_src = getTypeConstraints(ident_src)
-  type_tgt = getTypeConstraints(ident_tgt)
-  type_pre = pre.getTypeConstraints()
+  type_src = getTypeConstraints(ident_src, bitwidth)
+  type_tgt = getTypeConstraints(ident_tgt, bitwidth)
+  type_pre = pre.getTypeConstraints(bitwidth)
 
   s = SolverFor('QF_LIA')
   # s.set("timeout", 2)
@@ -577,13 +577,13 @@ class Row:
     csv_writer.writerow([self.path, self.name, self.src, self.tgt, self.timeout, self.time_elapsed, self.exitcode, self.completed_in_time])
     
 
-def verify_opt_with_timeout(path, opt, timeout):
+def verify_opt_with_timeout(path, opt, timeout, bitwidth):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
   if str(pre) != "true": print("%s has precondition; skipping." % (name, )); return None
   # timer using python standard library
   start_time = time.time()
   hide_progress = False
-  p1 = Process(target=check_opt, args=(opt, hide_progress))
+  p1 = Process(target=check_opt, args=(opt, bitwidth, hide_progress))
   p1.start()
   p1.join(timeout=timeout)
   end_time = time.time()
@@ -603,16 +603,20 @@ def verify_all():
     wof = csv.writer(of, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     Row.write_header(wof)
     # 7200 seconds = 2 hours
-    timeout_search_space = [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600, 7200] # , 14400, 28800, 57600, 86400]
+    timeout_search_space = [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600]
+    timeout_search_space.reverse() 
+    bitwidth_search_space = [8, 16, 32, 64, 128, 256, 512, 1024]
+
     for timeout in [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600]:
-      for path in paths:
-        with open(path, "r") as f:
-          opts = parse_opt_file(f.read())
-          for opt in opts:
-            row = verify_opt_with_timeout(path, opt, timeout)
-            if not row: continue # skipped because precondition.
-            row.write(wof)
-            of.flush()
+      for bitwidth in bitwidth_search_space:
+        for path in paths:
+          with open(path, "r") as f:
+            opts = parse_opt_file(f.read())
+            for opt in opts:
+              row = verify_opt_with_timeout(path, opt, timeout, bitwidth)
+              if not row: continue # skipped because precondition.
+              row.write(wof)
+              of.flush()
 if __name__ == "__main__":
   try:
     verify_all()

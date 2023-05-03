@@ -188,9 +188,9 @@ class CopyOperand(Instr):
   def toSMT(self, defined, poison, state, qvars):
     return state.eval(self.v, defined, poison, qvars)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.type == self.v.type,
-               self.type.getTypeConstraints())
+               self.type.getTypeConstraints(bitwidth))
 
   def register_types(self, manager):
     manager.register_type(self, self.type, UnknownType())
@@ -373,10 +373,10 @@ class BinOp(Instr):
       self.Xor:  lambda a,b: a ^ b,
     }[self.op](v1, v2)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.type == self.v1.type,
                self.type == self.v2.type,
-               self.type.getTypeConstraints())
+               self.type.getTypeConstraints(bitwidth))
 
   caps = {
     Add:  'Add',
@@ -523,7 +523,7 @@ class ConversionOp(Instr):
       self.Bitcast:     lambda v: v,
     }[self.op](state.eval(self.v, defined, poison, qvars))
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     cnstr = {
       self.Trunc:       lambda src,tgt: src > tgt,
       self.ZExt:        lambda src,tgt: src < tgt,
@@ -535,8 +535,8 @@ class ConversionOp(Instr):
     } [self.op](self.stype, self.type)
 
     return And(self.stype == self.v.type,
-               self.type.getTypeConstraints(),
-               self.stype.getTypeConstraints(),
+               self.type.getTypeConstraints(bitwidth),
+               self.stype.getTypeConstraints(bitwidth),
                cnstr)
 
   matcher = {
@@ -686,11 +686,11 @@ class Icmp(Instr):
     return self.recurseSMT(ops, state.eval(self.v1, defined, poison, qvars),
                            state.eval(self.v2, defined, poison, qvars), 0)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.stype == self.v1.type,
                self.stype == self.v2.type,
-               self.type.getTypeConstraints(),
-               self.stype.getTypeConstraints())
+               self.type.getTypeConstraints(bitwidth),
+               self.stype.getTypeConstraints(bitwidth))
 
   op_enum = {
     EQ:  'ICmpInst::ICMP_EQ',
@@ -781,11 +781,11 @@ class Select(Instr):
               state.eval(self.v1, defined, poison, qvars),
               state.eval(self.v2, defined, poison, qvars))
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.type == self.v1.type,
                self.type == self.v2.type,
                self.c.type == 1,
-               self.type.getTypeConstraints())
+               self.type.getTypeConstraints(bitwidth))
 
   def register_types(self, manager):
     manager.register_type(self, self.type, UnknownType().ensureFirstClass())
@@ -859,11 +859,11 @@ class Alloca(Instr):
       state.store([], ptr + i, Extract(idx+7, idx, mem))
     return ptr
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.numElems.getType() == self.elemsType,
-               self.type.getTypeConstraints(),
-               self.elemsType.getTypeConstraints(),
-               self.numElems.getTypeConstraints())
+               self.type.getTypeConstraints(bitwidth),
+               self.elemsType.getTypeConstraints(bitwidth),
+               self.numElems.getTypeConstraints(bitwidth))
 
 
 ################################
@@ -906,9 +906,9 @@ class GEP(Instr):
     # TODO: handle inbounds
     return ptr
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.type.ensureTypeDepth(len(self.idxs)),
-               Instr.getTypeConstraints(self))
+               Instr.getTypeConstraints(self, bitwidth))
 
 
 ################################
@@ -948,10 +948,10 @@ class Load(Instr):
       bytes = [state.load(ptr + i)] + bytes
     return mk_concat(bytes)
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.stype == self.v.type,
                self.type == self.v.type.getPointeeType(),
-               self.type.getTypeConstraints())
+               self.type.getTypeConstraints(bitwidth))
 
 
 ################################
@@ -1012,12 +1012,12 @@ class Store(Instr):
       src_idx += 8
     return None
 
-  def getTypeConstraints(self):
+  def getTypeConstraints(self, bitwidth):
     return And(self.stype == self.type.type,
                self.src.type == self.stype,
                self.dst.type == self.type,
-               self.stype.getTypeConstraints(),
-               self.type.getTypeConstraints())
+               self.stype.getTypeConstraints(bitwidth),
+               self.type.getTypeConstraints(bitwidth))
 
 
 ################################
@@ -1107,8 +1107,8 @@ class Ret(TerminatorInst):
   def toSMT(self, defined, poison, state, qvars):
     return state.eval(self.val, defined, poison, qvars)
 
-  def getTypeConstraints(self):
-    return And(self.type == self.val.type, self.type.getTypeConstraints())
+  def getTypeConstraints(self, bitwidth):
+    return And(self.type == self.val.type, self.type.getTypeConstraints(bitwidth))
 
 
 ################################
@@ -1135,8 +1135,8 @@ def countUsers(prog):
   return m
 
 
-def getTypeConstraints(p):
-  t = [v.getTypeConstraints() for v in p.itervalues()]
+def getTypeConstraints(p, bitwidth):
+  t = [v.getTypeConstraints(bitwidth) for v in p.itervalues()]
   # ensure all return instructions have the same type
   ret_types = [v.type for v in p.itervalues() if isinstance(v, Ret)]
   if len(ret_types) > 1:
