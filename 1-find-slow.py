@@ -492,20 +492,21 @@ def check_opt(opt, timeout, bitwidth, hide_progress):
 
 # a row in the CSV data that we write.
 class Row:
-  def __init__(self, path, name, timeout, time_elapsed, exitcode, timed_out):
+  def __init__(self, path, name, bitwidth, timeout, time_elapsed, exitcode, did_timeout):
     self.path = path
     self.name = name
+    self.bitwidth = bitwidth
     self.timeout = timeout
     self.time_elapsed = time_elapsed
     self.exitcode = exitcode
-    self.timed_out = timed_out
+    self.did_timeout = did_timeout
 
   @classmethod
   def write_header(cls, csv_writer):
-    csv_writer.writerow(["path", "name", "timeout", "time_elapsed", "exitcode", "timed_out"])
+    csv_writer.writerow(["path", "name", "bitwidth", "timeout", "time_elapsed", "exitcode", "did_timeout"])
 
   def write(self, csv_writer):
-    csv_writer.writerow([self.path, self.name, self.timeout, self.time_elapsed, self.exitcode, self.timed_out])
+    csv_writer.writerow([self.path, self.name, self.bitwidth, self.timeout, self.time_elapsed, self.exitcode, self.did_timeout])
 
 
 def verify_opt_with_timeout(path, opt, timeout, bitwidth):
@@ -521,10 +522,10 @@ def verify_opt_with_timeout(path, opt, timeout, bitwidth):
   end_time = time.time()
   p1.terminate()
   exitcode = p1.exitcode
-  timed_out = exitcode is None
+  did_timeout = exitcode is None
   print("timeout: [%4s]. bitwidth: [%4s], elapsed: [%4s] seconds. exitcode: [%s]. Timed out? [%s]" % \
-    (timeout, bitwidth, end_time - start_time, exitcode, timed_out))
-  row = Row(path, name, timeout, end_time - start_time, exitcode, timed_out)
+    (timeout, bitwidth, end_time - start_time, exitcode, did_timeout))
+  row = Row(path, name, bitwidth, timeout, end_time - start_time, exitcode, did_timeout)
   return row
 
 
@@ -538,21 +539,32 @@ def verify_all():
   with open(out_path, "w") as of:
     wof = csv.writer(of, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     Row.write_header(wof)
-    # 7200 seconds = 2 hours
-    timeout_search_space = [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600]
-    timeout_search_space.reverse()
-    bitwidth_search_space = [pow(2, i) for i in range(6, 30)]
 
-    for timeout in [1, 2, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600]:
-      for bitwidth in bitwidth_search_space:
+    # first run everything for 1 minute, then 5 minutes, then 1 hour
+    did_timeout_cache = {}
+    for timeout in [1, 10, 60, 300, 1800, 3600]:
         for path in paths:
           with open(path, "r") as f:
             opts = parse_opt_file(f.read())
             for opt in opts:
-              row = verify_opt_with_timeout(path, opt, timeout, bitwidth)
-              if not row: continue # skipped because precondition.
-              row.write(wof)
-              of.flush()
+                name = opt[0]
+                # 2^10 = 10^3
+                # (2^10)^3 = 10^9 = giga bit width
+                for bitwidth in [pow(2, i) for i in range(1, 30)]:
+                  # only run those that did time out in lower timeouts, or that has never been run before
+                  if did_timeout_cache.get((path, name, bitwidth)) in [True, None]: 
+                      row = verify_opt_with_timeout(path, opt, timeout, bitwidth)
+                      if row is None: continue # skipped because precondition.
+                      # if timed out, skip the larger bitwidths
+                      did_timeout_cache[(path, name, bitwidth)] = row.did_timeout
+                      row.write(wof)
+                      of.flush()
+                      # if this bitwidth timed out, then ignore larger bitwidths, as they too
+                      # will have timed out.
+                      if row.did_timeout: break
+                  else:
+                    print("already succeeded running Path [%s], Name [%s],  bitwidth [%4s]" % \
+                            (path, name, bitwidth))
 
 if __name__ == "__main__":
   try:
