@@ -1,0 +1,17 @@
+uuid,path,name,bitwidth,timeout,time_elapsed,exitcode,did_timeout
+1,tests/instcombine/andorxor.opt,AndOrXor:2443,1024,3600,471.8239300251007,0,False
+2,tests/instcombine/andorxor.opt,AndOrXor:2515   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3),1024,3600,859.363519191742,0,False
+3,tests/instcombine/muldivrem.opt,290 & 292,512,3600,1532.8099899291992,0,False
+4,tests/instcombine/muldivrem.opt,SimplifyDivRemOfSelect,128,3600,3600.0011899471283,,True
+5,tests/instcombine/muldivrem.opt,805,256,3600,364.55610489845276,0,False
+6,tests/instcombine/muldivrem.opt,809,1024,3600,481.3446879386902,-9,False
+7,tests/instcombine/muldivrem.opt,1298,1024,3600,477.6662428379059,-9,False
+8,tests/instcombine/select.opt,Select:746,1024,3600,1588.1358590126038,0,False
+9,tests/instcombine/select.opt,Select:747,1024,3600,1013.3078970909119,0,False
+10,tests/instcombine/shift.opt,InstCombineShift: 239,1024,3600,394.43194603919983,0,False
+11,tests/instcombine/shift.opt,InstCombineShift: 279,1024,3600,421.9325067996979,0,False
+12,tests/instcombine/shift.opt,InstCombineShift: 440,1024,3600,1199.090891122818,0,False
+13,tests/instcombine/shift.opt,InstCombineShift: 476,1024,3600,821.3988139629364,0,False
+14,tests/instcombine/shift.opt,InstCombineShift: 497,1024,3600,731.6159319877625,0,False
+17,tests/instcombine/shift.opt,InstCombineShift: 497,1024,3600,3600.0009088516235,,True
+18,tests/instcombine/shift.opt,InstCombineShift: 582,1024,3600,380.7481620311737,0,False
