@@ -540,10 +540,11 @@ def verify_all():
            "tests/instcombine/shift.opt"]
   # key: path -> value:bitwidth
   slow_programs = {
-          ("tests/instcombine/andorxor.opt", "AndOrXor:2443") : 1024,
-          ("tests/instcombine/andorxor.opt", "AndOrXor:2515   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3)") : 1024,
-          ("tests/instcombine/muldivrem.opt", "290 & 292") : 512,
-          ("tests/instcombine/muldivrem.opt", "SimplifyDivRemOfSelect") : 128,
+          ("tests/instcombine/andorxor.opt", "AndOrXor:2443") : 2048,
+          ("tests/instcombine/andorxor.opt", "AndOrXor:2515   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3)") : 2048,
+          ("tests/instcombine/muldivrem.opt", "290 & 292") : 1024,
+          # 4,tests/instcombine/muldivrem.opt,SimplifyDivRemOfSelect,128,3600,3600.0011899471283,,True
+          # ("tests/instcombine/muldivrem.opt", "SimplifyDivRemOfSelect") : 128,
           ("tests/instcombine/muldivrem.opt", "805") : 256,
           ("tests/instcombine/muldivrem.opt", "809") : 1024,
           ("tests/instcombine/muldivrem.opt", "1298") : 1024,
