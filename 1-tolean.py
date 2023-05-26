@@ -528,16 +528,38 @@ def verify_opt_with_timeout(path, opt, timeout, bitwidth):
   row = Row(path, name, bitwidth, timeout, end_time - start_time, exitcode, did_timeout)
   return row
 
+def alive_ir_to_lean(ir):
+    return ""
+    pass
+
 
 def print_as_lean(opt):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
   print "----------------------------------------"
-  return "LEAN"
+  out = ""
+  out += ("\n\n")
+  out += ("-- Name:%s\n" % (name,))
+  out += ("-- precondition: %s\n" % (pre if pre is not None else 'NONE', ))
+  out += "/-\n"
+  out += print_prog(src, []) + "\n"
+  out += "=>\n"
+  out += print_prog(tgt, []) + "\n"
+  out += "-/\n"
+  out += ("example : ")
+  out += ("TSSA.eval (Op := op) (Val := val) e re  [dsl_bb|\n");
+  out += (alive_ir_to_lean(src))
+  out += ("  ]");
+  out += ("  = \n");
+  out += ("  TSSA.eval (Op := op) (Val := val) e re [dsl_bb|\n");
+  out += (alive_ir_to_lean(tgt))
+  out += ("  ]");
+  out += ("\n  := by sorry")
+  return out;
 
 
 
 def convert_to_lean_all():
-  out_path = "experiment-out-data/out.csv"
+  out_path = "experiment-out-data/out.lean"
   paths = ["tests/instcombine/addsub.opt",
            "tests/instcombine/andorxor.opt",
            "tests/instcombine/muldivrem.opt",
@@ -550,7 +572,8 @@ def convert_to_lean_all():
         print("parsing '%s'" %(path, ))
         opts = parse_opt_file(f.read())
         for opt in opts:
-            print_as_lean(opt)
+            of.write(print_as_lean(opt))
+            return
 
 if __name__ == "__main__":
   try:
