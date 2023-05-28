@@ -1190,8 +1190,12 @@ class LExprOp(LExpr):
     return str(self)
 
 class ToLeanState:
+  def unit_index(self):
+    return LVar(9999)
+
   def __init__(self):
     self.assigns = []
+    self.constant_names = []
     self.varmap = {}
     self.nvars = 0 # number of variables so far
     pass
@@ -1206,45 +1210,76 @@ class ToLeanState:
     print "dbg> adding mapping '%s' -> '%s'" % (var, lvar)
     self.varmap[var] = lvar
 
-  def append_assign(self, lhs, rhs):
+  def add_constant_name(self, name):
+    assert isinstance(name, str)
+    self.constant_names.append(name)
+  
+  def _append_assign(self, lhs, rhs):
     assert isinstance(lhs, LVar)
     assert isinstance(rhs, LExpr)
     self.assigns.append((lhs, rhs))
+
+  def build_assign(self, rhs):
+    v = self.new_var()
+    self._append_assign(v, rhs)
+    return v
   
   def build_pair(self, v1, v2):
     v = self.new_var()
-    self.append_assign(v, LExprPair(v1, v2))
+    self._append_assign(v, LExprPair(v1, v2))
     return v
-
-  def build_unit(self):
-    v = self.new_var()
-    self.append_assign(v, LExprUnit())
-    return v
-  
-  def lookup_var(self, v):
-    print "dbg> lookup_var '%s'" % (v, ),
+    
+  def find_var_or_throw(self, v):
+    print "dbg> find_var_or_throw '%s'" % (v, ),
     if v in self.varmap:
       print(" -> self.varmap[v]")
       return self.varmap[v]
     else:
       raise RuntimeError("unknown variable '%s'" % (v, ))
-    
+
+  def find_var_or_none(self, v):
+    print "dbg> find_var_or_none '%s'" % (v, ),
+    if v in self.varmap:
+      print(" -> self.varmap[v] : %s" % (self.varmap[v]))
+      return self.varmap[v]
+    else:
+      print(" -> None")
+      return None
+
+def to_lean_unary_cst_value(val, state):
+  assert isinstance(val, CnstUnaryOp)
+  assert isinstance(state, ToLeanState)
+  if val.op == CnstUnaryOp.Not:
+    return state.build_assign(LExprOp("not w", to_lean_value(val.v, state)))
+  else:
+    raise RuntimeError("unknown unary constant '%s'" % (val.op, ))
+
 def to_lean_value(val, state):
+  assert isinstance(val, Value)
+  assert isinstance(state, ToLeanState)
   print("dbg> to_lean_value (%s) type(%s)" % (val, val.__class__))
     # TODO: maybe treat consants differently?
-  if isinstance(val, Constant):
-    lunit = state.build_unit()
-    lval = state.new_var()
-    lrhs = LExprOp("const %s" % val.getName(), lunit)
-    state.append_assign(lval, lrhs)
+  if isinstance(val, CnstUnaryOp):
+    return to_lean_unary_cst_value(val, state)
+  if isinstance(val, ConstantVal):
+    # FIXME: hardcode width 'w'
+    lrhs = LExprOp("const (Bitvec.ofNat w %s)" % val.getName(), state.unit_index())
+    lval = state.build_assign(lrhs)
     state.add_var_mapping(val.name, lval)
     return lval
   elif isinstance(val, Input):
-    lval = state.new_var()
+    lval = state.find_var_or_none(val.name)
+    if lval is not None:
+      return lval  
+    cleaned_up_name = val.name.replace("%", "")
+    lrhs = LExprOp("const (Bitvec.ofNat w %s)" % cleaned_up_name, state.unit_index())
+    lval = state.build_assign(lrhs)
     state.add_var_mapping(val.name, lval)
+    # TODO: think if this can be unified with ConstantVal
+    state.add_constant_name(cleaned_up_name) # add a new constant to be generated in the def.
     return lval
   elif isinstance(val, BinOp):
-    return state.lookup_var(val.getName())
+    return state.find_var_or_throw(val.getName())
   raise RuntimeError("cannot convert value '%s' (type: '%s')" % (val, val.__class__))
 
 def to_lean_binop(bop, state):
@@ -1253,11 +1288,12 @@ def to_lean_binop(bop, state):
   lv1 = to_lean_value(bop.v1, state)
   lv2 = to_lean_value(bop.v2, state)
   pair = state.build_pair(lv1, lv2)
-  if bop.op == BinOp.Or: return LExprOp("or", pair)
-  if bop.op == BinOp.Xor: return LExprOp("xor", pair)
-  if bop.op == BinOp.Add: return LExprOp("add", pair)
-  if bop.op == BinOp.And: return LExprOp("and", pair)
-  if bop.op == BinOp.Sub: return LExprOp("sub", pair)
+  # FIXME: hardcoded width to be 'w'
+  if bop.op == BinOp.Or: return LExprOp("or w", pair)
+  if bop.op == BinOp.Xor: return LExprOp("xor w", pair)
+  if bop.op == BinOp.Add: return LExprOp("add w", pair)
+  if bop.op == BinOp.And: return LExprOp("and w", pair)
+  if bop.op == BinOp.Sub: return LExprOp("sub w", pair)
   else:
     raise RuntimeError("unknown binop '%s' ; bop.op = '%s'" % (bop, bop.op)) 
 
@@ -1273,6 +1309,9 @@ def to_lean_prog(p, num_indent=2, skip=[]):
   state = ToLeanState()
   out = ""
   out += " "*num_indent + "^bb"
+  
+  # create a single unit that is reused everywhere.
+  state._append_assign(state.unit_index(), LExprUnit()) 
   for bb, instrs in p.iteritems():
     if bb != "":
       raise RuntimeError("expected no basic block name, got '%s'" % (bb, ))
@@ -1285,8 +1324,8 @@ def to_lean_prog(p, num_indent=2, skip=[]):
       lrhs = to_lean_instr(v, state) # l for lean
       kstr = str(k)
       if kstr[0] == '%':
-        llhs =  state.new_var(); state.add_var_mapping(k, llhs)
-        state.append_assign(llhs, lrhs)
+        llhs = state.build_assign(lrhs)
+        state.add_var_mapping(k, llhs)
       else:
         raise RuntimeError("unknown instruction with side effect: '%s'" % ((k, v)))
   last_var = None
@@ -1303,7 +1342,7 @@ def to_lean_prog(p, num_indent=2, skip=[]):
   out += "\n" + " " * num_indent + "dsl_ret " + lhs.to_lean_str()
   # what value do we 'ret'?
   # looks like we 'ret' the last value.
-  return out
+  return (out, state)
 
 def countUsers(prog):
   m = {}

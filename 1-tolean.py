@@ -535,6 +535,9 @@ def alive_ir_to_lean(ir):
 
 def print_as_lean(opt):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
+  (src_str, src_state) = to_lean_prog(src, num_indent=2, skip=[])
+  (tgt_str, tgt_state) = to_lean_prog(tgt, num_indent=2, skip=[])
+
   print "----------------------------------------"
   out = ""
   out += ("\n\n")
@@ -545,13 +548,22 @@ def print_as_lean(opt):
   out += "=>\n"
   out += to_str_prog(tgt, []) + "\n"
   out += "-/\n"
-  out += ("example : ")
-  out += ("TSSA.eval (Op := op) (Val := val) e re  [dsl_bb|\n");
-  out += to_lean_prog(src, num_indent=2, skip=[]) + "\n"
+  out += "open SSA EDSL in\n"
+  out += ("example : forall (w : Nat) ")
+  out += "(" + " ".join(src_state.constant_names + tgt_state.constant_names) + " : Nat)"
+  out += (",")
+  out += "TSSA.eval\n"
+  out += "  (Op := Op) (e := e)\n"
+  out += "  (i := TSSAIndex.TERMINATOR (UserType.base (BaseType.bitvec w)))\n"
+  out += "  [dsl_bb|\n"
+  out += src_str + "\n"
   out += ("  ]");
   out += ("  = \n");
-  out += ("  TSSA.eval (Op := op) (Val := val) e re [dsl_bb|\n");
-  out += to_lean_prog(tgt, num_indent=2, skip=[]) + "\n"
+  out += "  TSSA.eval\n"
+  out += "  (Op := Op) (e := e)\n"
+  out += "  (i := TSSAIndex.TERMINATOR (UserType.base (BaseType.bitvec w)))\n"
+  out += "  [dsl_bb|\n"
+  out += tgt_str + "\n"
   out += ("  ]");
   out += ("\n  := by sorry")
   return out;
@@ -565,7 +577,7 @@ open SSA InstCombine
 """
 
 def convert_to_lean_all():
-  out_path = "experiment-out-data/out.lean"
+  out_path = "experiment-out-data/InstCombineAlive.lean"
   paths = ["tests/instcombine/addsub.opt",
            "tests/instcombine/andorxor.opt",
            "tests/instcombine/muldivrem.opt",
@@ -579,6 +591,9 @@ def convert_to_lean_all():
         print("parsing '%s'" %(path, ))
         opts = parse_opt_file(f.read())
         for opt in opts:
+            name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
+            print("%s : %s" % (pre, pre.__class__))
+            if str(pre) != "true": continue
             of.write(print_as_lean(opt))
             return
 
