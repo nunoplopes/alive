@@ -1159,6 +1159,11 @@ class LExpr:
   pass
 
 
+class LExprUnit(LExpr):
+  def __init__(self): pass
+  def __str__(self): return self.to_lean_str()
+  def to_lean_str(self): return "unit: "
+
 class LExprPair(LExpr):
   def __init__(self, v1, v2):
     assert isinstance(v1, LVar)
@@ -1210,6 +1215,11 @@ class ToLeanState:
     v = self.new_var()
     self.append_assign(v, LExprPair(v1, v2))
     return v
+
+  def build_unit(self):
+    v = self.new_var()
+    self.append_assign(v, LExprUnit())
+    return v
   
   def lookup_var(self, v):
     print "dbg> lookup_var '%s'" % (v, ),
@@ -1222,7 +1232,14 @@ class ToLeanState:
 def to_lean_value(val, state):
   print("dbg> to_lean_value (%s) type(%s)" % (val, val.__class__))
     # TODO: maybe treat consants differently?
-  if isinstance(val, Input) or isinstance(val, Constant):
+  if isinstance(val, Constant):
+    lunit = state.build_unit()
+    lval = state.new_var()
+    lrhs = LExprOp("const %s" % val.getName(), lunit)
+    state.append_assign(lval, lrhs)
+    state.add_var_mapping(val.name, lval)
+    return lval
+  elif isinstance(val, Input):
     lval = state.new_var()
     state.add_var_mapping(val.name, lval)
     return lval
@@ -1255,6 +1272,7 @@ def to_lean_instr(instr, state):
 def to_lean_prog(p, num_indent=2, skip=[]):
   state = ToLeanState()
   out = ""
+  out += " "*num_indent + "^bb"
   for bb, instrs in p.iteritems():
     if bb != "":
       raise RuntimeError("expected no basic block name, got '%s'" % (bb, ))
@@ -1275,15 +1293,14 @@ def to_lean_prog(p, num_indent=2, skip=[]):
   for (i, (lhs, rhs)) in enumerate(state.assigns):
     assert isinstance(lhs, LVar)
     assert isinstance(rhs, LExpr)
-    out += " " * num_indent + lhs.to_lean_str() + " := " + rhs.to_lean_str()
+    out += "\n" + " " * num_indent + lhs.to_lean_str() + " := " + rhs.to_lean_str()
     if i + 1 < len(state.assigns):
       out += ";" # we have more, so print a ;
-    out += "\n"
 
     last_var = lhs
   assert last_var is not None
   assert isinstance(last_var, LVar)
-  out += " " * num_indent + "return " + lhs.to_lean_str()
+  out += "\n" + " " * num_indent + "dsl_ret " + lhs.to_lean_str()
   # what value do we 'ret'?
   # looks like we 'ret' the last value.
   return out
