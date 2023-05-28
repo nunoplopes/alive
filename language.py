@@ -1,4 +1,4 @@
-# Copyright 2014-2015 The Alive authors.
+# Copyright 2013-2015 The Alive authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 import collections
 from constants import *
 from codegen import *
-
 
 def getAllocSize(type):
   # round to nearest byte boundary
@@ -1140,6 +1139,127 @@ def to_str_prog(p, skip):
         out += '  %s = %s\n' % (k, v)
       else:
         out += "  %s\n" % v
+  return out
+
+class LVar:
+  def __init__(self, v):
+    self.v = v
+  def __repr__(self):
+    return "%" + str(self.v)
+  
+class LExpr:
+  pass
+
+
+class LExprPair(LExpr):
+  def __init__(self, v1, v2):
+    assert isinstance(v1, LVar)
+    assert isinstance(v2, LVar)
+    self.v1 = v1
+    self.v2 = v2
+
+  def __repr__(self):
+    return "pair:" + str(self.v1) + " " + str(self.v2)
+
+class LExprOp(LExpr):
+  def __init__(self, op, v):
+    assert isinstance(op, str)
+    assert isinstance(v, LVar)
+    self.op = op
+    self.v = v
+  def __repr__(self):
+    return "op:" + self.op + " " + str(self.v)
+
+
+class ToLeanState:
+  def __init__(self):
+    self.assigns = []
+    self.varmap = {}
+    self.nvars = 0 # number of variables so far
+    pass
+
+  def new_var(self): # return a new variable name
+    self.nvars += 1
+    return LVar(self.nvars)  
+  
+  def add_var_mapping(self, var, lvar):
+    assert isinstance(var, str)
+    assert isinstance(lvar, LVar)
+    print "dbg> adding mapping '%s' -> '%s'" % (var, lvar)
+    self.varmap[var] = lvar
+
+  def append_assign(self, lhs, rhs):
+    assert isinstance(lhs, LVar)
+    assert isinstance(rhs, LExpr)
+    self.assigns.append((lhs, rhs))
+  
+  def build_pair(self, v1, v2):
+    v = self.new_var()
+    self.append_assign(v, LExprPair(v1, v2))
+    return v
+  
+  def lookup_var(self, v):
+    print "dbg> lookup_var '%s'" % (v, ),
+    if v in self.varmap:
+      print(" -> self.varmap[v]")
+      return self.varmap[v]
+    else:
+      raise RuntimeError("unknown variable '%s'" % (v, ))
+    
+def to_lean_value(val, state):
+  print("dbg> to_lean_value (%s) type(%s)" % (val, val.__class__))
+    # TODO: maybe treat consants differently?
+  if isinstance(val, Input) or isinstance(val, Constant):
+    lval = state.new_var()
+    state.add_var_mapping(val.name, lval)
+    return lval
+  elif isinstance(val, BinOp):
+    return state.lookup_var(val.getName())
+  raise RuntimeError("cannot convert value '%s' (type: '%s')" % (val, val.__class__))
+
+def to_lean_binop(bop, state):
+  print("dbg> to_lean_binop(%s) type(%s)" % (bop, bop.__class__))
+  out = ""
+  lv1 = to_lean_value(bop.v1, state)
+  lv2 = to_lean_value(bop.v2, state)
+  pair = state.build_pair(lv1, lv2)
+  if bop.op == BinOp.Or: return LExprOp("or", pair)
+  if bop.op == BinOp.Xor: return LExprOp("xor", pair)
+  if bop.op == BinOp.Add: return LExprOp("add", pair)
+  if bop.op == BinOp.And: return LExprOp("and", pair)
+  if bop.op == BinOp.Sub: return LExprOp("sub", pair)
+  else:
+    raise RuntimeError("unknown binop '%s' ; bop.op = '%s'" % (bop, bop.op)) 
+
+def to_lean_instr(instr, state):
+  print("dbg> to_lean_instr(%s) type(%s)" % (instr, instr.__class__))
+  if isinstance(instr, BinOp):
+    return to_lean_binop(instr, state)
+  else:
+    raise RuntimeError("unknown instruction '%s'" % (instr, ))
+  
+    
+def to_lean_prog(p, skip):
+  state = ToLeanState()
+  out = ""
+  for bb, instrs in p.iteritems():
+    if bb != "":
+      raise RuntimeError("expected no basic block name, got '%s'" % (bb, ))
+
+    for k,v in instrs.iteritems():
+      if k in skip:
+        continue
+      # print("dbg> type of k(%s) : '%s', of v(%s) : '%s'" % (k, type(k), v, v.__class__))
+      print("dbg> k:%s := v:%s" % (k, v))
+      lrhs = to_lean_instr(v, state) # l for lean
+      kstr = str(k)
+      if kstr[0] == '%':
+        llhs =  state.new_var(); state.add_var_mapping(k, llhs)
+        state.append_assign(llhs, lrhs)
+      else:
+        raise RuntimeError("unknown instruction with side effect: '%s'" % ((k, v)))
+  # what value do we 'ret'?
+  # looks like we 'ret' the last value.
   return out
 
 def countUsers(prog):
