@@ -1143,11 +1143,19 @@ def to_str_prog(p, skip):
 
 class LVar:
   def __init__(self, v):
+    assert isinstance(v, int)
     self.v = v
+
   def __repr__(self):
-    return "%" + str(self.v)
+    return self.to_lean_str()
+
+  def to_lean_str(self):
+    return "%v" + str(self.v)
+
   
 class LExpr:
+  def to_lean_str(self):
+    raise RuntimeError("to_lean_str not implemented")
   pass
 
 
@@ -1159,7 +1167,10 @@ class LExprPair(LExpr):
     self.v2 = v2
 
   def __repr__(self):
-    return "pair:" + str(self.v1) + " " + str(self.v2)
+    return self.to_lean_str()
+
+  def to_lean_str(self):
+    return "pair:" + self.v1.to_lean_str() + " " + self.v2.to_lean_str()
 
 class LExprOp(LExpr):
   def __init__(self, op, v):
@@ -1168,8 +1179,10 @@ class LExprOp(LExpr):
     self.op = op
     self.v = v
   def __repr__(self):
-    return "op:" + self.op + " " + str(self.v)
+    return "op:" + self.op + " " + self.v.to_lean_str()
 
+  def to_lean_str(self):
+    return str(self)
 
 class ToLeanState:
   def __init__(self):
@@ -1239,7 +1252,7 @@ def to_lean_instr(instr, state):
     raise RuntimeError("unknown instruction '%s'" % (instr, ))
   
     
-def to_lean_prog(p, skip):
+def to_lean_prog(p, num_indent=2, skip=[]):
   state = ToLeanState()
   out = ""
   for bb, instrs in p.iteritems():
@@ -1258,6 +1271,19 @@ def to_lean_prog(p, skip):
         state.append_assign(llhs, lrhs)
       else:
         raise RuntimeError("unknown instruction with side effect: '%s'" % ((k, v)))
+  last_var = None
+  for (i, (lhs, rhs)) in enumerate(state.assigns):
+    assert isinstance(lhs, LVar)
+    assert isinstance(rhs, LExpr)
+    out += " " * num_indent + lhs.to_lean_str() + " := " + rhs.to_lean_str()
+    if i + 1 < len(state.assigns):
+      out += ";" # we have more, so print a ;
+    out += "\n"
+
+    last_var = lhs
+  assert last_var is not None
+  assert isinstance(last_var, LVar)
+  out += " " * num_indent + "return " + lhs.to_lean_str()
   # what value do we 'ret'?
   # looks like we 'ret' the last value.
   return out

@@ -547,11 +547,11 @@ def print_as_lean(opt):
   out += "-/\n"
   out += ("example : ")
   out += ("TSSA.eval (Op := op) (Val := val) e re  [dsl_bb|\n");
-  out += to_lean_prog(src, []) + "\n"
+  out += to_lean_prog(src, num_indent=2, skip=[]) + "\n"
   out += ("  ]");
   out += ("  = \n");
   out += ("  TSSA.eval (Op := op) (Val := val) e re [dsl_bb|\n");
-  out += to_lean_prog(tgt, []) + "\n"
+  out += to_lean_prog(tgt, num_indent=2, skip=[]) + "\n"
   out += ("  ]");
   out += ("\n  := by sorry")
   return out;
