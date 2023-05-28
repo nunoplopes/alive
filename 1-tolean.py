@@ -583,6 +583,7 @@ def convert_to_lean_all():
            "tests/instcombine/muldivrem.opt",
            "tests/instcombine/select.opt",
            "tests/instcombine/shift.opt"]
+  errors = []
   with open(out_path, "w") as of:
     of.write(LEAN_PREAMBLE)
     # first run everything for 1 minute, then 5 minutes, then 1 hour
@@ -594,8 +595,20 @@ def convert_to_lean_all():
             name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
             print("%s : %s" % (pre, pre.__class__))
             if str(pre) != "true": continue
-            of.write(print_as_lean(opt))
-            return
+            try:
+              out = print_as_lean(opt)
+              of.write(out)
+            except RuntimeError as e:
+              errors.append((path, opt, e))
+    print "#errors: %d" % len(errors)
+    for (path, opt, err) in errors:
+      name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
+      print("%s:%s" % (path, name))
+      print(to_str_prog(src, []))
+      print("=>")
+      print(to_str_prog(tgt, []))
+      print("error: %s" % err)
+      print("--")
 
 if __name__ == "__main__":
   try:

@@ -1263,7 +1263,7 @@ def to_lean_value(val, state):
     return to_lean_unary_cst_value(val, state)
   if isinstance(val, ConstantVal):
     # FIXME: hardcode width 'w'
-    lrhs = LExprOp("const (Bitvec.ofNat w %s)" % val.getName(), state.unit_index())
+    lrhs = LExprOp("const (Bitvec.ofInt' w (%s))" % val.getName(), state.unit_index())
     lval = state.build_assign(lrhs)
     state.add_var_mapping(val.name, lval)
     return lval
@@ -1272,7 +1272,7 @@ def to_lean_value(val, state):
     if lval is not None:
       return lval  
     cleaned_up_name = val.name.replace("%", "")
-    lrhs = LExprOp("const (Bitvec.ofNat w %s)" % cleaned_up_name, state.unit_index())
+    lrhs = LExprOp("const (Bitvec.ofInt' w (%s))" % cleaned_up_name, state.unit_index())
     lval = state.build_assign(lrhs)
     state.add_var_mapping(val.name, lval)
     # TODO: think if this can be unified with ConstantVal
