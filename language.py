@@ -743,7 +743,7 @@ class Icmp(Instr):
       opname = Icmp.op_enum[self.op]
 
     instr = CFunctionCall('new ICmpInst', CVariable(opname),
-      manager.get_cexp(self.v1), 
+      manager.get_cexp(self.v1),
       manager.get_cexp(self.v2))
 
     if use_builder:
@@ -1126,6 +1126,21 @@ def print_prog(p, skip):
       else:
         print "  %s" % v
 
+def to_str_prog(p, skip):
+  out = ""
+  for bb, instrs in p.iteritems():
+    if bb != "":
+      out += "%s:\n" % bb
+
+    for k,v in instrs.iteritems():
+      if k in skip:
+        continue
+      k = str(k)
+      if k[0] == '%':
+        out += '  %s = %s\n' % (k, v)
+      else:
+        out += "  %s\n" % v
+  return out
 
 def countUsers(prog):
   m = {}

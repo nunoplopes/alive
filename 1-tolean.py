@@ -541,9 +541,9 @@ def print_as_lean(opt):
   out += ("-- Name:%s\n" % (name,))
   out += ("-- precondition: %s\n" % (pre if pre is not None else 'NONE', ))
   out += "/-\n"
-  out += print_prog(src, []) + "\n"
+  out += to_str_prog(src, []) + "\n"
   out += "=>\n"
-  out += print_prog(tgt, []) + "\n"
+  out += to_str_prog(tgt, []) + "\n"
   out += "-/\n"
   out += ("example : ")
   out += ("TSSA.eval (Op := op) (Val := val) e re  [dsl_bb|\n");
