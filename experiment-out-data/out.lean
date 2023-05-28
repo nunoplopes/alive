@@ -1,4 +1,9 @@
 
+import SSA.Core.WellTypedFramework
+import SSA.Projects.InstCombine.InstCombineBase
+
+open SSA InstCombine
+
 
 -- Name:AddSub:1040
 -- precondition: (C2 == ~C1)

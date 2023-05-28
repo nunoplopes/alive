@@ -557,6 +557,12 @@ def print_as_lean(opt):
   return out;
 
 
+LEAN_PREAMBLE="""
+import SSA.Core.WellTypedFramework
+import SSA.Projects.InstCombine.InstCombineBase
+
+open SSA InstCombine
+"""
 
 def convert_to_lean_all():
   out_path = "experiment-out-data/out.lean"
@@ -566,6 +572,7 @@ def convert_to_lean_all():
            "tests/instcombine/select.opt",
            "tests/instcombine/shift.opt"]
   with open(out_path, "w") as of:
+    of.write(LEAN_PREAMBLE)
     # first run everything for 1 minute, then 5 minutes, then 1 hour
     for path in paths:
       with open(path, "r") as f:
