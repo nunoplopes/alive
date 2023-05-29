@@ -1,0 +1,185 @@
+file,name,error
+tests/instcombine/addsub.opt,AddSub:1043,
+tests/instcombine/addsub.opt,AddSub:1098,unknown instruction 'zext i1 %a'
+tests/instcombine/addsub.opt,AddSub:1152,
+tests/instcombine/addsub.opt,AddSub:1156,
+tests/instcombine/addsub.opt,AddSub:1156-2,
+tests/instcombine/addsub.opt,AddSub:1156-3,
+tests/instcombine/addsub.opt,AddSub:1164,
+tests/instcombine/addsub.opt,AddSub:1165,
+tests/instcombine/addsub.opt,AddSub:1176,
+tests/instcombine/addsub.opt,AddSub:1202,"unknown binary constant '(C - 1)', op index: '4'"
+tests/instcombine/addsub.opt,AddSub:1295,
+tests/instcombine/addsub.opt,AddSub:1309,
+tests/instcombine/addsub.opt,AddSub:1309-2,
+tests/instcombine/addsub.opt,AddSub:1309-3,
+tests/instcombine/addsub.opt,AddSub:1539,
+tests/instcombine/addsub.opt,AddSub:1539-2,unknown unary constant '1'
+tests/instcombine/addsub.opt,AddSub:1546,
+tests/instcombine/addsub.opt,AddSub:1556,
+tests/instcombine/addsub.opt,AddSub:1560,
+tests/instcombine/addsub.opt,AddSub:1564,"unknown binary constant '(C + 1)', op index: '3'"
+tests/instcombine/addsub.opt,AddSub:1574,"unknown binary constant '(C - C2)', op index: '4'"
+tests/instcombine/addsub.opt,AddSub:1582,unknown instruction 'zext i1 %X'
+tests/instcombine/addsub.opt,AddSub:1587,unknown instruction 'sext i1 %X'
+tests/instcombine/addsub.opt,AddSub:1614,
+tests/instcombine/addsub.opt,AddSub:1619,
+tests/instcombine/addsub.opt,AddSub:1624,
+tests/instcombine/andorxor.opt,AndOrXor:135,"unknown binary constant '(C1 & C2)', op index: '0'"
+tests/instcombine/andorxor.opt,AndOrXor:144,"unknown binary constant '(C1 & C2)', op index: '0'"
+tests/instcombine/andorxor.opt,AndOrXor:516,"unknown instruction 'icmp slt %X, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:523,"unknown instruction 'icmp sgt %X, -1'"
+tests/instcombine/andorxor.opt,AndOrXor:698,"unknown instruction 'icmp eq %a1, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:709,"unknown instruction 'icmp eq %a1, %b'"
+tests/instcombine/andorxor.opt,AndOrXor:716,"unknown instruction 'icmp eq %a1, %a'"
+tests/instcombine/andorxor.opt,AndOrXor:794,"unknown instruction 'icmp sgt %a, %b'"
+tests/instcombine/andorxor.opt,AndOrXor:827,"unknown instruction 'icmp eq %a, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:887-2,"unknown instruction 'icmp eq %a, C1'"
+tests/instcombine/andorxor.opt,AndOrXor:1191-1,"unknown instruction 'icmp eq %op0RHS, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:1191-2,"unknown instruction 'icmp eq %op0RHS, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:1207,unknown instruction 'trunc %a'
+tests/instcombine/andorxor.opt,AndOrXor:1230  ~A & ~B -> ~(A | B),
+tests/instcombine/andorxor.opt,AndOrXor:1241 (A|B) & ~(A&B) => A^B,
+tests/instcombine/andorxor.opt,AndOrXor:1247 ~(A&B) & (A|B) => A^B,
+tests/instcombine/andorxor.opt,AndOrXor:1253 A & (A^B) -> A & ~B,
+tests/instcombine/andorxor.opt,AndOrXor:1280 (~A|B)&A -> A&B,
+tests/instcombine/andorxor.opt,AndOrXor:1288 (A ^ B) & ((B ^ C) ^ A) -> (A ^ B) & ~C,
+tests/instcombine/andorxor.opt,AndOrXor:1294 (A | B) & ((~A) ^ B) -> (A & B),
+tests/instcombine/andorxor.opt,AndOrXor:1346 (sext),unknown instruction 'sext %x'
+tests/instcombine/andorxor.opt,AndOrXor:1346 (zext),unknown instruction 'zext %x'
+tests/instcombine/andorxor.opt,AndOrXor:1346 (trunc),unknown instruction 'trunc %x'
+tests/instcombine/andorxor.opt,AndOrXor:1388,unknown instruction 'sext i1 %a'
+tests/instcombine/andorxor.opt,AndOrXor:1395,unknown instruction 'sext i1 %a'
+tests/instcombine/andorxor.opt,AndOrXor:1574,unknown instruction 'sext %Cond'
+tests/instcombine/andorxor.opt,AndOrXor:1577,unknown instruction 'sext %Cond'
+tests/instcombine/andorxor.opt,AndOrXor:1581,unknown instruction 'sext %Cond'
+tests/instcombine/andorxor.opt,AndOrXor:1583,unknown instruction 'sext %Cond'
+tests/instcombine/andorxor.opt,AndOrXor:1683-1,"unknown instruction 'icmp ugt %a, %b'"
+tests/instcombine/andorxor.opt,AndOrXor:1683-2,"unknown instruction 'icmp uge %a, %b'"
+tests/instcombine/andorxor.opt,AndOrXor:1704,"unknown instruction 'icmp eq %B, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:1705,"unknown instruction 'icmp eq %B, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:1733,"unknown instruction 'icmp ne %A, 0'"
+tests/instcombine/andorxor.opt,AndOrXor:2063  (X ^ C1) | C2 --> (X | C2) ^ (C1 & ~C2),"unknown binary constant '(C1 & ~C)', op index: '0'"
+tests/instcombine/andorxor.opt,AndOrXor:2113   ((~A & B) | A) -> (A | B),
+tests/instcombine/andorxor.opt,AndOrXor:2118   ((A & B) | ~A) -> (~A | B),
+tests/instcombine/andorxor.opt,AndOrXor:2123   (A & (~B)) | (A ^ B) -> (A ^ B),
+tests/instcombine/andorxor.opt,AndOrXor:2188,
+tests/instcombine/andorxor.opt,AndOrXor:2231  (A ^ B) | ((B ^ C) ^ A) -> (A ^ B) | C,
+tests/instcombine/andorxor.opt,AndOrXor:2243  ((B | C) & A) | B -> B | (A & C),
+tests/instcombine/andorxor.opt,AndOrXor:2247  (~A | ~B) == (~(A & B)),
+tests/instcombine/andorxor.opt,AndOrXor:2263,
+tests/instcombine/andorxor.opt,AndOrXor:2264,
+tests/instcombine/andorxor.opt,AndOrXor:2265,
+tests/instcombine/andorxor.opt,AndOrXor:2284,
+tests/instcombine/andorxor.opt,AndOrXor:2285,
+tests/instcombine/andorxor.opt,AndOrXor:2297,
+tests/instcombine/andorxor.opt,AndOrXor:2321-1,unknown instruction 'zext %A'
+tests/instcombine/andorxor.opt,AndOrXor:2321-2,unknown instruction 'sext %A'
+tests/instcombine/andorxor.opt,AndOrXor:2321-3,unknown instruction 'trunc %A'
+tests/instcombine/andorxor.opt,AndOrXor:2356,unknown instruction 'sext i1 %A'
+tests/instcombine/andorxor.opt,AndOrXor:2367,
+tests/instcombine/andorxor.opt,AndOrXor:2375,"cannot convert value 'select i1 %x, %A, %B' (type: 'language.Select')"
+tests/instcombine/andorxor.opt,AndOrXor:2416,
+tests/instcombine/andorxor.opt,AndOrXor:2417,
+tests/instcombine/andorxor.opt,AndOrXor:2429,
+tests/instcombine/andorxor.opt,AndOrXor:2430,
+tests/instcombine/andorxor.opt,AndOrXor:2443,
+tests/instcombine/andorxor.opt,AndOrXor:2453,"unknown instruction 'icmp slt %x, %y'"
+tests/instcombine/andorxor.opt,AndOrXor:2459-1,"unknown instruction 'icmp slt %x, %y'"
+tests/instcombine/andorxor.opt,AndOrXor:2459-2,"unknown instruction 'icmp slt %x, %y'"
+tests/instcombine/andorxor.opt,AndOrXor:2475,"unknown binary constant '(-1 - C)', op index: '4'"
+tests/instcombine/andorxor.opt,AndOrXor:2486,"unknown binary constant '(-1 - C)', op index: '4'"
+tests/instcombine/andorxor.opt,AndOrXor:2515   ((X^C1) >> C2)^C3 -> (X>>C2) ^ ((C1>>C2)^C3),"cannot convert value 'lshr(C1, C2)' (type: 'constants.CnstFunction')"
+tests/instcombine/andorxor.opt,AndOrXor:2581  (B|A)^B -> A & ~B,
+tests/instcombine/andorxor.opt,AndOrXor:2587  (B&A)^A -> ~B & A,
+tests/instcombine/andorxor.opt,AndOrXor:2595,
+tests/instcombine/andorxor.opt,AndOrXor:2607,
+tests/instcombine/andorxor.opt,AndOrXor:2617,
+tests/instcombine/andorxor.opt,AndOrXor:2627,
+tests/instcombine/andorxor.opt,AndOrXor:2647,
+tests/instcombine/andorxor.opt,AndOrXor:2658,
+tests/instcombine/andorxor.opt,AndOrXor:2663,"unknown instruction 'icmp ule %a, %b'"
+tests/instcombine/andorxor.opt,AndOrXor:2681-1,unknown instruction 'zext %a'
+tests/instcombine/andorxor.opt,AndOrXor:2681-2,unknown instruction 'sext %a'
+tests/instcombine/andorxor.opt,AndOrXor:2681-3,unknown instruction 'trunc %a'
+tests/instcombine/muldivrem.opt,152,
+tests/instcombine/muldivrem.opt,160,
+tests/instcombine/muldivrem.opt,229,
+tests/instcombine/muldivrem.opt,239,
+tests/instcombine/muldivrem.opt,265,unknown instruction '%X'
+tests/instcombine/muldivrem.opt,265-2,unknown instruction '%X'
+tests/instcombine/muldivrem.opt,266,
+tests/instcombine/muldivrem.opt,266-2,
+tests/instcombine/muldivrem.opt,275,
+tests/instcombine/muldivrem.opt,275-2,
+tests/instcombine/muldivrem.opt,276,
+tests/instcombine/muldivrem.opt,276-2,
+tests/instcombine/muldivrem.opt,283,
+tests/instcombine/muldivrem.opt,290 & 292,
+tests/instcombine/muldivrem.opt,SimplifyDivRemOfSelect,"cannot convert value 'select i1 %c, %Y, 0' (type: 'language.Select')"
+tests/instcombine/muldivrem.opt,805,"unknown instruction 'icmp ult %inc, 3'"
+tests/instcombine/muldivrem.opt,809,"unknown instruction 'icmp eq %X, 1'"
+tests/instcombine/muldivrem.opt,820,
+tests/instcombine/muldivrem.opt,820,
+tests/instcombine/muldivrem.opt,891,
+tests/instcombine/muldivrem.opt,891-exact,
+tests/instcombine/muldivrem.opt,976,unknown instruction 'zext Ty %X'
+tests/instcombine/muldivrem.opt,976-exact,unknown instruction 'zext Ty %X'
+tests/instcombine/muldivrem.opt,1030,
+tests/instcombine/muldivrem.opt,1049,unknown unary constant '1'
+tests/instcombine/muldivrem.opt,1285,unknown instruction 'zext Ty %X'
+tests/instcombine/muldivrem.opt,1298,"unknown instruction 'icmp ne %Op1, 1'"
+tests/instcombine/select.opt,Select:485-2,"unknown instruction 'icmp ult i32 %x, 0'"
+tests/instcombine/select.opt,Select:489-2,"unknown instruction 'icmp ugt i32 %x, -1'"
+tests/instcombine/select.opt,Select:575,"unknown instruction 'icmp sgt %X, -1'"
+tests/instcombine/select.opt,Select:575,"unknown instruction 'icmp sgt %X, -1'"
+tests/instcombine/select.opt,Select:576,"unknown instruction 'icmp slt %X, 0'"
+tests/instcombine/select.opt,Select:576,"unknown instruction 'icmp slt %X, 0'"
+tests/instcombine/select.opt,Select:637,"unknown instruction 'icmp eq %X, C'"
+tests/instcombine/select.opt,Select:641,"unknown instruction 'icmp ne %X, C'"
+tests/instcombine/select.opt,Select:699,"unknown instruction 'icmp uge %A, %B'"
+tests/instcombine/select.opt,Select:700,"unknown instruction 'icmp slt %A, %B'"
+tests/instcombine/select.opt,Select:704,"unknown instruction 'icmp slt %A, %B'"
+tests/instcombine/select.opt,Select:705,"unknown instruction 'icmp sge %A, %B'"
+tests/instcombine/select.opt,Select:740,"unknown instruction 'icmp sgt %A, 0'"
+tests/instcombine/select.opt,Select:741,"unknown instruction 'icmp sgt %A, 0'"
+tests/instcombine/select.opt,Select:746,"unknown instruction 'icmp slt %A, 0'"
+tests/instcombine/select.opt,Select:747,"unknown instruction 'icmp sgt %A, 0'"
+tests/instcombine/select.opt,Select:846,
+tests/instcombine/select.opt,Select:850,
+tests/instcombine/select.opt,Select:855,
+tests/instcombine/select.opt,Select:859,
+tests/instcombine/select.opt,Select:851,
+tests/instcombine/select.opt,Select:852,
+tests/instcombine/select.opt,Select:858,
+tests/instcombine/select.opt,Select:859,
+tests/instcombine/select.opt,Select:869,unknown instruction 'zext C'
+tests/instcombine/select.opt,Select:873,unknown instruction 'sext C'
+tests/instcombine/select.opt,Select:877,unknown instruction 'zext %notc'
+tests/instcombine/select.opt,Select:883,unknown instruction 'sext %notc'
+tests/instcombine/select.opt,Select:962,"cannot convert value 'select i1 %c, %y, %z' (type: 'language.Select')"
+tests/instcombine/select.opt,Select:967a,"cannot convert value 'select i1 %c, %y, %neg' (type: 'language.Select')"
+tests/instcombine/select.opt,Select:967b,"cannot convert value 'select i1 %c, %neg, %y' (type: 'language.Select')"
+tests/instcombine/select.opt,Select:1070,"cannot convert value 'select i1 %c, %W, %Z' (type: 'language.Select')"
+tests/instcombine/select.opt,Select:1078,"cannot convert value 'select i1 %c, %W, %Z' (type: 'language.Select')"
+tests/instcombine/select.opt,Select:1087,
+tests/instcombine/select.opt,Select:1100,unknown instruction '%X'
+tests/instcombine/select.opt,Select:1105,unknown instruction '%Y'
+tests/instcombine/shift.opt,InstCombineShift: 239,"unknown binary constant '(-1 u>> C)', op index: '11'"
+tests/instcombine/shift.opt,InstCombineShift: 279,
+tests/instcombine/shift.opt,InstCombineShift: 351,
+tests/instcombine/shift.opt,InstCombineShift: 366-1,unknown instruction 'trunc %TrOp'
+tests/instcombine/shift.opt,InstCombineShift: 366-2,unknown instruction 'trunc %TrOp'
+tests/instcombine/shift.opt,InstCombineShift: 366-3,unknown instruction 'trunc %TrOp'
+tests/instcombine/shift.opt,InstCombineShift: 366-4,unknown instruction 'trunc %TrOp'
+tests/instcombine/shift.opt,InstCombineShift: 366-5,unknown instruction 'trunc %TrOp'
+tests/instcombine/shift.opt,InstCombineShift: 366-6,unknown instruction 'trunc %TrOp'
+tests/instcombine/shift.opt,InstCombineShift: 422-1,
+tests/instcombine/shift.opt,InstCombineShift: 422-2,
+tests/instcombine/shift.opt,InstCombineShift: 440,
+tests/instcombine/shift.opt,InstCombineShift: 458,
+tests/instcombine/shift.opt,InstCombineShift: 476,
+tests/instcombine/shift.opt,InstCombineShift: 497,"unknown binary constant '(C2 u>> C)', op index: '11'"
+tests/instcombine/shift.opt,InstCombineShift: 497,
+tests/instcombine/shift.opt,InstCombineShift: 582,"unknown binary constant '(-1 u>> C)', op index: '11'"
+tests/instcombine/shift.opt,InstCombineShift: 724,

@@ -13,6 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# This file implements code to 
+# convert Alive definitions into Lean, and produce statistics
+# about the conversion.
 
 import argparse, glob, re, sys
 from language import *
@@ -490,48 +493,6 @@ def check_opt(opt, timeout, bitwidth, hide_progress):
 
   return True # succeeded, did not time out
 
-# a row in the CSV data that we write.
-class Row:
-  def __init__(self, path, name, bitwidth, timeout, time_elapsed, exitcode, did_timeout):
-    self.path = path
-    self.name = name
-    self.bitwidth = bitwidth
-    self.timeout = timeout
-    self.time_elapsed = time_elapsed
-    self.exitcode = exitcode
-    self.did_timeout = did_timeout
-
-  @classmethod
-  def write_header(cls, csv_writer):
-    csv_writer.writerow(["path", "name", "bitwidth", "timeout", "time_elapsed", "exitcode", "did_timeout"])
-
-  def write(self, csv_writer):
-    csv_writer.writerow([self.path, self.name, self.bitwidth, self.timeout, self.time_elapsed, self.exitcode, self.did_timeout])
-
-
-def verify_opt_with_timeout(path, opt, timeout, bitwidth):
-  name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
-  print '----------------------------------------'
-  if str(pre) != "true": print("%s has precondition; skipping." % (name, )); return None
-  # timer using python standard library
-  start_time = time.time()
-  hide_progress = False
-  p1 = Process(target=check_opt, args=(opt, timeout, bitwidth, hide_progress))
-  p1.start()
-  p1.join(timeout=timeout)
-  end_time = time.time()
-  p1.terminate()
-  exitcode = p1.exitcode
-  did_timeout = exitcode is None
-  print("timeout: [%4s]. bitwidth: [%4s], elapsed: [%4s] seconds. exitcode: [%s]. Timed out? [%s]" % \
-    (timeout, bitwidth, end_time - start_time, exitcode, did_timeout))
-  row = Row(path, name, bitwidth, timeout, end_time - start_time, exitcode, did_timeout)
-  return row
-
-def alive_ir_to_lean(ir):
-    return ""
-    pass
-
 
 def print_as_lean(opt):
   name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
@@ -576,6 +537,58 @@ import SSA.Projects.InstCombine.InstCombineBase
 open SSA InstCombine
 """
 
+
+
+class Statistics:
+  class Row:
+    def __init__(self, file, name, error):
+      self.file = file
+      self.name = name 
+      self.error = error
+
+    @classmethod
+    def write_header(cls, csv_writer):
+      csv_writer.writerow(["file", "name", "error"])
+    
+    def write(self, csv_writer):
+      csv_writer.writerow([self.file, self.name, self.error])
+
+  def __init__(self):
+    self.rows = [] 
+  
+  def add(self, row):
+    self.rows.append(row)
+
+  def write(self, out_path):
+   with open(out_path, "w") as of:
+    wof = csv.writer(of, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    Statistics.Row.write_header(wof)
+    for r in self.rows:
+      r.write(wof)
+
+def summarize_stats(stats):
+  # number of tests per file.
+  successess_per_file = {}
+  total_successes = 0
+
+  totals_per_file = {}
+  total_counts = 0
+  for row in stats.rows:
+    if row.file not in successess_per_file:
+      successess_per_file[row.file] = 0
+      totals_per_file[row.file] = 0
+
+    totals_per_file[row.file] += 1
+    total_counts += 1
+    if row.error is not None: continue
+    successess_per_file[row.file] += 1    
+    total_successes += 1
+
+  for file in successess_per_file:
+    print("summary> file:%40s  #tests:%5s / %5s" % \
+            (file, successess_per_file[file], totals_per_file[file]))
+  print("summary> total:%5s / %5s" % (total_successes, total_counts))
+
 def convert_to_lean_all():
   out_path = "experiment-out-data/InstCombineAlive.lean"
   paths = ["tests/instcombine/addsub.opt",
@@ -583,6 +596,7 @@ def convert_to_lean_all():
            "tests/instcombine/muldivrem.opt",
            "tests/instcombine/select.opt",
            "tests/instcombine/shift.opt"]
+  stats = Statistics()
   errors = []
   with open(out_path, "w") as of:
     of.write(LEAN_PREAMBLE)
@@ -595,11 +609,15 @@ def convert_to_lean_all():
             name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
             print("%s : %s" % (pre, pre.__class__))
             if str(pre) != "true": continue
+            error = None 
             try:
               out = print_as_lean(opt)
               of.write(out)
             except RuntimeError as e:
+              error = str(e)
               errors.append((path, opt, e))
+            stats.add(Statistics.Row(file=path, name=name, error=error))
+
     print "#errors: %d" % len(errors)
     for (path, opt, err) in errors:
       name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
@@ -610,6 +628,9 @@ def convert_to_lean_all():
       print("error: %s" % err)
       print("--")
 
+    stats.write("experiment-out-data/InstCombineAlive.csv")
+
+    summarize_stats(stats)
 if __name__ == "__main__":
   try:
     convert_to_lean_all()

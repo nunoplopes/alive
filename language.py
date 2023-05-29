@@ -1177,6 +1177,24 @@ class LExprPair(LExpr):
   def to_lean_str(self):
     return "pair:" + self.v1.to_lean_str() + " " + self.v2.to_lean_str()
 
+class LExprTriple(LExpr):
+  def __init__(self, v1, v2, v3):
+    assert isinstance(v1, LVar)
+    assert isinstance(v2, LVar)
+    assert isinstance(v3, LVar)
+    self.v1 = v1
+    self.v2 = v2
+    self.v3 = v3
+
+  def __repr__(self):
+    return self.to_lean_str()
+
+  def to_lean_str(self):
+    return "triple:" + \
+            self.v1.to_lean_str() + " " + \
+            self.v2.to_lean_str() + " " + \
+            self.v3.to_lean_str()
+
 class LExprOp(LExpr):
   def __init__(self, op, v):
     assert isinstance(op, str)
@@ -1229,6 +1247,11 @@ class ToLeanState:
     self._append_assign(v, LExprPair(v1, v2))
     return v
     
+  def build_triple(self, v1, v2, v3):
+    v = self.new_var()
+    self._append_assign(v, LExprTriple(v1, v2, v3))
+    return v
+
   def find_var_or_throw(self, v):
     print "dbg> find_var_or_throw '%s'" % (v, ),
     if v in self.varmap:
@@ -1254,6 +1277,20 @@ def to_lean_unary_cst_value(val, state):
   else:
     raise RuntimeError("unknown unary constant '%s'" % (val.op, ))
 
+
+def to_lean_binary_cst_value(val, state):
+  assert isinstance(val, CnstBinaryOp)
+  assert isinstance(state, ToLeanState)
+
+  v1 = to_lean_value(val.v1, state)
+  v2 = to_lean_value(val.v2, state)
+
+  if val.op == CnstBinaryOp.Shl:
+    largs = state.build_pair(v1, v2)
+    return state.build_assign(LExprOp("shl w", largs))
+  else:
+      raise RuntimeError("unknown binary constant '%s', op index: '%s'" % (val, val.op, ))
+
 def to_lean_value(val, state):
   assert isinstance(val, Value)
   assert isinstance(state, ToLeanState)
@@ -1261,6 +1298,8 @@ def to_lean_value(val, state):
     # TODO: maybe treat consants differently?
   if isinstance(val, CnstUnaryOp):
     return to_lean_unary_cst_value(val, state)
+  if isinstance(val, CnstBinaryOp):
+    return to_lean_binary_cst_value(val, state)
   if isinstance(val, ConstantVal):
     # FIXME: hardcode width 'w'
     lrhs = LExprOp("const (Bitvec.ofInt' w (%s))" % val.getName(), state.unit_index())
@@ -1289,18 +1328,39 @@ def to_lean_binop(bop, state):
   lv2 = to_lean_value(bop.v2, state)
   pair = state.build_pair(lv1, lv2)
   # FIXME: hardcoded width to be 'w'
+  if bop.op == BinOp.Add: return LExprOp("add w", pair)
+  if bop.op == BinOp.Sub: return LExprOp("sub w", pair)
+  if bop.op == BinOp.Mul: return LExprOp("mul w", pair)
+  if bop.op == BinOp.UDiv: return LExprOp("udiv w", pair)
+  if bop.op == BinOp.SDiv: return LExprOp("sdiv w", pair)
+  if bop.op == BinOp.URem: return LExprOp("urem w", pair)
+  if bop.op == BinOp.SRem: return LExprOp("srem w", pair)
+  if bop.op == BinOp.Shl: return LExprOp("shl w", pair)
+  if bop.op == BinOp.AShr: return LExprOp("ashr w", pair)
+  if bop.op == BinOp.LShr: return LExprOp("lhsr w", pair)
+  if bop.op == BinOp.Mul: return LExprOp("mul w", pair)
+  if bop.op == BinOp.And: return LExprOp("and w", pair)
   if bop.op == BinOp.Or: return LExprOp("or w", pair)
   if bop.op == BinOp.Xor: return LExprOp("xor w", pair)
-  if bop.op == BinOp.Add: return LExprOp("add w", pair)
-  if bop.op == BinOp.And: return LExprOp("and w", pair)
-  if bop.op == BinOp.Sub: return LExprOp("sub w", pair)
   else:
     raise RuntimeError("unknown binop '%s' ; bop.op = '%s'" % (bop, bop.op)) 
+
+def to_lean_select(instr, state):
+  print("dbg> to_lean_state(%s) type(%s)" % (instr, instr.__class__))
+  assert isinstance(instr, Select)
+  assert isinstance(state, ToLeanState)
+  lcond = to_lean_value(instr.c, state)
+  lv1 = to_lean_value(instr.v1, state)
+  lv2 = to_lean_value(instr.v2, state)
+  triple = state.build_triple(lcond, lv1, lv2)
+  return LExprOp("select", triple)
 
 def to_lean_instr(instr, state):
   print("dbg> to_lean_instr(%s) type(%s)" % (instr, instr.__class__))
   if isinstance(instr, BinOp):
     return to_lean_binop(instr, state)
+  elif isinstance(instr, Select):
+    return to_lean_select(instr, state)
   else:
     raise RuntimeError("unknown instruction '%s'" % (instr, ))
   
