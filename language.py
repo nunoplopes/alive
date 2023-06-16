@@ -1291,6 +1291,14 @@ def to_lean_binary_cst_value(val, state):
   else:
       raise RuntimeError("unknown binary constant '%s', op index: '%s'" % (val, val.op, ))
 
+def to_bitwidth(obj):
+    t = str(obj.type)
+    if len(t) > 0 and t[0] == 'i':
+      return int(t[1:])
+    else:
+      return 'w'
+
+
 def to_lean_value(val, state):
   assert isinstance(val, Value)
   assert isinstance(state, ToLeanState)
@@ -1301,8 +1309,8 @@ def to_lean_value(val, state):
   if isinstance(val, CnstBinaryOp):
     return to_lean_binary_cst_value(val, state)
   if isinstance(val, ConstantVal):
-    # FIXME: hardcode width 'w'
-    lrhs = LExprOp("const (Bitvec.ofInt' w (%s))" % val.getName(), state.unit_index())
+    bitwidth = to_bitwidth(val)
+    lrhs = LExprOp("const (Bitvec.ofInt' " + str(bitwidth) + "(%s))" % val.getName(), state.unit_index())
     lval = state.build_assign(lrhs)
     state.add_var_mapping(val.name, lval)
     return lval
@@ -1327,21 +1335,21 @@ def to_lean_binop(bop, state):
   lv1 = to_lean_value(bop.v1, state)
   lv2 = to_lean_value(bop.v2, state)
   pair = state.build_pair(lv1, lv2)
-  # FIXME: hardcoded width to be 'w'
-  if bop.op == BinOp.Add: return LExprOp("add w", pair)
-  if bop.op == BinOp.Sub: return LExprOp("sub w", pair)
-  if bop.op == BinOp.Mul: return LExprOp("mul w", pair)
-  if bop.op == BinOp.UDiv: return LExprOp("udiv w", pair)
-  if bop.op == BinOp.SDiv: return LExprOp("sdiv w", pair)
-  if bop.op == BinOp.URem: return LExprOp("urem w", pair)
-  if bop.op == BinOp.SRem: return LExprOp("srem w", pair)
-  if bop.op == BinOp.Shl: return LExprOp("shl w", pair)
-  if bop.op == BinOp.AShr: return LExprOp("ashr w", pair)
-  if bop.op == BinOp.LShr: return LExprOp("lhsr w", pair)
-  if bop.op == BinOp.Mul: return LExprOp("mul w", pair)
-  if bop.op == BinOp.And: return LExprOp("and w", pair)
-  if bop.op == BinOp.Or: return LExprOp("or w", pair)
-  if bop.op == BinOp.Xor: return LExprOp("xor w", pair)
+  bitwidth = to_bitwidth(bop)
+  if bop.op == BinOp.Add: return LExprOp("add " + str(bitwidth), pair)
+  if bop.op == BinOp.Sub: return LExprOp("sub " + str(bitwidth), pair)
+  if bop.op == BinOp.Mul: return LExprOp("mul " + str(bitwidth), pair)
+  if bop.op == BinOp.UDiv: return LExprOp("udiv " + str(bitwidth), pair)
+  if bop.op == BinOp.SDiv: return LExprOp("sdiv " + str(bitwidth), pair)
+  if bop.op == BinOp.URem: return LExprOp("urem " + str(bitwidth), pair)
+  if bop.op == BinOp.SRem: return LExprOp("srem " + str(bitwidth), pair)
+  if bop.op == BinOp.Shl: return LExprOp("shl " + str(bitwidth), pair)
+  if bop.op == BinOp.AShr: return LExprOp("ashr " + str(bitwidth), pair)
+  if bop.op == BinOp.LShr: return LExprOp("lhsr " + str(bitwidth), pair)
+  if bop.op == BinOp.Mul: return LExprOp("mul " + str(bitwidth), pair)
+  if bop.op == BinOp.And: return LExprOp("and " + str(bitwidth), pair)
+  if bop.op == BinOp.Or: return LExprOp("or " + str(bitwidth), pair)
+  if bop.op == BinOp.Xor: return LExprOp("xor " + str(bitwidth), pair)
   else:
     raise RuntimeError("unknown binop '%s' ; bop.op = '%s'" % (bop, bop.op)) 
 

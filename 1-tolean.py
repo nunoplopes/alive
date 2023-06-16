@@ -27,6 +27,7 @@ import stopit
 import pdb
 import time
 import csv
+
 def block_model(s, sneg, m):
   # First simplify the model.
   sneg.push()
@@ -509,8 +510,7 @@ def print_as_lean(opt):
   out += "=>\n"
   out += to_str_prog(tgt, []) + "\n"
   out += "-/\n"
-  out += "open SSA EDSL in\n"
-  out += ("example : forall (w : Nat) ")
+  out += ("theorem alive_" + (name.replace(':', '_').replace('-','_')) + ": forall (w : Nat) ")
   out += "(" + " ".join(src_state.constant_names + tgt_state.constant_names) + " : Nat)"
   out += (",")
   out += "TSSA.eval\n"
@@ -526,7 +526,9 @@ def print_as_lean(opt):
   out += "  [dsl_bb|\n"
   out += tgt_str + "\n"
   out += ("  ]");
-  out += ("\n  := by sorry")
+  out += ("\n  := by")
+  out += ("\n     simp_mlir")
+  out += ("\n     sorry")
   return out;
 
 
@@ -534,7 +536,7 @@ LEAN_PREAMBLE="""
 import SSA.Core.WellTypedFramework
 import SSA.Projects.InstCombine.InstCombineBase
 
-open SSA InstCombine
+open SSA InstCombine EDSL
 """
 
 
@@ -609,7 +611,7 @@ def convert_to_lean_all():
             name, pre, src, tgt, ident_src, ident_tgt, used_src, used_tgt, skip_tgt = opt
             print("%s : %s" % (pre, pre.__class__))
             if str(pre) != "true": continue
-            error = None 
+            error = None
             try:
               out = print_as_lean(opt)
               of.write(out)
